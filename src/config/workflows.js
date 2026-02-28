@@ -1088,14 +1088,19 @@ export const WORKFLOW_TEMPLATES = [
         position: { x: startPosition.x + colSpacing, y: startPosition.y - rowSpacing },
         data: {
           label: '角色设计生成',
-          systemPrompt: `你是专业的绘本角色设计师。根据故事大纲提取主角，生成适合图像生成的详细提示词。
+          systemPrompt: `你是专业的绘本角色设计师。根据故事大纲提取所有角色，为每个角色生成适合图像生成的详细提示词。
+
+输出格式（用换行分隔每个角色，每个角色占多行）：
+[角色名]
+[角色图像生成提示词]
+---
 
 输出要求：
-1. 只输出主角的图像生成提示词
-2. 包含：外貌特征、服装、表情、姿态
+1. 识别故事中的所有角色（主角、配角等）
+2. 提示词包含：外貌特征、服装、表情、姿态、场景
 3. 使用绘本水彩风格描述
 4. 末尾加上"白色简洁背景，儿童绘本水彩风格，温馨治愈，色彩明亮柔和"
-5. 直接输出提示词，不要标题或格式标记`,
+5. 直接输出，不要编号、标题或其他格式标记`,
           model: 'gpt-4o-mini',
           outputFormat: 'text'
         }
@@ -1117,7 +1122,7 @@ export const WORKFLOW_TEMPLATES = [
         type: 'imageConfig',
         position: { x: startPosition.x + colSpacing * 2, y: startPosition.y - rowSpacing },
         data: {
-          label: '主角参考图',
+          label: '角色参考图',
           model: 'doubao-seedream-4-5-251128',
           size: '2048x2048'
         }
@@ -1142,7 +1147,7 @@ export const WORKFLOW_TEMPLATES = [
         position: { x: startPosition.x + colSpacing * 3, y: startPosition.y - rowSpacing },
         data: {
           url: '',
-          label: '角色参考图'
+          label: '角色参考图结果'
         }
       })
 
@@ -1199,7 +1204,7 @@ export const WORKFLOW_TEMPLATES = [
         position: { x: startPosition.x + colSpacing * 2.5, y: startPosition.y + rowSpacing * 0.5 },
         data: {
           content: `操作步骤：
-1. 先点击「角色设计生成」的【执行生成】，等角色参考图生成完成
+1. 先点击「角色设计生成」的【执行生成】，等待生成所有角色参考图
 2. 再点击「剧情拆分」的【执行生成】，等待 LLM 输出剧本
 3. 在剧情拆分节点中点击【拆分为绘本页】按钮
 4. 系统将自动创建每页的故事文字、插画描述和图片生成节点
