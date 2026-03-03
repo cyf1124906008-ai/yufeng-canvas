@@ -684,7 +684,6 @@ const modelOptions = computed(() => modelStore.allChatModelOptions)
 
 // 默认模型使用选中的模型
 const model = ref(props.data?.model || modelStore.selectedChatModel || 'gpt-4o-mini')
-debugger
 // Format options | 格式选项
 const formatOptions = [
   { label: '纯文本', value: 'text' },
