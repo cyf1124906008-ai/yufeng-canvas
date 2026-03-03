@@ -729,14 +729,20 @@ const chatHook = computed(() => {
   })
 })
 
-// Update config in store | 更新存储中的配置
+// 防抖定时器
+let updateConfigTimer = null
+
+// Update config in store | 更新存储中的配置（防抖）
 const updateConfig = () => {
-  updateNode(props.id, { 
-    systemPrompt: systemPrompt.value,
-    model: model.value,
-    outputFormat: outputFormat.value,
-    outputContent: outputContent.value
-  })
+  if (updateConfigTimer) clearTimeout(updateConfigTimer)
+  updateConfigTimer = setTimeout(() => {
+    updateNode(props.id, {
+      systemPrompt: systemPrompt.value,
+      model: model.value,
+      outputFormat: outputFormat.value,
+      outputContent: outputContent.value
+    })
+  }, 150)
 }
 
 // Get input from connected nodes | 获取连接节点的输入
@@ -889,8 +895,7 @@ watch(
       updateNode(props.id, { autoExecute: false })
       setTimeout(() => handleGenerate(), 100)
     }
-  },
-  { immediate: true }
+  }
 )
 
 // Start editing label | 开始编辑 label
