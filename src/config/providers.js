@@ -13,7 +13,7 @@ export const PROVIDERS = {
       chat: '/v1/chat/completions',
       image: '/v1/images/generations',
       video: '/v1/video/generations',
-      videoQuery: '/v1/videos/{taskId}'
+      videoQuery: '/v1/video/task/{taskId}'
     },
     // 火宝渠道请求适配
     requestAdapter: {

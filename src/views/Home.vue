@@ -199,7 +199,7 @@
  * Home view component | 首页视图组件
  * Entry point with project list and creation input
  */
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { NIcon, NDropdown, NModal, NInput, NButton, useDialog } from 'naive-ui'
 import { 
@@ -223,21 +223,21 @@ import {
   duplicateProject, 
   renameProject 
 } from '../stores/projects'
-import { useApiConfig } from '../hooks/useApiConfig'
+import { useModelStore } from '../stores/pinia'
 import ApiSettings from '../components/ApiSettings.vue'
 import AppHeader from '../components/AppHeader.vue'
 
 const router = useRouter()
 const dialog = useDialog()
-const apiConfig = useApiConfig()
+const modelStore = useModelStore()
 
 // API Settings state | API 设置状态
 const showApiSettings = ref(false)
-const isApiConfigured = ref(apiConfig.isConfigured.value)
+const isApiConfigured = computed(() => !!modelStore.currentApiKey)
 
 // Refresh API config state | 刷新 API 配置状态
 const refreshApiConfig = () => {
-  isApiConfigured.value = !!localStorage.getItem('apiKey')
+  // 通过 computed 自动更新，不需要手动刷新
 }
 
 // Video refs for hover play | 视频引用用于悬停播放

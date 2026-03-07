@@ -48,6 +48,19 @@ export const BANANA_SIZE_OPTIONS = [
 // Image generation models | 图片生成模型
 export const IMAGE_MODELS = [
     {
+        label: 'Nano Banana 2',
+        key: 'nano-banana-2',
+        provider: ['chatfire'], // 火宝渠道
+        sizes: BANANA_SIZE_OPTIONS.map(s => s.key),
+        // qualities: SEEDREAM_QUALITY_OPTIONS,
+        // getSizesByQuality: (quality) => quality === '4k' ? SEEDREAM_4K_SIZE_OPTIONS : SEEDREAM_SIZE_OPTIONS,
+        defaultParams: {
+            size: '1x1',
+            quality: 'standard',
+            style: 'vivid'
+        }
+    },
+    {
         label: 'Nano Banana Pro',
         key: 'nano-banana-pro',
         provider: ['chatfire'], // 火宝渠道

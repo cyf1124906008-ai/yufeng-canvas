@@ -276,7 +276,8 @@ import {
 } from '@vicons/ionicons5'
 import { nodes, edges, addNode, addNodes, addEdge, addEdges, updateNode, initSampleData, loadProject, saveProject, clearCanvas, canvasViewport, updateViewport, undo, redo, canUndo, canRedo, manualSaveHistory, startBatchOperation, endBatchOperation } from '../stores/canvas'
 import { loadAllModels } from '../stores/models'
-import { useApiConfig, useChat, useWorkflowOrchestrator } from '../hooks'
+import { useChat, useWorkflowOrchestrator } from '../hooks'
+import { useModelStore } from '../stores/pinia'
 import { projects, initProjectsStore, updateProject, renameProject, currentProject } from '../stores/projects'
 
 // API Settings component | API 设置组件
@@ -285,8 +286,9 @@ import DownloadModal from '../components/DownloadModal.vue'
 import WorkflowPanel from '../components/WorkflowPanel.vue'
 import AppHeader from '../components/AppHeader.vue'
 
-// API Config hook | API 配置 hook
-const { isConfigured: isApiConfigured } = useApiConfig()
+// API Config state | API 配置状态
+const modelStore = useModelStore()
+const isApiConfigured = computed(() => !!modelStore.currentApiKey)
 
 // Initialize models on page load | 页面加载时初始化模型
 onMounted(() => {

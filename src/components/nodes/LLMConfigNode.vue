@@ -146,7 +146,7 @@ import { TrashOutline, CopyOutline, ChatbubbleOutline, SparklesOutline, ListOutl
 import { updateNode, removeNode, duplicateNode, addNode, addEdge, addNodes, addEdges, nodes, edges, startBatchOperation, endBatchOperation } from '../../stores/canvas'
 import NodeHandleMenu from './NodeHandleMenu.vue'
 import MentionsPicker from '../MentionsPicker.vue'
-import { useChat, useApiConfig } from '../../hooks'
+import { useChat } from '../../hooks'
 import { useModelStore } from '../../stores/pinia'
 import { parseMentions, removeMention as removeMentionUtil } from '../../hooks/useNodeRef'
 
@@ -158,8 +158,8 @@ const props = defineProps({
 // Vue Flow instance | Vue Flow 实例
 const { updateNodeInternals } = useVueFlow()
 
-// API config hook | API 配置 hook
-const { isConfigured: isApiConfigured } = useApiConfig()
+// API config state | API 配置状态
+const isApiConfigured = computed(() => !!modelStore.currentApiKey)
 
 // Local state | 本地状态
 const showHandleMenu = ref(false)

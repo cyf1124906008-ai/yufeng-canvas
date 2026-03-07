@@ -98,7 +98,8 @@ import { TrashOutline, ExpandOutline, CopyOutline, ImageOutline, VideocamOutline
 import { updateNode, removeNode, duplicateNode, addNode, addEdge, nodes } from '../../stores/canvas'
 import NodeHandleMenu from './NodeHandleMenu.vue'
 import MentionsPicker from '../MentionsPicker.vue'
-import { useChat, useApiConfig } from '../../hooks'
+import { useChat } from '../../hooks'
+import { useModelStore } from '../../stores/pinia'
 import { parseMentions } from '../../hooks/useNodeRef'
 
 const props = defineProps({
@@ -109,8 +110,9 @@ const props = defineProps({
 // Vue Flow instance | Vue Flow 实例
 const { updateNodeInternals } = useVueFlow()
 
-// API config hook | API 配置 hook
-const { isConfigured: isApiConfigured } = useApiConfig()
+// API config state | API 配置状态
+const modelStore = useModelStore()
+const isApiConfigured = computed(() => !!modelStore.currentApiKey)
 
 // Chat hook for polish | 润色用的 Chat hook
 const { send: sendChat } = useChat({

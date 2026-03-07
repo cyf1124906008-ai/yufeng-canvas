@@ -21,7 +21,7 @@ export const createVideoTask = (data, options = {}) => {
 export const getVideoTaskStatus = (taskId, options = {}) => {
   const { endpoint = '/videos' } = options
   return request({
-    url: `${endpoint}/${taskId}`,
+    url: `${endpoint}`,
     method: 'get'
   })
 }

@@ -17,17 +17,27 @@ const instance = axios.create({
 // Request interceptor | 请求拦截器
 instance.interceptors.request.use(
   (config) => {
-    // Get API key from localStorage | 从 localStorage 获取 API key
-    const apiKey = localStorage.getItem('apiKey')
-    
+    // Get current provider | 获取当前渠道
+    const currentProvider = localStorage.getItem('api-provider') || 'chatfire'
+
+    // Get API keys from new storage | 从新存储结构获取 API Keys
+    let apiKey = ''
+    try {
+      const apiKeysJson = localStorage.getItem('api-keys-by-provider')
+      const apiKeys = apiKeysJson ? JSON.parse(apiKeysJson) : {}
+      apiKey = apiKeys[currentProvider] || ''
+    } catch (e) {
+      apiKey = ''
+    }
+
     // Skip auth for certain endpoints | 跳过某些端点的认证
     const noAuthEndpoints = ['/model/page', '/model/fullName', '/model/types']
     const isNoAuth = noAuthEndpoints.some(ep => config.url?.includes(ep))
-    
+
     if (apiKey && !isNoAuth) {
       config.headers['Authorization'] = `Bearer ${apiKey}`
     }
-    
+
     return config
   },
   (error) => {
