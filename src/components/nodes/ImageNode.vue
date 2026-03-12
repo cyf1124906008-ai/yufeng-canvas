@@ -42,6 +42,17 @@
             </n-tooltip>
           </div>
           <div class="flex items-center gap-1">
+            <!-- Replace button | 替换按钮 -->
+            <n-tooltip trigger="hover">
+              <template #trigger>
+                <button @click="showReplaceModal = true" class="p-1 hover:bg-[var(--bg-tertiary)] rounded transition-colors">
+                  <n-icon :size="14">
+                    <SwapHorizontalOutline />
+                  </n-icon>
+                </button>
+              </template>
+              替换图片
+            </n-tooltip>
             <n-tooltip v-if="data.url" trigger="hover">
               <template #trigger>
                 <button @click="handlePreview" class="p-1 hover:bg-[var(--bg-tertiary)] rounded transition-colors">
@@ -258,6 +269,52 @@
     v-model:show="showRef"
     :src="props.data?.url"
   />
+
+  <!-- Replace image modal | 替换图片弹窗 -->
+  <n-modal v-model:show="showReplaceModal" preset="card" title="替换图片" class="w-[400px]" :mask-closable="true">
+    <div class="space-y-4">
+      <!-- Upload area | 上传区域 -->
+      <div
+        class="border-2 border-dashed border-[var(--border-color)] rounded-xl p-4 cursor-pointer hover:bg-[var(--bg-tertiary)] transition-colors"
+        @click="replaceFileInputRef?.click()"
+      >
+        <div class="flex flex-col items-center gap-2">
+          <n-icon :size="32" class="text-[var(--text-secondary)]">
+            <ImageOutline />
+          </n-icon>
+          <span class="text-sm text-[var(--text-secondary)]">点击上传图片</span>
+          <input
+            ref="replaceFileInputRef"
+            type="file"
+            accept="image/*"
+            class="hidden"
+            @change="handleReplaceFileUpload"
+          />
+        </div>
+      </div>
+
+      <!-- Divider | 分割线 -->
+      <div class="flex items-center gap-2">
+        <div class="flex-1 h-px bg-[var(--border-color)]"></div>
+        <span class="text-xs text-[var(--text-secondary)]">或</span>
+        <div class="flex-1 h-px bg-[var(--border-color)]"></div>
+      </div>
+
+      <!-- URL input | URL 输入 -->
+      <div class="flex gap-2">
+        <input
+          v-model="replaceUrlInput"
+          type="text"
+          placeholder="输入图片地址..."
+          class="flex-1 px-3 py-2 text-sm bg-[var(--bg-tertiary)] border border-[var(--border-color)] rounded-lg outline-none focus:border-[var(--accent-color)] text-[var(--text-primary)] placeholder:text-[var(--text-secondary)]"
+          @keydown.enter="handleReplaceUrlSubmit"
+        />
+        <n-button type="primary" size="small" :disabled="!replaceUrlInput.trim()" @click="handleReplaceUrlSubmit">
+          确认
+        </n-button>
+      </div>
+    </div>
+  </n-modal>
 </template>
 
 <script setup>
@@ -267,8 +324,8 @@
  */
 import { ref, nextTick, computed } from 'vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
-import { NIcon, NTooltip, NSwitch, NImagePreview } from 'naive-ui'
-import { TrashOutline, ExpandOutline, ImageOutline, CloseCircleOutline, CopyOutline, VideocamOutline, DownloadOutline, EyeOutline, BrushOutline, RefreshOutline, ColorWandOutline } from '@vicons/ionicons5'
+import { NIcon, NTooltip, NSwitch, NImagePreview, NModal, NButton } from 'naive-ui'
+import { TrashOutline, ExpandOutline, ImageOutline, CloseCircleOutline, CopyOutline, VideocamOutline, DownloadOutline, EyeOutline, BrushOutline, RefreshOutline, ColorWandOutline, SwapHorizontalOutline } from '@vicons/ionicons5'
 import { updateNode, removeNode, duplicateNode, addNode, addEdge, nodes } from '../../stores/canvas'
 import NodeHandleMenu from './NodeHandleMenu.vue'
 
@@ -292,6 +349,11 @@ const labelInputRef = ref(null)
 // URL input state | URL 输入状态
 const urlInput = ref('')
 const urlLoading = ref(false)
+
+// Replace modal state | 替换弹窗状态
+const showReplaceModal = ref(false)
+const replaceUrlInput = ref('')
+const replaceFileInputRef = ref(null)
 
 // Inpainting state | 涂抹重绘状态
 const isInpaintMode = ref(false)
@@ -665,6 +727,59 @@ const handleUrlSubmit = () => {
   img.onerror = () => {
     window.$message?.error('图片加载失败，请检查地址是否正确')
     urlLoading.value = false
+  }
+  img.src = url
+}
+
+
+
+// Handle replace file upload | 处理替换文件上传
+const handleReplaceFileUpload = async (event) => {
+  const file = event.target.files[0]
+  if (file) {
+    try {
+      const base64 = await fileToBase64(file)
+      updateNode(props.id, {
+        url: base64,
+        base64: base64,
+        fileName: file.name,
+        fileType: file.type,
+        label: '参考图',
+        updatedAt: Date.now()
+      })
+      showReplaceModal.value = false
+      replaceUrlInput.value = ''
+      window.$message?.success('图片已替换')
+    } catch (err) {
+      console.error('File upload error:', err)
+      window.$message?.error('图片上传失败')
+    }
+  }
+}
+
+// Handle replace URL submit | 处理替换 URL 提交
+const handleReplaceUrlSubmit = () => {
+  const url = replaceUrlInput.value.trim()
+  if (!url) return
+
+  if (!url.startsWith('http://') && !url.startsWith('https://')) {
+    window.$message?.warning('请输入有效的图片地址 (http:// 或 https://)')
+    return
+  }
+
+  const img = new Image()
+  img.onload = () => {
+    updateNode(props.id, {
+      url: url,
+      label: '网络图片',
+      updatedAt: Date.now()
+    })
+    showReplaceModal.value = false
+    replaceUrlInput.value = ''
+    window.$message?.success('图片已替换')
+  }
+  img.onerror = () => {
+    window.$message?.error('图片加载失败，请检查地址是否正确')
   }
   img.src = url
 }
