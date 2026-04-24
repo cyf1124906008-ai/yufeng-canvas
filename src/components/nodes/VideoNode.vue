@@ -233,7 +233,7 @@ const startPolling = async (taskId) => {
       error: err.message || '生成失败',
       label: '生成失败',
       finishedAt: Date.now(),
-      taskId: null  // 清除 taskId
+      taskId
     })
     window.$message?.error(err.message || '视频生成失败')
   } finally {
