@@ -73,7 +73,15 @@
         class="aspect-video rounded-lg bg-red-50 dark:bg-red-900/20 flex flex-col items-center justify-center gap-2 border border-red-200 dark:border-red-800"
       >
         <n-icon :size="32" class="text-red-500"><CloseCircleOutline /></n-icon>
-        <span class="text-sm text-red-500">{{ data.error }}</span>
+        <span class="text-sm text-red-500 px-3 text-center">{{ data.error }}</span>
+        <span v-if="data.taskId" class="text-xs text-red-400 px-3 text-center break-all">任务 ID：{{ data.taskId }}</span>
+        <button
+          v-if="data.taskId && !isPolling"
+          class="mt-1 px-3 py-1 rounded-md bg-red-500 text-white text-xs hover:bg-red-600 transition-colors"
+          @click.stop="retryPolling"
+        >
+          重新查询结果
+        </button>
       </div>
       <!-- Video preview | 视频预览 -->
       <div 
@@ -239,6 +247,19 @@ const startPolling = async (taskId) => {
   } finally {
     isPolling.value = false
   }
+}
+
+const retryPolling = () => {
+  if (!props.data?.taskId || isPolling.value) return
+
+  updateNode(props.id, {
+    loading: true,
+    error: '',
+    label: '视频生成中...',
+    progress: props.data?.progress || 0,
+    updatedAt: Date.now()
+  })
+  startPolling(props.data.taskId)
 }
 
 // Handle menu select | 处理菜单选择
