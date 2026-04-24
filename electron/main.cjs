@@ -63,12 +63,18 @@ app.whenReady().then(() => {
     }
 
     const release = await response.json()
+    const assets = Array.isArray(release.assets) ? release.assets : []
+    const installerAsset = assets.find((asset) =>
+      /\.exe$/i.test(asset.name || '') &&
+      /setup/i.test(asset.name || '')
+    ) || assets.find((asset) => /\.exe$/i.test(asset.name || ''))
+
     return {
       currentVersion: packageJson.version,
       latestVersion: String(release.tag_name || '').replace(/^v/i, ''),
       releaseName: release.name || release.tag_name || '',
       releaseUrl: release.html_url,
-      downloadUrl: release.assets?.[0]?.browser_download_url || release.html_url,
+      downloadUrl: installerAsset?.browser_download_url || release.html_url,
       publishedAt: release.published_at || ''
     }
   })
