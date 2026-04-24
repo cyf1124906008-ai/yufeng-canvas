@@ -180,7 +180,7 @@ const isPolling = ref(false)
 
 const loadingText = computed(() => {
   if (props.data?.taskId) {
-    return '创作中，最多等待 3 分钟'
+    return '创作中，最多等待 6 分钟'
   }
 
   return '任务创建中...'

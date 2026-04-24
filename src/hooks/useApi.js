@@ -74,6 +74,124 @@ const normalizeGeminiImageResponse = (response) => {
   return urls.map((url) => ({ url, revisedPrompt: '' }))
 }
 
+const VIDEO_URL_KEYS = new Set([
+  'url',
+  'video_url',
+  'videoUrl',
+  'output_url',
+  'outputUrl',
+  'file_url',
+  'fileUrl',
+  'download_url',
+  'downloadUrl',
+  'media_url',
+  'mediaUrl',
+  'play_url',
+  'playUrl',
+  'source_url',
+  'sourceUrl'
+])
+
+const COMPLETED_VIDEO_STATES = new Set(['completed', 'complete', 'succeeded', 'success', 'done', 'finished'])
+const FAILED_VIDEO_STATES = new Set(['failed', 'failure', 'error', 'cancelled', 'canceled', 'rejected'])
+const PENDING_VIDEO_STATES = new Set(['pending', 'queued', 'queueing', 'running', 'processing', 'in_progress', 'created', 'submitted'])
+
+const trimUrl = (url) => url.replace(/[),.;\]\s]+$/g, '')
+
+const looksLikeVideoUrl = (url) =>
+  /^data:video\//i.test(url) ||
+  /\.(mp4|webm|mov|m4v|m3u8)(\?|#|$)/i.test(url) ||
+  /\/(video|videos|media|files|download|outputs?)\//i.test(url)
+
+const extractUrlsFromString = (value) => {
+  if (!value) return []
+  if (/^data:video\//i.test(value)) return [value]
+
+  return [...String(value).matchAll(/https?:\/\/[^\s"'<>]+/gi)]
+    .map((match) => trimUrl(match[0]))
+    .filter(looksLikeVideoUrl)
+}
+
+const hasVideoUrlContext = (path) =>
+  path.some((key) => /video|output|result|file|download|media|play/i.test(String(key)))
+
+const extractVideoUrls = (value, seen = new WeakSet(), path = []) => {
+  if (!value) return []
+
+  if (typeof value === 'string') {
+    return extractUrlsFromString(value)
+  }
+
+  if (Array.isArray(value)) {
+    return [...new Set(value.flatMap((item, index) => extractVideoUrls(item, seen, [...path, index])))]
+  }
+
+  if (typeof value !== 'object') return []
+  if (seen.has(value)) return []
+  seen.add(value)
+
+  const urls = []
+  Object.entries(value).forEach(([key, nestedValue]) => {
+    const nextPath = [...path, key]
+    if (VIDEO_URL_KEYS.has(key) && typeof nestedValue === 'string') {
+      const directUrl = trimUrl(nestedValue)
+      const isSpecificVideoKey = key !== 'url'
+      if (looksLikeVideoUrl(directUrl) || (isSpecificVideoKey && /^https?:\/\//i.test(directUrl)) || hasVideoUrlContext(nextPath)) {
+        urls.push(directUrl)
+      }
+    }
+
+    urls.push(...extractVideoUrls(nestedValue, seen, nextPath))
+  })
+
+  return [...new Set(urls)]
+}
+
+const findNestedValueByKeys = (value, keys, seen = new WeakSet()) => {
+  if (!value || typeof value !== 'object') return undefined
+  if (seen.has(value)) return undefined
+  seen.add(value)
+
+  for (const key of keys) {
+    if (Object.prototype.hasOwnProperty.call(value, key) && value[key] !== undefined && value[key] !== null) {
+      return value[key]
+    }
+  }
+
+  const entries = Array.isArray(value) ? value.entries() : Object.entries(value)
+  for (const [, nestedValue] of entries) {
+    const found = findNestedValueByKeys(nestedValue, keys, seen)
+    if (found !== undefined && found !== null) return found
+  }
+
+  return undefined
+}
+
+const getVideoTaskState = (response) => {
+  const value = findNestedValueByKeys(response, ['status', 'state', 'task_status', 'taskStatus'])
+  return value === undefined || value === null ? '' : String(value).toLowerCase()
+}
+
+const getVideoTaskFailureMessage = (response) => {
+  const value = findNestedValueByKeys(response, ['message', 'error_message', 'errorMessage', 'reason'])
+  if (typeof value === 'string' && value.trim()) return value.trim()
+  if (response?.error?.message) return response.error.message
+  return '视频生成失败'
+}
+
+const summarizeVideoTaskResponse = (response) => {
+  try {
+    return JSON.parse(JSON.stringify(response, (key, value) => {
+      if (typeof value === 'string' && value.length > 1200) {
+        return `${value.slice(0, 1200)}...`
+      }
+      return value
+    }))
+  } catch {
+    return { rawType: typeof response }
+  }
+}
+
 /**
  * Base API state hook | 基础 API 状态 Hook
  */
@@ -379,7 +497,7 @@ export const useVideoGeneration = () => {
   const taskId = ref(null)
   const progress = reactive({
     attempt: 0,
-    maxAttempts: 120,
+    maxAttempts: 72,
     percentage: 0
   })
 
@@ -435,13 +553,22 @@ export const useVideoGeneration = () => {
     // Check if async (need polling) | 检查是否异步
     const isAsync = modelConfig?.async !== false
 
+    const directVideoUrl = extractVideoUrls(task)[0]
+
     // If has video URL directly, return | 如果直接有视频 URL，返回
-    if (!isAsync || task.data?.url || task.url || task.content?.video_url) {
+    if (directVideoUrl) {
       addRuntimeLog('success', `视频直接返回完成：${params.model}`)
       return {
         taskId: null,
-        url: task.data?.url || task.url || task.content?.video_url
+        url: directVideoUrl
       }
+    }
+
+    if (!isAsync) {
+      addRuntimeLog('error', `视频接口没有返回可播放地址：${params.model}`, {
+        response: summarizeVideoTaskResponse(task)
+      })
+      throw new Error('视频接口没有返回可播放地址，右侧运行日志已记录原始响应。')
     }
 
     // Get task ID | 获取任务 ID
@@ -466,8 +593,10 @@ export const useVideoGeneration = () => {
    * Poll video task | 轮询视频任务
    */
   const pollVideoTask = async (pollTaskId, onProgress = () => {}) => {
-    const maxAttempts = 36
+    const maxAttempts = 72
     const interval = 5000
+    let lastResponse = null
+
     addRuntimeLog('info', `开始轮询视频任务：${pollTaskId}`, {
       maxSeconds: Math.round((maxAttempts * interval) / 1000)
     })
@@ -484,41 +613,54 @@ export const useVideoGeneration = () => {
       const result = await getVideoTaskStatus(pollTaskId, {
         endpoint: taskEndpoint
       })
+      lastResponse = result
 
       // 适配轮询响应
       const adaptedResult = adaptResponse('video', result)
+      const taskState = getVideoTaskState(result)
+      const videoUrl = extractVideoUrls(adaptedResult)[0] || extractVideoUrls(result)[0]
 
-      // Check for completion | 检查是否完成
-      if (result.status === 'completed' || result.status === 'succeeded' || result.data) {
-        const videoUrl = adaptedResult.url || result.data?.url || result.data?.[0]?.url || result.url || result.content?.video_url || result.video_url
-        if (!videoUrl && (result.status === 'completed' || result.status === 'succeeded')) {
-          addRuntimeLog('error', `视频任务完成但没有返回视频地址：${pollTaskId}`)
-          throw new Error('视频任务完成但没有返回视频地址，请在后台记录里查看原始结果')
-        }
-        if (!videoUrl) {
-          await new Promise(resolve => setTimeout(resolve, interval))
-          continue
-        }
-        addRuntimeLog('success', `视频任务完成：${pollTaskId}`)
-        return { ...adaptedResult, url: videoUrl,  }
+      if (videoUrl) {
+        addRuntimeLog('success', `视频任务完成：${pollTaskId}`, {
+          state: taskState || 'unknown',
+          url: videoUrl
+        })
+        return { ...adaptedResult, url: videoUrl }
       }
 
-      // Check for failure | 检查是否失败
-      if (result.status === 'failed' || result.status === 'error') {
-        addRuntimeLog('error', `视频任务失败：${result.error?.message || result.message || '生成失败'}`, {
-          taskId: pollTaskId
+      if (FAILED_VIDEO_STATES.has(taskState)) {
+        const message = getVideoTaskFailureMessage(result)
+        addRuntimeLog('error', `视频任务失败：${message}`, {
+          taskId: pollTaskId,
+          state: taskState,
+          response: summarizeVideoTaskResponse(result)
         })
-        throw new Error(result.error?.message || result.message || '视频生成失败')
+        throw new Error(message)
+      }
+
+      if (COMPLETED_VIDEO_STATES.has(taskState)) {
+        addRuntimeLog('info', `视频任务显示完成，正在等待视频地址：${pollTaskId}`, {
+          attempt: i + 1,
+          state: taskState,
+          response: summarizeVideoTaskResponse(result)
+        })
+      } else if (taskState && !PENDING_VIDEO_STATES.has(taskState)) {
+        addRuntimeLog('info', `视频任务状态：${taskState}`, {
+          taskId: pollTaskId,
+          attempt: i + 1,
+          response: summarizeVideoTaskResponse(result)
+        })
       }
 
       // Wait before next poll | 等待下次轮询
       await new Promise(resolve => setTimeout(resolve, interval))
     }
 
-    addRuntimeLog('error', `视频任务轮询超时：${pollTaskId}`, {
-      maxSeconds: Math.round((maxAttempts * interval) / 1000)
+    addRuntimeLog('error', `视频任务未返回可播放地址：${pollTaskId}`, {
+      maxSeconds: Math.round((maxAttempts * interval) / 1000),
+      lastResponse: summarizeVideoTaskResponse(lastResponse)
     })
-    throw new Error('视频生成超时（已等待 3 分钟）。任务可能仍在后台生成，请稍后到后台查看记录，或重新发起一次。')
+    throw new Error(`视频任务暂未返回可播放地址（任务ID：${pollTaskId}）。右侧运行日志已记录最后一次响应。`)
   }
 
   /**
