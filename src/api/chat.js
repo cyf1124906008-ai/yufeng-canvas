@@ -1,30 +1,28 @@
 /**
- * Chat API | 对话 API
+ * Chat API.
  */
 
 import { request, getBaseUrl } from '@/utils'
+import { getRuntimeApiKey, getRuntimeBaseUrl } from '@/utils/runtimeConfig'
 
-// 对话补全
 export const chatCompletions = (data) =>
   request({
-    url: `/chat/completions`,
+    url: '/chat/completions',
     method: 'post',
-    data
+    data,
+    metadata: { capability: 'chat' }
   })
 
-// 流式对话补全
 export const streamChatCompletions = async function* (data, signal, options = {}) {
-  const apiKey = localStorage.getItem('apiKey')
-  // 优先使用传入的 baseUrl，否则使用默认的
-  const baseUrl = options.baseUrl || getBaseUrl()
-  // 使用 options.endpoint 或默认的 /chat/completions
+  const apiKey = getRuntimeApiKey(undefined, 'chat')
+  const baseUrl = options.baseUrl || getBaseUrl() || getRuntimeBaseUrl()
   const endpoint = options.endpoint || '/chat/completions'
 
   const response = await fetch(`${baseUrl}${endpoint}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`
+      ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {})
     },
     body: JSON.stringify({ ...data, stream: true }),
     signal
@@ -41,7 +39,9 @@ export const streamChatCompletions = async function* (data, signal, options = {}
 
   while (true) {
     const { done, value } = await reader.read()
-    if (done) break
+    if (done) {
+      break
+    }
 
     buffer += decoder.decode(value, { stream: true })
     const lines = buffer.split('\n')
@@ -49,17 +49,23 @@ export const streamChatCompletions = async function* (data, signal, options = {}
 
     for (const line of lines) {
       const trimmed = line.trim()
-      if (!trimmed || !trimmed.startsWith('data:')) continue
+      if (!trimmed || !trimmed.startsWith('data:')) {
+        continue
+      }
 
-      const data = trimmed.slice(5).trim()
-      if (data === '[DONE]') return
+      const payload = trimmed.slice(5).trim()
+      if (payload === '[DONE]') {
+        return
+      }
 
       try {
-        const parsed = JSON.parse(data)
+        const parsed = JSON.parse(payload)
         const content = parsed.choices?.[0]?.delta?.content
-        if (content) yield content
-      } catch (e) {
-        // Skip invalid JSON
+        if (content) {
+          yield content
+        }
+      } catch {
+        // Ignore malformed chunks.
       }
     }
   }

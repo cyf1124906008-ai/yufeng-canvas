@@ -97,7 +97,7 @@
         <!-- Generate button | 生成按钮 -->
         <div v-if="hasConnectedImageWithContent" class="flex gap-2">
           <!-- Create new (primary) | 新建节点（主按钮） -->
-          <button @click="handleGenerate('new')" :disabled="loading || !isConfigured"
+          <button @click="handleGenerate('new')" :disabled="loading || !canGenerate"
             class="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg bg-[var(--accent-color)] hover:bg-[var(--accent-hover)] text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
             <n-spin v-if="loading" :size="14" />
             <template v-else>
@@ -106,7 +106,7 @@
             </template>
           </button>
           <!-- Replace existing (secondary) | 替换现有（次按钮） -->
-          <button @click="handleGenerate('replace')" :disabled="loading || !isConfigured"
+          <button @click="handleGenerate('replace')" :disabled="loading || !canGenerate"
             class="flex-shrink-0 flex items-center justify-center gap-1 py-2 px-2.5 rounded-lg border border-[var(--border-color)] text-[var(--text-secondary)] hover:border-[var(--accent-color)] hover:text-[var(--accent-color)] text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
             <n-spin v-if="loading" :size="14" />
             <template v-else>
@@ -115,7 +115,7 @@
             </template>
           </button>
         </div>
-        <button v-else @click="handleGenerate('auto')" :disabled="loading || !isConfigured"
+        <button v-else @click="handleGenerate('auto')" :disabled="loading || !canGenerate"
           class="w-full flex items-center justify-center gap-2 py-2 px-4 rounded-lg bg-[var(--accent-color)] hover:bg-[var(--accent-hover)] text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
           <n-spin v-if="loading" :size="14" />
           <template v-else>
@@ -166,8 +166,9 @@ import { useImageGeneration } from '../../hooks'
 import { updateNode, addNode, addEdge, nodes, edges, duplicateNode, removeNode } from '../../stores/canvas'
 import NodeHandleMenu from './NodeHandleMenu.vue'
 import { useModelStore } from '../../stores/pinia'
-import { getModelSizeOptions, getModelQualityOptions, getModelConfig, DEFAULT_IMAGE_MODEL } from '../../stores/models'
+import { getModelSizeOptions, getModelQualityOptions, getModelConfig } from '../../stores/models'
 import { parseMentions } from '../../hooks/useNodeRef'
+import { getCapabilityLabel, getModelCapabilityConflict } from '../../utils/modelCapability'
 
 // 使用 Pinia store 获取模型选项（根据渠道过滤）
 const modelStore = useModelStore()
@@ -181,14 +182,14 @@ const props = defineProps({
 const { updateNodeInternals } = useVueFlow()
 
 // API config state | API 配置状态
-const isConfigured = computed(() => !!modelStore.currentApiKey)
+const isConfigured = computed(() => !!modelStore.currentImageApiKey)
 
 // Image generation hook | 图片生成 hook
 const { loading, error, images: generatedImages, generate } = useImageGeneration()
 
 // Local state | 本地状态
 const showHandleMenu = ref(false)
-const localModel = ref(props.data?.model || DEFAULT_IMAGE_MODEL)
+const localModel = ref(props.data?.model || modelStore.selectedImageModel || '')
 const localSize = ref(props.data?.size || '2048x2048')
 const localQuality = ref(props.data?.quality || 'standard')
 
@@ -234,10 +235,14 @@ const handleSelect = (item) => {
 const currentModelConfig = computed(() => getModelConfig(localModel.value))
 
 // Model options from Pinia store (filtered by provider) | 从 Pinia store 获取模型选项（根据渠道过滤）
-const modelOptions = computed(() => modelStore.allImageModelOptions)
+const modelOptions = computed(() => modelStore.imageModelOptions)
 
 // Display model name | 显示模型名称
 const displayModelName = computed(() => {
+  if (modelCapabilityConflict.value) {
+    return '选择图片模型'
+  }
+
   const model = modelOptions.value.find(m => m.key === localModel.value)
   // 如果当前模型不在选项中，尝试从 allImageModels 找到
   if (!model) {
@@ -280,6 +285,19 @@ const displaySize = computed(() => {
   return option?.label || localSize.value
 })
 
+const selectedImageModel = computed(() =>
+  modelStore.availableImageModels.find((model) => model.key === localModel.value)
+)
+
+const modelCapabilityConflict = computed(() => getModelCapabilityConflict(localModel.value, 'image'))
+
+const canGenerate = computed(() =>
+  isConfigured.value &&
+  !!localModel.value &&
+  !!selectedImageModel.value &&
+  !modelCapabilityConflict.value
+)
+
 // Initialize on mount | 挂载时初始化
 onMounted(() => {
   // 检查当前模型是否在可用模型列表中
@@ -287,9 +305,13 @@ onMounted(() => {
   const isModelAvailable = availableModels.some(m => m.key === localModel.value)
 
   if (!localModel.value || !isModelAvailable) {
-    // 使用 store 中的默认模型或第一个可用模型
-    localModel.value = modelStore.selectedImageModel || availableModels[0]?.key || DEFAULT_IMAGE_MODEL
-    updateNode(props.id, { model: localModel.value })
+    // 只允许从图片模型列表里选择，避免把视频/文本模型误发到图片接口产生扣费。
+    localModel.value = availableModels[0]?.key || ''
+    if (localModel.value) {
+      updateNode(props.id, { model: localModel.value })
+    } else if (props.data?.model) {
+      updateNode(props.id, { model: '' })
+    }
   }
 })
 
@@ -568,6 +590,23 @@ const hasConnectedImageWithContent = computed(() => {
 // Handle generate action | 处理生成操作
 // mode: 'auto' = 自动判断, 'replace' = 替换现有, 'new' = 新建节点
 const handleGenerate = async (mode = 'auto') => {
+  if (!localModel.value) {
+    window.$message?.warning('请先在 API 设置的模型配置里添加图片模型')
+    return
+  }
+
+  if (modelCapabilityConflict.value) {
+    window.$message?.warning(
+      `当前选择的是${getCapabilityLabel(modelCapabilityConflict.value)}模型，请在图片模型里填写真正的图片模型，例如 gpt-image-2-sp。`
+    )
+    return
+  }
+
+  if (!selectedImageModel.value) {
+    window.$message?.warning('当前模型不在图片模型列表中，请先配置正确的图片模型')
+    return
+  }
+
   const { prompt, prompts, refImages, refImagesWithOrder } = getConnectedInputs()
 
   if (!prompt && refImages.length === 0) {
@@ -596,7 +635,7 @@ const handleGenerate = async (mode = 'auto') => {
     // Replace mode: find any connected image node | 替换模式：查找任意连接的图片节点
     imageNodeId = findConnectedOutputImageNode(false)
     if (imageNodeId) {
-      updateNode(imageNodeId, { loading: true, url: '' })
+      updateNode(imageNodeId, { loading: true, url: '', error: '' })
     }
   } else if (mode === 'new') {
     // New mode: always create new node | 新建模式：始终创建新节点
@@ -605,7 +644,7 @@ const handleGenerate = async (mode = 'auto') => {
     // Auto mode: check for empty connected node first | 自动模式：先检查空白连接节点
     imageNodeId = findConnectedOutputImageNode(true)
     if (imageNodeId) {
-      updateNode(imageNodeId, { loading: true })
+      updateNode(imageNodeId, { loading: true, error: '' })
     }
   }
   
@@ -626,6 +665,7 @@ const handleGenerate = async (mode = 'auto') => {
     imageNodeId = addNode('image', { x: nodeX + 400, y: nodeY + yOffset }, {
       url: '',
       loading: true,
+      error: '',
       label: '图像生成结果'
     })
 
@@ -651,11 +691,14 @@ const handleGenerate = async (mode = 'auto') => {
       model: localModel.value,
       prompt: prompt,
       size: localSize.value,
-      quality: localQuality.value,
       n: 1
     }
 
     // Add reference image if provided | 如果有参考图则添加
+    if (hasQualityOptions.value && localQuality.value) {
+      params.quality = localQuality.value
+    }
+
     if (refImages.length > 0) {
       params.image = refImages
     }
@@ -667,6 +710,7 @@ const handleGenerate = async (mode = 'auto') => {
       updateNode(imageNodeId, {
         url: result[0].url,
         loading: false,
+        error: '',
         label: '文生图',
         model: localModel.value,
         updatedAt: Date.now()

@@ -345,7 +345,6 @@ export const initProjectsStore = () => {
             position: { x: 500, y: 150 },
             data: {
               prompt: '',
-              model: 'doubao-seedream-4-5-251128',
               size: '512x512',
               label: '文生图'
             }

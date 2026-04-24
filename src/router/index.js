@@ -1,23 +1,31 @@
 /**
- * Router configuration | 路由配置
+ * Router configuration.
  */
-import { createRouter, createWebHistory } from 'vue-router'
+
+import { createMemoryHistory, createRouter, createWebHistory } from 'vue-router'
+import Home from '../views/Home.vue'
+import Canvas from '../views/Canvas.vue'
 
 const routes = [
   {
     path: '/',
     name: 'Home',
-    component: () => import('../views/Home.vue')
+    component: Home
   },
   {
     path: '/canvas/:id?',
     name: 'Canvas',
-    component: () => import('../views/Canvas.vue')
+    component: Canvas
   }
 ]
 
+const isDesktop = import.meta.env.APP_TARGET === 'desktop'
+const history = isDesktop
+  ? createMemoryHistory()
+  : createWebHistory(import.meta.env.BASE_URL)
+
 const router = createRouter({
-  history: createWebHistory('/huobao-canvas'),
+  history,
   routes
 })
 

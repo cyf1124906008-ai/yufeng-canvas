@@ -81,7 +81,6 @@ export const WORKFLOW_TEMPLATES = [
         position: { x: startPosition.x + nodeSpacing, y: startPosition.y + rowSpacing * 1.5 },
         data: {
           label: '主角色图',
-          model: 'doubao-seedream-4-5-251128',
           size: '2048x2048'
         }
       })
@@ -145,7 +144,6 @@ export const WORKFLOW_TEMPLATES = [
           position: { x: currentX, y: angleY },
           data: {
             label: `${angleConfig.label} (${angleConfig.english})`,
-            model: 'doubao-seedream-4-5-251128',
             size: '2048x2048'
           }
         })
@@ -218,7 +216,7 @@ export const WORKFLOW_TEMPLATES = [
         type: 'image',
         position: { x: startPosition.x, y: startPosition.y + rowSpacing },
         data: {
-          url: 'https://ffile.chatfire.site/image/covers/product01.jpg',
+    url: '',
           label: '产品图片'
         }
       })
@@ -281,7 +279,6 @@ export const WORKFLOW_TEMPLATES = [
         position: { x: startPosition.x + colSpacing * 2, y: startPosition.y },
         data: {
           label: '生成模特图',
-          model: 'doubao-seedream-4-5-251128',
           size: '2048x2048'
         }
       })
@@ -294,7 +291,6 @@ export const WORKFLOW_TEMPLATES = [
         position: { x: startPosition.x + colSpacing * 2, y: startPosition.y + rowSpacing },
         data: {
           label: '侧面展示图',
-          model: 'doubao-seedream-4-5-251128',
           size: '2048x2048'
         }
       })
@@ -307,7 +303,6 @@ export const WORKFLOW_TEMPLATES = [
         position: { x: startPosition.x + colSpacing * 2, y: startPosition.y + rowSpacing * 2 },
         data: {
           label: '俯瞰展示图',
-          model: 'doubao-seedream-4-5-251128',
           size: '2048x2048'
         }
       })
@@ -320,7 +315,6 @@ export const WORKFLOW_TEMPLATES = [
         position: { x: startPosition.x + colSpacing * 2, y: startPosition.y + rowSpacing * 3 },
         data: {
           label: '拆解图',
-          model: 'doubao-seedream-4-5-251128',
           size: '2048x2048'
         }
       })
@@ -507,7 +501,6 @@ export const WORKFLOW_TEMPLATES = [
         position: { x: startPosition.x + colSpacing * 2, y: startPosition.y },
         data: {
           label: '生成正面全身图',
-          model: 'doubao-seedream-4-5-251128',
           size: '1440x2560'
         }
       })
@@ -569,7 +562,6 @@ export const WORKFLOW_TEMPLATES = [
         position: { x: startPosition.x + colSpacing * 4 + 100, y: startPosition.y + rowSpacing },
         data: {
           label: '侧面半身图',
-          model: 'doubao-seedream-4-5-251128',
           size: '2048x2048'
         }
       })
@@ -582,7 +574,6 @@ export const WORKFLOW_TEMPLATES = [
         position: { x: startPosition.x + colSpacing * 4 + 100, y: startPosition.y + rowSpacing * 2 },
         data: {
           label: '表情特写图',
-          model: 'doubao-seedream-4-5-251128',
           size: '2048x2048'
         }
       })
@@ -595,7 +586,6 @@ export const WORKFLOW_TEMPLATES = [
         position: { x: startPosition.x + colSpacing * 4 + 100, y: startPosition.y + rowSpacing * 3 },
         data: {
           label: '背面全身图',
-          model: 'doubao-seedream-4-5-251128',
           size: '1440x2560'
         }
       })
@@ -753,7 +743,6 @@ export const WORKFLOW_TEMPLATES = [
         position: { x: startPosition.x + colSpacing * 2, y: startPosition.y },
         data: {
           label: '生成基础场景',
-          model: 'doubao-seedream-4-5-251128',
           size: '2560x1440'
         }
       })
@@ -815,7 +804,6 @@ export const WORKFLOW_TEMPLATES = [
         position: { x: startPosition.x + colSpacing * 4 + 100, y: startPosition.y + rowSpacing },
         data: {
           label: '傍晚场景',
-          model: 'doubao-seedream-4-5-251128',
           size: '2560x1440'
         }
       })
@@ -828,7 +816,6 @@ export const WORKFLOW_TEMPLATES = [
         position: { x: startPosition.x + colSpacing * 4 + 100, y: startPosition.y + rowSpacing * 2 },
         data: {
           label: '夜晚场景',
-          model: 'doubao-seedream-4-5-251128',
           size: '2560x1440'
         }
       })
@@ -841,7 +828,6 @@ export const WORKFLOW_TEMPLATES = [
         position: { x: startPosition.x + colSpacing * 4 + 100, y: startPosition.y + rowSpacing * 3 },
         data: {
           label: '雨天场景',
-          model: 'doubao-seedream-4-5-251128',
           size: '2560x1440'
         }
       })
@@ -1045,7 +1031,7 @@ export const WORKFLOW_TEMPLATES = [
     description: '角色生成 → 剧情文字 → 绘本插画，支持角色一致性',
     icon: 'BookOutline',
     category: 'creative',
-    cover: "https://ffile.chatfire.site/image/covers/workflow03.jpeg",
+    cover: "",
     createNodes: (startPosition) => {
       const colSpacing = 420
       const rowSpacing = 280
@@ -1101,7 +1087,6 @@ export const WORKFLOW_TEMPLATES = [
 3. 使用绘本水彩风格描述
 4. 末尾加上"白色简洁背景，儿童绘本水彩风格，温馨治愈，色彩明亮柔和"
 5. 直接输出，不要编号、标题或其他格式标记`,
-          model: 'gpt-4o-mini',
           outputFormat: 'text'
         }
       })
@@ -1123,7 +1108,6 @@ export const WORKFLOW_TEMPLATES = [
         position: { x: startPosition.x + colSpacing * 2, y: startPosition.y - rowSpacing },
         data: {
           label: '角色参考图',
-          model: 'doubao-seedream-4-5-251128',
           size: '2048x2048'
         }
       })

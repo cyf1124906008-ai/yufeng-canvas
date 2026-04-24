@@ -23,6 +23,27 @@ export const canvasViewport = ref({ x: 100, y: 50, zoom: 0.8 })
 // Selected node | 选中的节点
 export const selectedNode = ref(null)
 
+// Runtime logs | 当前会话运行日志（不写入项目文件）
+export const runtimeLogs = ref([])
+
+export const addRuntimeLog = (level, message, meta = {}) => {
+  runtimeLogs.value.unshift({
+    id: `log_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    level,
+    message,
+    meta,
+    timestamp: Date.now()
+  })
+
+  if (runtimeLogs.value.length > 120) {
+    runtimeLogs.value = runtimeLogs.value.slice(0, 120)
+  }
+}
+
+export const clearRuntimeLogs = () => {
+  runtimeLogs.value = []
+}
+
 // Auto-save flag | 自动保存标志
 let autoSaveEnabled = false
 let saveTimeout = null
@@ -242,7 +263,7 @@ const getDefaultNodeData = (type) => {
       const imageModel = IMAGE_MODELS.find(m => m.key === DEFAULT_IMAGE_MODEL) || IMAGE_MODELS[0]
       return {
         prompt: '',
-        model: DEFAULT_IMAGE_MODEL,
+        model: '',
         size: imageModel?.defaultParams?.size || '1x1',
         quality: imageModel?.defaultParams?.quality || 'standard',
         label: '文生图'
@@ -254,7 +275,7 @@ const getDefaultNodeData = (type) => {
         prompt: '',
         ratio: videoModel?.defaultParams?.ratio || '16:9',
         duration: videoModel?.defaultParams?.duration || 5,
-        model: DEFAULT_VIDEO_MODEL,
+        model: '',
         label: '图生视频'
       }
     }
@@ -273,7 +294,7 @@ const getDefaultNodeData = (type) => {
     case 'llmConfig':
       return {
         systemPrompt: '',
-        model: DEFAULT_CHAT_MODEL,
+        model: '',
         outputFormat: 'text',
         outputContent: '',
         label: 'LLM文本生成',
@@ -401,7 +422,6 @@ export const initSampleData = () => {
   // Add image config node | 添加文生图配置节点
   addNode('imageConfig', { x: 450, y: 150 }, {
     prompt: '',
-    model: 'doubao-seedream-4-5-251128',
     ratio: '16:9 | 4张 | 高清',
     label: '文生图'
   })

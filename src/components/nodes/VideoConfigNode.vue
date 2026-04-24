@@ -105,7 +105,7 @@
       </div> -->
 
         <!-- Generate button | 生成按钮 -->
-        <button @click="handleGenerate" :disabled="isGenerating || !isConfigured"
+        <button @click="handleGenerate" :disabled="isGenerating || !canGenerate"
           class="w-full flex items-center justify-center gap-2 py-2 px-4 rounded-lg bg-[var(--accent-color)] hover:bg-[var(--accent-hover)] text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
           <n-spin v-if="isGenerating" :size="14" />
           <template v-else>
@@ -151,7 +151,13 @@ import { useVideoGeneration } from '../../hooks'
 import { updateNode, removeNode, duplicateNode, addNode, addEdge, nodes, edges } from '../../stores/canvas'
 import NodeHandleMenu from './NodeHandleMenu.vue'
 import { useModelStore } from '../../stores/pinia'
-import { getModelRatioOptions, getModelDurationOptions, getModelConfig, DEFAULT_VIDEO_MODEL } from '../../stores/models'
+import { getCapabilityLabel, getModelCapabilityConflict } from '../../utils/modelCapability'
+import {
+  getModelRatioOptions,
+  getModelDurationOptions,
+  getModelResolutionOptions,
+  getModelConfig
+} from '../../stores/models'
 
 // 使用 Pinia store 获取模型选项（根据渠道过滤）
 const modelStore = useModelStore()
@@ -165,7 +171,7 @@ const props = defineProps({
 const { updateNodeInternals } = useVueFlow()
 
 // API config state | API 配置状态
-const isConfigured = computed(() => !!modelStore.currentApiKey)
+const isConfigured = computed(() => !!modelStore.currentVideoApiKey)
 
 // Video generation hook | 视频生成 hook
 const { loading, error, status, video: generatedVideo, progress, createVideoTaskOnly } = useVideoGeneration()
@@ -173,9 +179,10 @@ const { loading, error, status, video: generatedVideo, progress, createVideoTask
 // Local state | 本地状态
 const showHandleMenu = ref(false)
 const isGenerating = ref(false)  // 任务创建中状态
-const localModel = ref(props.data?.model || DEFAULT_VIDEO_MODEL)
+const localModel = ref(props.data?.model || modelStore.selectedVideoModel || '')
 const localRatio = ref(props.data?.ratio || '16:9')
 const localDuration = ref(props.data?.dur || 5)
+const localResolution = ref(props.data?.resolution || '720p')
 
 // Label editing state | Label 编辑状态
 const isEditingLabel = ref(false)
@@ -220,10 +227,14 @@ const imagesByRole = computed(() => {
 const currentModelConfig = computed(() => getModelConfig(localModel.value))
 
 // Model options from Pinia store (filtered by provider) | 从 Pinia store 获取模型选项（根据渠道过滤）
-const modelOptions = computed(() => modelStore.allVideoModelOptions)
+const modelOptions = computed(() => modelStore.videoModelOptions)
 
 // Display model name | 显示模型名称
 const displayModelName = computed(() => {
+  if (modelCapabilityConflict.value) {
+    return '选择视频模型'
+  }
+
   const model = modelOptions.value.find(m => m.key === localModel.value)
   // 如果当前模型不在选项中，尝试从 allVideoModels 找到
   if (!model) {
@@ -243,6 +254,32 @@ const durationOptions = computed(() => {
   return getModelDurationOptions(localModel.value)
 })
 
+const resolutionOptions = computed(() => {
+  return getModelResolutionOptions(localModel.value)
+})
+
+const hasResolutionOptions = computed(() => {
+  return Array.isArray(currentModelConfig.value?.resolutions) && currentModelConfig.value.resolutions.length > 0
+})
+
+const displayResolution = computed(() => {
+  const option = resolutionOptions.value.find((item) => item.key === localResolution.value)
+  return option?.label || localResolution.value
+})
+
+const selectedVideoModel = computed(() =>
+  modelStore.availableVideoModels.find((model) => model.key === localModel.value)
+)
+
+const modelCapabilityConflict = computed(() => getModelCapabilityConflict(localModel.value, 'video'))
+
+const canGenerate = computed(() =>
+  isConfigured.value &&
+  !!localModel.value &&
+  !!selectedVideoModel.value &&
+  !modelCapabilityConflict.value
+)
+
 // Handle model selection | 处理模型选择
 const handleModelSelect = (key) => {
   localModel.value = key
@@ -256,6 +293,10 @@ const handleModelSelect = (key) => {
   if (config?.defaultParams?.duration) {
     localDuration.value = config.defaultParams.duration
     updates.dur = config.defaultParams.duration
+  }
+  if (config?.defaultParams?.resolution || config?.defaultResolution) {
+    localResolution.value = config?.defaultParams?.resolution || config?.defaultResolution
+    updates.resolution = localResolution.value
   }
   updateNode(props.id, updates)
 }
@@ -281,6 +322,11 @@ const handleRatioSelect = (key) => {
 const handleDurationSelect = (key) => {
   localDuration.value = key
   updateNode(props.id, { dur: key })
+}
+
+const handleResolutionSelect = (key) => {
+  localResolution.value = key
+  updateNode(props.id, { resolution: key })
 }
 
 // Get connected inputs by role | 根据角色获取连接的输入
@@ -332,6 +378,26 @@ const handleGenerate = async () => {
   // 设置生成中状态
   isGenerating.value = true
 
+  if (!localModel.value) {
+    window.$message?.warning('请先在 API 设置的模型配置里添加视频模型')
+    isGenerating.value = false
+    return
+  }
+
+  if (modelCapabilityConflict.value) {
+    window.$message?.warning(
+      `当前选择的是${getCapabilityLabel(modelCapabilityConflict.value)}模型，请在视频模型里填写真正的视频模型，例如 kling-v2-5-turbo。`
+    )
+    isGenerating.value = false
+    return
+  }
+
+  if (!selectedVideoModel.value) {
+    window.$message?.warning('当前模型不在视频模型列表中，请先配置正确的视频模型')
+    isGenerating.value = false
+    return
+  }
+
   const { prompt, first_frame_image, last_frame_image, images } = getConnectedInputs()
 
   const hasInput = prompt || first_frame_image || last_frame_image || images.length > 0
@@ -356,6 +422,8 @@ const handleGenerate = async () => {
   const videoNodeId = addNode('video', { x: nodeX + 350, y: nodeY }, {
     url: '',
     loading: true,
+    error: '',
+    startedAt: Date.now(),
     label: '视频生成中...'
   })
   createdVideoNodeId.value = videoNodeId
@@ -410,6 +478,10 @@ const handleGenerate = async () => {
       params.dur = localDuration.value
     }
 
+    if (hasResolutionOptions.value && localResolution.value) {
+      params.resolution = localResolution.value
+    }
+
     // 只创建任务，获取 taskId，不在这里轮询
     const { taskId: newTaskId, url } = await createVideoTaskOnly(params)
 
@@ -418,8 +490,10 @@ const handleGenerate = async () => {
       updateNode(videoNodeId, {
         url: url,
         loading: false,
+        error: '',
         label: '视频生成',
         model: localModel.value,
+        finishedAt: Date.now(),
         updatedAt: Date.now()
       })
       window.$message?.success('视频生成成功')
@@ -430,6 +504,8 @@ const handleGenerate = async () => {
       updateNode(videoNodeId, {
         taskId: newTaskId,
         loading: true,
+        error: '',
+        startedAt: Date.now(),
         label: '视频生成中...',
         model: localModel.value,
         updatedAt: Date.now()
@@ -444,6 +520,7 @@ const handleGenerate = async () => {
       loading: false,
       error: err.message || '生成失败',
       label: '生成失败',
+      finishedAt: Date.now(),
       updatedAt: Date.now()
     })
     window.$message?.error(err.message || '视频生成失败')
@@ -488,9 +565,19 @@ onMounted(() => {
   const isModelAvailable = availableModels.some(m => m.key === localModel.value)
 
   if (!localModel.value || !isModelAvailable) {
-    // 使用 store 中的默认模型或第一个可用模型
-    localModel.value = modelStore.selectedVideoModel || availableModels[0]?.key || DEFAULT_VIDEO_MODEL
-    updateNode(props.id, { model: localModel.value })
+    // 只允许从视频模型列表里选择，避免把图片模型误发到视频接口产生扣费。
+    localModel.value = availableModels[0]?.key || ''
+    if (localModel.value) {
+      updateNode(props.id, { model: localModel.value })
+    } else if (props.data?.model) {
+      updateNode(props.id, { model: '' })
+    }
+  }
+
+  const config = getModelConfig(localModel.value)
+  if (config?.defaultParams?.resolution || config?.defaultResolution) {
+    localResolution.value = props.data?.resolution || config?.defaultParams?.resolution || config?.defaultResolution
+    updateNode(props.id, { resolution: localResolution.value })
   }
 })
 
@@ -498,6 +585,12 @@ onMounted(() => {
 watch(() => props.data?.model, (newModel) => {
   if (newModel && newModel !== localModel.value) {
     localModel.value = newModel
+  }
+})
+
+watch(() => props.data?.resolution, (newResolution) => {
+  if (newResolution && newResolution !== localResolution.value) {
+    localResolution.value = newResolution
   }
 })
 

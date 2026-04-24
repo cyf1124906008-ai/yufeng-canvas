@@ -1,6 +1,5 @@
 /**
- * Pinia Store: Model Config | 模型配置 Store
- * 管理模型配置、渠道切换和模型选择
+ * Pinia Store: Model Config
  */
 
 import { defineStore } from 'pinia'
@@ -11,11 +10,14 @@ import {
   VIDEO_MODELS,
   DEFAULT_CHAT_MODEL,
   DEFAULT_IMAGE_MODEL,
-  DEFAULT_VIDEO_MODEL
+  DEFAULT_VIDEO_MODEL,
+  getDefaultChatModelForProvider,
+  getDefaultVideoModelForProvider
 } from '@/config/models'
 import { PROVIDERS, getProviderList, getDefaultProvider, getProviderConfig, getDefaultBaseUrl } from '@/config/providers'
+import { DISTRIBUTION_CONFIG, getPresetApiKey, getPresetBaseUrl } from '@/config/distribution'
+import { isModelAllowedForCapability } from '@/utils/modelCapability'
 
-// 存储键名
 const STORAGE_KEYS = {
   PROVIDER: 'api-provider',
   CUSTOM_CHAT_MODELS: 'custom-chat-models',
@@ -31,9 +33,17 @@ const STORAGE_KEYS = {
   BASE_URLS_BY_PROVIDER: 'base-urls-by-provider'
 }
 
-/**
- * Get stored value from localStorage
- */
+const API_KEY_CAPABILITIES = ['default', 'chat', 'image', 'video']
+const REQUIRE_USER_MODELS = DISTRIBUTION_CONFIG.models?.requireUserModels === true
+
+const inferImageProtocol = (modelKey = '') => {
+  const value = String(modelKey).toLowerCase()
+  if (value.includes('gemini') && value.includes('image')) {
+    return 'chat'
+  }
+  return 'image'
+}
+
 const getStored = (key, defaultValue = '') => {
   try {
     return localStorage.getItem(key) || defaultValue
@@ -42,9 +52,6 @@ const getStored = (key, defaultValue = '') => {
   }
 }
 
-/**
- * Set stored value to localStorage
- */
 const setStored = (key, value) => {
   try {
     if (value) {
@@ -57,9 +64,14 @@ const setStored = (key, value) => {
   }
 }
 
-/**
- * Get stored JSON value from localStorage
- */
+const removeStored = (key) => {
+  try {
+    localStorage.removeItem(key)
+  } catch {
+    // ignore
+  }
+}
+
 const getStoredJson = (key, defaultValue = []) => {
   try {
     const stored = localStorage.getItem(key)
@@ -69,9 +81,6 @@ const getStoredJson = (key, defaultValue = []) => {
   }
 }
 
-/**
- * Set stored JSON value to localStorage
- */
 const setStoredJson = (key, value) => {
   try {
     localStorage.setItem(key, JSON.stringify(value))
@@ -80,450 +89,570 @@ const setStoredJson = (key, value) => {
   }
 }
 
-/**
- * 检查模型是否支持指定渠道
- */
+const normalizeApiKeyEntry = (entry, presetDefault = '') => {
+  const normalized = {
+    default: '',
+    chat: '',
+    image: '',
+    video: ''
+  }
+
+  if (typeof entry === 'string') {
+    normalized.default = entry.trim()
+  } else if (entry && typeof entry === 'object') {
+    API_KEY_CAPABILITIES.forEach((capability) => {
+      const value = entry[capability]
+      normalized[capability] = typeof value === 'string' ? value.trim() : ''
+    })
+  }
+
+  if (!normalized.default && presetDefault) {
+    normalized.default = presetDefault
+  }
+
+  return normalized
+}
+
+const normalizeApiKeysByProvider = (apiKeysByProvider = {}) =>
+  Object.entries(apiKeysByProvider).reduce((result, [provider, entry]) => {
+    result[provider] = normalizeApiKeyEntry(entry)
+    return result
+  }, {})
+
 const isModelSupported = (model, provider) => {
   if (!model.provider) {
     return true
   }
+
   return model.provider.includes(provider)
 }
 
+const buildCustomChatModel = (model, provider) => ({
+  label: model.label || model.key,
+  key: model.key,
+  isCustom: true,
+  ...(provider ? { provider: [provider] } : {})
+})
+
+const buildCustomImageModel = (model, provider) => ({
+  label: model.label || model.key,
+  key: model.key,
+  isCustom: true,
+  protocol: model.protocol || 'auto',
+  resolvedProtocol: model.protocol && model.protocol !== 'auto' ? model.protocol : inferImageProtocol(model.key),
+  sizes: model.sizes || ['1024x1024', '1536x1024', '1024x1536', '1792x1024', '1024x1792'],
+  defaultParams: { size: '1024x1024', quality: 'standard', style: 'vivid' },
+  ...(provider ? { provider: [provider] } : {})
+})
+
+const buildCustomVideoModel = (model, provider) => ({
+  label: model.label || model.key,
+  key: model.key,
+  isCustom: true,
+  ratios: ['16:9', '9:16', '1:1', '4:3', '3:4'],
+  durs: [{ label: '5 s', key: 5 }, { label: '10 s', key: 10 }],
+  defaultParams: { ratio: '16:9', duration: 5 },
+  ...(provider ? { provider: [provider] } : {})
+})
+
 export const useModelStore = defineStore('model', () => {
-  // ============ Provider 状态 | Provider State ============
+  const distributionDefaultProvider = DISTRIBUTION_CONFIG.api.defaultProvider || getDefaultProvider()
 
-  // 当前选中的渠道
-  const currentProvider = ref(getStored(STORAGE_KEYS.PROVIDER) || getDefaultProvider())
-
-  // 渠道列表
-  const providerList = computed(() => getProviderList())
-
-  // 当前渠道配置
-  const providerConfig = computed(() => getProviderConfig(currentProvider.value))
-
-  // 当前渠道标签
-  const providerLabel = computed(() => providerConfig.value.label || currentProvider.value)
-
-  // 设置当前渠道
-  const setProvider = (provider) => {
-    if (PROVIDERS[provider]) {
-      currentProvider.value = provider
-      setStored(STORAGE_KEYS.PROVIDER, provider)
+  const resolveInitialProvider = () => {
+    if (DISTRIBUTION_CONFIG.api.lockProvider) {
+      return distributionDefaultProvider
     }
+
+    const storedProvider = getStored(STORAGE_KEYS.PROVIDER, distributionDefaultProvider)
+    return PROVIDERS[storedProvider] ? storedProvider : distributionDefaultProvider
   }
 
-  // 清除渠道配置
+  const resolveBaseUrl = (provider, baseUrlsByProvider) => {
+    const presetBaseUrl = getPresetBaseUrl(provider)
+
+    if (DISTRIBUTION_CONFIG.api.lockBaseUrl && presetBaseUrl) {
+      return presetBaseUrl
+    }
+
+    return baseUrlsByProvider[provider] || presetBaseUrl || getDefaultBaseUrl(provider)
+  }
+
+  const currentProvider = ref(resolveInitialProvider())
+  const providerList = computed(() => getProviderList())
+  const providerConfig = computed(() => getProviderConfig(currentProvider.value))
+  const providerLabel = computed(() => providerConfig.value.label || currentProvider.value)
+  const getProviderChatFallback = (provider = currentProvider.value) =>
+    REQUIRE_USER_MODELS ? '' : getDefaultChatModelForProvider(provider)
+  const getProviderVideoFallback = (provider = currentProvider.value) =>
+    REQUIRE_USER_MODELS ? '' : getDefaultVideoModelForProvider(provider)
+
+  const setProvider = (provider) => {
+    const nextProvider = DISTRIBUTION_CONFIG.api.lockProvider
+      ? distributionDefaultProvider
+      : provider
+
+    if (!PROVIDERS[nextProvider]) {
+      return
+    }
+
+    currentProvider.value = nextProvider
+    setStored(STORAGE_KEYS.PROVIDER, nextProvider)
+  }
+
   const clearProvider = () => {
-    currentProvider.value = getDefaultProvider()
+    currentProvider.value = distributionDefaultProvider
     removeStored(STORAGE_KEYS.PROVIDER)
   }
 
-  // 适配请求参数
   const adaptRequest = (type, params) => {
-    const config = providerConfig.value
-    if (config.requestAdapter && config.requestAdapter[type]) {
-      return config.requestAdapter[type](params)
-    }
-    return params
+    const adapter = providerConfig.value.requestAdapter?.[type]
+    return adapter ? adapter(params) : params
   }
 
-  // 适配响应数据
   const adaptResponse = (type, response) => {
-    const config = providerConfig.value
-    if (config.responseAdapter && config.responseAdapter[type]) {
-      return config.responseAdapter[type](response)
-    }
-    return response
+    const adapter = providerConfig.value.responseAdapter?.[type]
+    return adapter ? adapter(response) : response
   }
 
-  // ============ Custom Models 状态 | Custom Models State ============
-
-  // 全局自定义模型（不区分渠道）
   const customChatModels = ref(getStoredJson(STORAGE_KEYS.CUSTOM_CHAT_MODELS, []))
   const customImageModels = ref(getStoredJson(STORAGE_KEYS.CUSTOM_IMAGE_MODELS, []))
   const customVideoModels = ref(getStoredJson(STORAGE_KEYS.CUSTOM_VIDEO_MODELS, []))
 
-  // 按渠道存储的自定义模型 | 结构: { 'openai': [{key, label}], 'chatfire': [{key, label}] }
   const customChatModelsByProvider = ref(getStoredJson(STORAGE_KEYS.CUSTOM_CHAT_MODELS_BY_PROVIDER, {}))
   const customImageModelsByProvider = ref(getStoredJson(STORAGE_KEYS.CUSTOM_IMAGE_MODELS_BY_PROVIDER, {}))
   const customVideoModelsByProvider = ref(getStoredJson(STORAGE_KEYS.CUSTOM_VIDEO_MODELS_BY_PROVIDER, {}))
 
-  // 选中的模型
-  const selectedChatModel = ref(getStored(STORAGE_KEYS.SELECTED_CHAT_MODEL, DEFAULT_CHAT_MODEL))
-  const selectedImageModel = ref(getStored(STORAGE_KEYS.SELECTED_IMAGE_MODEL, DEFAULT_IMAGE_MODEL))
-  const selectedVideoModel = ref(getStored(STORAGE_KEYS.SELECTED_VIDEO_MODEL, DEFAULT_VIDEO_MODEL))
+  const selectedChatModel = ref(getStored(STORAGE_KEYS.SELECTED_CHAT_MODEL, getProviderChatFallback()))
+  const selectedImageModel = ref(getStored(STORAGE_KEYS.SELECTED_IMAGE_MODEL, REQUIRE_USER_MODELS ? '' : DEFAULT_IMAGE_MODEL))
+  const selectedVideoModel = ref(
+    getStored(STORAGE_KEYS.SELECTED_VIDEO_MODEL, getProviderVideoFallback(currentProvider.value))
+  )
 
-  // 按渠道存储的 API 配置
-  const apiKeysByProvider = ref(getStoredJson(STORAGE_KEYS.API_KEYS_BY_PROVIDER, {}))
+  const apiKeysByProvider = ref(normalizeApiKeysByProvider(getStoredJson(STORAGE_KEYS.API_KEYS_BY_PROVIDER, {})))
   const baseUrlsByProvider = ref(getStoredJson(STORAGE_KEYS.BASE_URLS_BY_PROVIDER, {}))
 
-  // 当前渠道的 API Key 和 Base URL
-  const currentApiKey = computed(() => apiKeysByProvider.value[currentProvider.value] || '')
-  const currentBaseUrl = computed(() => baseUrlsByProvider.value[currentProvider.value] || getDefaultBaseUrl(currentProvider.value))
-
-  // 设置指定渠道的 API Key
-  const setApiKeyByProvider = (provider, apiKey) => {
-    apiKeysByProvider.value[provider] = apiKey
+  const getApiKeyByProvider = (provider, capability = 'default') => {
+    const normalizedCapability = API_KEY_CAPABILITIES.includes(capability) ? capability : 'default'
+    const apiKeyEntry = normalizeApiKeyEntry(apiKeysByProvider.value[provider], getPresetApiKey(provider))
+    return apiKeyEntry[normalizedCapability] || apiKeyEntry.default || ''
   }
 
-  // 设置指定渠道的 Base URL
+  const currentApiKey = computed(() => getApiKeyByProvider(currentProvider.value))
+  const currentChatApiKey = computed(() => getApiKeyByProvider(currentProvider.value, 'chat'))
+  const currentImageApiKey = computed(() => getApiKeyByProvider(currentProvider.value, 'image'))
+  const currentVideoApiKey = computed(() => getApiKeyByProvider(currentProvider.value, 'video'))
+  const hasAnyApiKey = computed(() =>
+    API_KEY_CAPABILITIES.some((capability) => !!getApiKeyByProvider(currentProvider.value, capability))
+  )
+  const currentBaseUrl = computed(() => resolveBaseUrl(currentProvider.value, baseUrlsByProvider.value))
+
+  const setApiKeyByProvider = (provider, apiKey, capability = 'default') => {
+    const normalizedCapability = API_KEY_CAPABILITIES.includes(capability) ? capability : 'default'
+    const normalizedApiKey = apiKey?.trim?.() || ''
+    const nextEntry = normalizeApiKeyEntry(apiKeysByProvider.value[provider])
+
+    if (normalizedApiKey) {
+      nextEntry[normalizedCapability] = normalizedApiKey
+    } else {
+      nextEntry[normalizedCapability] = ''
+    }
+
+    if (API_KEY_CAPABILITIES.some((key) => nextEntry[key])) {
+      apiKeysByProvider.value[provider] = nextEntry
+    } else {
+      delete apiKeysByProvider.value[provider]
+    }
+  }
+
   const setBaseUrlByProvider = (provider, baseUrl) => {
-    baseUrlsByProvider.value[provider] = baseUrl
+    const normalizedBaseUrl = baseUrl?.trim?.() || ''
+    const nextBaseUrl = DISTRIBUTION_CONFIG.api.lockBaseUrl
+      ? resolveBaseUrl(provider, {})
+      : normalizedBaseUrl
+
+    if (nextBaseUrl) {
+      baseUrlsByProvider.value[provider] = nextBaseUrl
+    } else {
+      delete baseUrlsByProvider.value[provider]
+    }
   }
 
-  // 清除指定渠道的 API 配置
   const clearApiConfigByProvider = (provider) => {
     delete apiKeysByProvider.value[provider]
     delete baseUrlsByProvider.value[provider]
   }
 
-  // ============ Computed: All Models (built-in + custom + by provider) ============
-
   const allChatModels = computed(() => [
-    ...CHAT_MODELS.map(m => ({ ...m, isCustom: false })),
-    ...customChatModels.value.map(m => ({
-      label: m.label || m.key,
-      key: m.key,
-      isCustom: true
-    })),
-    // 添加当前渠道的自定义模型
-    ...(customChatModelsByProvider.value[currentProvider.value] || []).map(m => ({
-      label: m.label || m.key,
-      key: m.key,
-      isCustom: true,
-      provider: [currentProvider.value]
-    }))
-  ])
+    ...(REQUIRE_USER_MODELS ? [] : CHAT_MODELS.map((model) => ({ ...model, isCustom: false }))),
+    ...customChatModels.value.map((model) => buildCustomChatModel(model)),
+    ...(customChatModelsByProvider.value[currentProvider.value] || []).map((model) =>
+      buildCustomChatModel(model, currentProvider.value)
+    )
+  ].filter((model) => isModelAllowedForCapability(model.key, 'chat')))
 
   const allImageModels = computed(() => [
-    ...IMAGE_MODELS.map(m => ({ ...m, isCustom: false })),
-    ...customImageModels.value.map(m => ({
-      label: m.label || m.key,
-      key: m.key,
-      isCustom: true,
-      sizes: [],
-      defaultParams: { quality: 'standard', style: 'vivid' }
-    })),
-    // 添加当前渠道的自定义模型
-    ...(customImageModelsByProvider.value[currentProvider.value] || []).map(m => ({
-      label: m.label || m.key,
-      key: m.key,
-      isCustom: true,
-      sizes: [],
-      defaultParams: { quality: 'standard', style: 'vivid' },
-      provider: [currentProvider.value]
-    }))
-  ])
+    ...(REQUIRE_USER_MODELS ? [] : IMAGE_MODELS.map((model) => ({ ...model, isCustom: false }))),
+    ...customImageModels.value.map((model) => buildCustomImageModel(model)),
+    ...(customImageModelsByProvider.value[currentProvider.value] || []).map((model) =>
+      buildCustomImageModel(model, currentProvider.value)
+    )
+  ].filter((model) => isModelAllowedForCapability(model.key, 'image')))
 
   const allVideoModels = computed(() => [
-    ...VIDEO_MODELS.map(m => ({ ...m, isCustom: false })),
-    ...customVideoModels.value.map(m => ({
-      label: m.label || m.key,
-      key: m.key,
-      isCustom: true,
-      ratios: ['16x9', '9:16', '1:1'],
-      durs: [{ label: '5 秒', key: 5 }, { label: '10 秒', key: 10 }],
-      defaultParams: { ratio: '16:9', duration: 5 }
-    })),
-    // 添加当前渠道的自定义模型
-    ...(customVideoModelsByProvider.value[currentProvider.value] || []).map(m => ({
-      label: m.label || m.key,
-      key: m.key,
-      isCustom: true,
-      ratios: ['16x9', '9:16', '1:1'],
-      durs: [{ label: '5 秒', key: 5 }, { label: '10 秒', key: 10 }],
-      defaultParams: { ratio: '16:9', duration: 5 },
-      provider: [currentProvider.value]
-    }))
-  ])
+    ...(REQUIRE_USER_MODELS ? [] : VIDEO_MODELS.map((model) => ({ ...model, isCustom: false }))),
+    ...customVideoModels.value.map((model) => buildCustomVideoModel(model)),
+    ...(customVideoModelsByProvider.value[currentProvider.value] || []).map((model) =>
+      buildCustomVideoModel(model, currentProvider.value)
+    )
+  ].filter((model) => isModelAllowedForCapability(model.key, 'video')))
 
-  // ============ Computed: Available Models (filtered by provider) ============
-
-  // 按渠道过滤的可用模型
   const availableChatModels = computed(() =>
-    allChatModels.value.filter(m => isModelSupported(m, currentProvider.value))
+    allChatModels.value.filter((model) => isModelSupported(model, currentProvider.value))
   )
 
   const availableImageModels = computed(() =>
-    allImageModels.value.filter(m => isModelSupported(m, currentProvider.value))
+    allImageModels.value.filter((model) => isModelSupported(model, currentProvider.value))
   )
 
   const availableVideoModels = computed(() =>
-    allVideoModels.value.filter(m => isModelSupported(m, currentProvider.value))
+    allVideoModels.value.filter((model) => isModelSupported(model, currentProvider.value))
   )
 
-  // ============ Computed: Model Options for UI (all models, not filtered by provider) ============
-
-  // 返回适合 n-dropdown 使用的选项格式（全部模型，不按渠道过滤）
   const allImageModelOptions = computed(() =>
-    allImageModels.value.map(m => ({
-      label: m.label,
-      key: m.key
+    allImageModels.value.map((model) => ({
+      label: model.label,
+      key: model.key
     }))
   )
 
   const allVideoModelOptions = computed(() =>
-    allVideoModels.value.map(m => ({
-      label: m.label,
-      key: m.key
+    allVideoModels.value.map((model) => ({
+      label: model.label,
+      key: model.key
     }))
   )
 
   const allChatModelOptions = computed(() =>
-    allChatModels.value.map(m => ({
-      label: m.label,
-      key: m.key
+    allChatModels.value.map((model) => ({
+      label: model.label,
+      key: model.key
     }))
   )
 
-  // ============ Computed: Model Options for UI (filtered by provider - deprecated, use all* instead) ============
-
-  // 返回适合 n-dropdown 使用的选项格式
   const imageModelOptions = computed(() =>
-    availableImageModels.value.map(m => ({
-      label: m.label,
-      key: m.key
+    availableImageModels.value.map((model) => ({
+      label: model.label,
+      key: model.key
     }))
   )
 
   const videoModelOptions = computed(() =>
-    availableVideoModels.value.map(m => ({
-      label: m.label,
-      key: m.key
+    availableVideoModels.value.map((model) => ({
+      label: model.label,
+      key: model.key
     }))
   )
 
   const chatModelOptions = computed(() =>
-    availableChatModels.value.map(m => ({
-      label: m.label,
-      key: m.key
+    availableChatModels.value.map((model) => ({
+      label: model.label,
+      key: model.key
     }))
   )
 
-  // ============ Methods: Add/Remove Custom Models ============
-
   const addCustomChatModel = (modelKey, label = '') => {
-    if (!modelKey || customChatModels.value.some(m => m.key === modelKey)) return false
+    if (!modelKey || customChatModels.value.some((model) => model.key === modelKey)) {
+      return false
+    }
+
     customChatModels.value.push({ key: modelKey, label: label || modelKey })
+    selectedChatModel.value = modelKey
     return true
   }
 
-  const addCustomImageModel = (modelKey, label = '') => {
-    if (!modelKey || customImageModels.value.some(m => m.key === modelKey)) return false
-    customImageModels.value.push({ key: modelKey, label: label || modelKey })
+  const addCustomImageModel = (modelKey, label = '', options = {}) => {
+    if (!modelKey || customImageModels.value.some((model) => model.key === modelKey)) {
+      return false
+    }
+
+    customImageModels.value.push({ key: modelKey, label: label || modelKey, protocol: options.protocol || 'auto' })
+    selectedImageModel.value = modelKey
     return true
   }
 
   const addCustomVideoModel = (modelKey, label = '') => {
-    if (!modelKey || customVideoModels.value.some(m => m.key === modelKey)) return false
+    if (!modelKey || customVideoModels.value.some((model) => model.key === modelKey)) {
+      return false
+    }
+
     customVideoModels.value.push({ key: modelKey, label: label || modelKey })
+    selectedVideoModel.value = modelKey
     return true
   }
 
   const removeCustomChatModel = (modelKey) => {
-    const idx = customChatModels.value.findIndex(m => m.key === modelKey)
-    if (idx > -1) {
-      customChatModels.value.splice(idx, 1)
-      if (selectedChatModel.value === modelKey) {
-        selectedChatModel.value = DEFAULT_CHAT_MODEL
-      }
-      return true
+    const index = customChatModels.value.findIndex((model) => model.key === modelKey)
+    if (index < 0) {
+      return false
     }
-    return false
+
+    customChatModels.value.splice(index, 1)
+    if (selectedChatModel.value === modelKey) {
+      selectedChatModel.value = availableChatModels.value[0]?.key || getProviderChatFallback()
+    }
+    return true
   }
 
   const removeCustomImageModel = (modelKey) => {
-    const idx = customImageModels.value.findIndex(m => m.key === modelKey)
-    if (idx > -1) {
-      customImageModels.value.splice(idx, 1)
-      if (selectedImageModel.value === modelKey) {
-        selectedImageModel.value = DEFAULT_IMAGE_MODEL
-      }
-      return true
+    const index = customImageModels.value.findIndex((model) => model.key === modelKey)
+    if (index < 0) {
+      return false
     }
-    return false
+
+    customImageModels.value.splice(index, 1)
+    if (selectedImageModel.value === modelKey) {
+      selectedImageModel.value = availableImageModels.value[0]?.key || (REQUIRE_USER_MODELS ? '' : DEFAULT_IMAGE_MODEL)
+    }
+    return true
   }
 
   const removeCustomVideoModel = (modelKey) => {
-    const idx = customVideoModels.value.findIndex(m => m.key === modelKey)
-    if (idx > -1) {
-      customVideoModels.value.splice(idx, 1)
-      if (selectedVideoModel.value === modelKey) {
-        selectedVideoModel.value = DEFAULT_VIDEO_MODEL
-      }
+    const index = customVideoModels.value.findIndex((model) => model.key === modelKey)
+    if (index < 0) {
+      return false
+    }
+
+    customVideoModels.value.splice(index, 1)
+    if (selectedVideoModel.value === modelKey) {
+      selectedVideoModel.value = availableVideoModels.value[0]?.key || getProviderVideoFallback()
+    }
+    return true
+  }
+
+  const getChatModel = (key) => allChatModels.value.find((model) => model.key === key)
+  const getImageModel = (key) => allImageModels.value.find((model) => model.key === key)
+  const getVideoModel = (key) => allVideoModels.value.find((model) => model.key === key)
+
+  const getImageModelProtocol = (key) => getImageModel(key)?.resolvedProtocol || inferImageProtocol(key)
+
+  const updateCustomImageModelProtocol = (modelKey, protocol = 'auto') => {
+    const normalizedProtocol = ['auto', 'image', 'chat'].includes(protocol) ? protocol : 'auto'
+    const updateList = (list) => {
+      const model = list.find((item) => item.key === modelKey)
+      if (!model) return false
+      model.protocol = normalizedProtocol
       return true
     }
+
+    if (updateList(customImageModels.value)) return true
+
+    for (const models of Object.values(customImageModelsByProvider.value)) {
+      if (Array.isArray(models) && updateList(models)) {
+        return true
+      }
+    }
+
     return false
   }
 
-  // ============ Methods: Get Model Config ============
-
-  const getChatModel = (key) => allChatModels.value.find(m => m.key === key)
-  const getImageModel = (key) => allImageModels.value.find(m => m.key === key)
-  const getVideoModel = (key) => allVideoModels.value.find(m => m.key === key)
-
-  // ============ Methods: Get API Endpoints ============
-
-  // 获取图片端点
   const getImageEndpoint = () => {
     const endpoint = providerConfig.value.endpoints?.image || '/images/generations'
     return `${currentBaseUrl.value}${endpoint}`
   }
 
-  // 获取视频生成端点
+  const getImageEditEndpoint = () => {
+    const endpoint = providerConfig.value.endpoints?.imageEdit || '/images/edits'
+    return `${currentBaseUrl.value}${endpoint}`
+  }
+
   const getVideoEndpoint = () => {
     const endpoint = providerConfig.value.endpoints?.video || '/videos'
     return `${currentBaseUrl.value}${endpoint}`
   }
 
-  // 获取视频任务查询端点
   const getVideoTaskEndpoint = () => {
-    const config = providerConfig.value
-    // 优先使用 videoQuery 端点，支持 {taskId} 占位符替换
-    let endpoint = config.endpoints?.videoQuery || config.endpoints?.video || '/videos'
+    const endpoint = providerConfig.value.endpoints?.videoQuery || providerConfig.value.endpoints?.video || '/videos'
     return `${currentBaseUrl.value}${endpoint}`
   }
 
-  // 获取聊天端点（支持参考图片）
   const getChatEndpoint = () => {
-    const endpoint = providerConfig.value?.endpoints?.chat || '/chat/completions'
+    const endpoint = providerConfig.value.endpoints?.chat || '/chat/completions'
     return `${currentBaseUrl.value}${endpoint}`
   }
 
-  // ============ Methods: Get Models By Provider (for ApiSettings) ============
-
-  const getModelsByProvider = (provider) => {
-    const chat = [
-      ...CHAT_MODELS.filter(m => isModelSupported(m, provider)).map(m => ({ ...m, isCustom: false })),
-      ...(customChatModelsByProvider.value[provider] || []).map(m => ({
-        label: m.label || m.key,
-        key: m.key,
-        isCustom: true,
-        provider: [provider]
-      }))
+  const getModelsByProvider = (provider) => ({
+    chat: [
+      ...(REQUIRE_USER_MODELS ? [] : CHAT_MODELS.filter((model) => isModelSupported(model, provider)).map((model) => ({
+        ...model,
+        isCustom: false
+      }))),
+      ...(customChatModelsByProvider.value[provider] || []).map((model) => buildCustomChatModel(model, provider))
+    ],
+    image: [
+      ...(REQUIRE_USER_MODELS ? [] : IMAGE_MODELS.filter((model) => isModelSupported(model, provider)).map((model) => ({
+        ...model,
+        isCustom: false
+      }))),
+      ...(customImageModelsByProvider.value[provider] || []).map((model) => buildCustomImageModel(model, provider))
+    ],
+    video: [
+      ...(REQUIRE_USER_MODELS ? [] : VIDEO_MODELS.filter((model) => isModelSupported(model, provider)).map((model) => ({
+        ...model,
+        isCustom: false
+      }))),
+      ...(customVideoModelsByProvider.value[provider] || []).map((model) => buildCustomVideoModel(model, provider))
     ]
-    const image = [
-      ...IMAGE_MODELS.filter(m => isModelSupported(m, provider)).map(m => ({ ...m, isCustom: false })),
-      ...(customImageModelsByProvider.value[provider] || []).map(m => ({
-        label: m.label || m.key,
-        key: m.key,
-        isCustom: true,
-        sizes: [],
-        defaultParams: { quality: 'standard', style: 'vivid' },
-        provider: [provider]
-      }))
-    ]
-    const video = [
-      ...VIDEO_MODELS.filter(m => isModelSupported(m, provider)).map(m => ({ ...m, isCustom: false })),
-      ...(customVideoModelsByProvider.value[provider] || []).map(m => ({
-        label: m.label || m.key,
-        key: m.key,
-        isCustom: true,
-        ratios: ['16x9', '9:16', '1:1'],
-        durs: [{ label: '5 秒', key: 5 }, { label: '10 秒', key: 10 }],
-        defaultParams: { ratio: '16:9', duration: 5 },
-        provider: [provider]
-      }))
-    ]
-    return { chat, image, video }
-  }
-
-  // ============ Methods: Add/Remove Custom Models By Provider ============
+  })
 
   const addCustomChatModelByProvider = (modelKey, provider, label = '') => {
-    if (!modelKey) return false
+    if (!modelKey) {
+      return false
+    }
+
     if (!customChatModelsByProvider.value[provider]) {
       customChatModelsByProvider.value[provider] = []
     }
-    if (customChatModelsByProvider.value[provider].some(m => m.key === modelKey)) return false
+
+    if (customChatModelsByProvider.value[provider].some((model) => model.key === modelKey)) {
+      return false
+    }
+
     customChatModelsByProvider.value[provider].push({ key: modelKey, label: label || modelKey })
+    selectedChatModel.value = modelKey
     return true
   }
 
-  const addCustomImageModelByProvider = (modelKey, provider, label = '') => {
-    if (!modelKey) return false
+  const addCustomImageModelByProvider = (modelKey, provider, label = '', options = {}) => {
+    if (!modelKey) {
+      return false
+    }
+
     if (!customImageModelsByProvider.value[provider]) {
       customImageModelsByProvider.value[provider] = []
     }
-    if (customImageModelsByProvider.value[provider].some(m => m.key === modelKey)) return false
-    customImageModelsByProvider.value[provider].push({ key: modelKey, label: label || modelKey })
+
+    if (customImageModelsByProvider.value[provider].some((model) => model.key === modelKey)) {
+      return false
+    }
+
+    customImageModelsByProvider.value[provider].push({ key: modelKey, label: label || modelKey, protocol: options.protocol || 'auto' })
+    selectedImageModel.value = modelKey
     return true
   }
 
   const addCustomVideoModelByProvider = (modelKey, provider, label = '') => {
-    if (!modelKey) return false
+    if (!modelKey) {
+      return false
+    }
+
     if (!customVideoModelsByProvider.value[provider]) {
       customVideoModelsByProvider.value[provider] = []
     }
-    if (customVideoModelsByProvider.value[provider].some(m => m.key === modelKey)) return false
+
+    if (customVideoModelsByProvider.value[provider].some((model) => model.key === modelKey)) {
+      return false
+    }
+
     customVideoModelsByProvider.value[provider].push({ key: modelKey, label: label || modelKey })
+    selectedVideoModel.value = modelKey
     return true
   }
 
   const removeCustomChatModelByProvider = (modelKey, provider) => {
-    if (!customChatModelsByProvider.value[provider]) return false
-    const idx = customChatModelsByProvider.value[provider].findIndex(m => m.key === modelKey)
-    if (idx > -1) {
-      customChatModelsByProvider.value[provider].splice(idx, 1)
-      return true
+    const models = customChatModelsByProvider.value[provider]
+    if (!models) {
+      return false
     }
-    return false
+
+    const index = models.findIndex((model) => model.key === modelKey)
+    if (index < 0) {
+      return false
+    }
+
+    models.splice(index, 1)
+    return true
   }
 
   const removeCustomImageModelByProvider = (modelKey, provider) => {
-    if (!customImageModelsByProvider.value[provider]) return false
-    const idx = customImageModelsByProvider.value[provider].findIndex(m => m.key === modelKey)
-    if (idx > -1) {
-      customImageModelsByProvider.value[provider].splice(idx, 1)
-      return true
+    const models = customImageModelsByProvider.value[provider]
+    if (!models) {
+      return false
     }
-    return false
+
+    const index = models.findIndex((model) => model.key === modelKey)
+    if (index < 0) {
+      return false
+    }
+
+    models.splice(index, 1)
+    return true
   }
 
   const removeCustomVideoModelByProvider = (modelKey, provider) => {
-    if (!customVideoModelsByProvider.value[provider]) return false
-    const idx = customVideoModelsByProvider.value[provider].findIndex(m => m.key === modelKey)
-    if (idx > -1) {
-      customVideoModelsByProvider.value[provider].splice(idx, 1)
-      return true
+    const models = customVideoModelsByProvider.value[provider]
+    if (!models) {
+      return false
     }
-    return false
+
+    const index = models.findIndex((model) => model.key === modelKey)
+    if (index < 0) {
+      return false
+    }
+
+    models.splice(index, 1)
+    return true
   }
 
-  // 清除所有自定义模型
   const clearCustomModels = () => {
     customChatModels.value = []
     customImageModels.value = []
     customVideoModels.value = []
-    selectedChatModel.value = DEFAULT_CHAT_MODEL
-    selectedImageModel.value = DEFAULT_IMAGE_MODEL
-    selectedVideoModel.value = DEFAULT_VIDEO_MODEL
+    selectedChatModel.value = getProviderChatFallback()
+    selectedImageModel.value = REQUIRE_USER_MODELS ? '' : DEFAULT_IMAGE_MODEL
+    selectedVideoModel.value = getProviderVideoFallback()
   }
 
-  // ============ Watch & Persist ============
+  watch(customChatModels, (value) => setStoredJson(STORAGE_KEYS.CUSTOM_CHAT_MODELS, value), { deep: true })
+  watch(customImageModels, (value) => setStoredJson(STORAGE_KEYS.CUSTOM_IMAGE_MODELS, value), { deep: true })
+  watch(customVideoModels, (value) => setStoredJson(STORAGE_KEYS.CUSTOM_VIDEO_MODELS, value), { deep: true })
 
-  // 监听并持久化自定义模型
-  watch(customChatModels, (val) => setStoredJson(STORAGE_KEYS.CUSTOM_CHAT_MODELS, val), { deep: true })
-  watch(customImageModels, (val) => setStoredJson(STORAGE_KEYS.CUSTOM_IMAGE_MODELS, val), { deep: true })
-  watch(customVideoModels, (val) => setStoredJson(STORAGE_KEYS.CUSTOM_VIDEO_MODELS, val), { deep: true })
+  watch(customChatModelsByProvider, (value) => setStoredJson(STORAGE_KEYS.CUSTOM_CHAT_MODELS_BY_PROVIDER, value), {
+    deep: true
+  })
+  watch(customImageModelsByProvider, (value) => setStoredJson(STORAGE_KEYS.CUSTOM_IMAGE_MODELS_BY_PROVIDER, value), {
+    deep: true
+  })
+  watch(customVideoModelsByProvider, (value) => setStoredJson(STORAGE_KEYS.CUSTOM_VIDEO_MODELS_BY_PROVIDER, value), {
+    deep: true
+  })
 
-  // 监听并持久化按渠道的自定义模型
-  watch(customChatModelsByProvider, (val) => setStoredJson(STORAGE_KEYS.CUSTOM_CHAT_MODELS_BY_PROVIDER, val), { deep: true })
-  watch(customImageModelsByProvider, (val) => setStoredJson(STORAGE_KEYS.CUSTOM_IMAGE_MODELS_BY_PROVIDER, val), { deep: true })
-  watch(customVideoModelsByProvider, (val) => setStoredJson(STORAGE_KEYS.CUSTOM_VIDEO_MODELS_BY_PROVIDER, val), { deep: true })
+  watch(selectedChatModel, (value) => setStored(STORAGE_KEYS.SELECTED_CHAT_MODEL, value))
+  watch(selectedImageModel, (value) => setStored(STORAGE_KEYS.SELECTED_IMAGE_MODEL, value))
+  watch(selectedVideoModel, (value) => setStored(STORAGE_KEYS.SELECTED_VIDEO_MODEL, value))
 
-  // 监听并持久化选中的模型
-  watch(selectedChatModel, (val) => setStored(STORAGE_KEYS.SELECTED_CHAT_MODEL, val))
-  watch(selectedImageModel, (val) => setStored(STORAGE_KEYS.SELECTED_IMAGE_MODEL, val))
-  watch(selectedVideoModel, (val) => setStored(STORAGE_KEYS.SELECTED_VIDEO_MODEL, val))
-
-  // 监听并持久化 API 配置
-  watch(apiKeysByProvider, (val) => setStoredJson(STORAGE_KEYS.API_KEYS_BY_PROVIDER, val), { deep: true })
-  watch(baseUrlsByProvider, (val) => setStoredJson(STORAGE_KEYS.BASE_URLS_BY_PROVIDER, val), { deep: true })
+  watch(apiKeysByProvider, (value) => setStoredJson(STORAGE_KEYS.API_KEYS_BY_PROVIDER, value), { deep: true })
+  watch(baseUrlsByProvider, (value) => setStoredJson(STORAGE_KEYS.BASE_URLS_BY_PROVIDER, value), { deep: true })
+  watch(currentProvider, (value) => setStored(STORAGE_KEYS.PROVIDER, value), { immediate: true })
+  watch(currentProvider, (provider) => {
+    const isSelectedModelSupported = availableChatModels.value.some((model) => model.key === selectedChatModel.value)
+    if (!isSelectedModelSupported) {
+      selectedChatModel.value = availableChatModels.value[0]?.key || getProviderChatFallback(provider)
+    }
+  }, { immediate: true })
+  watch(currentProvider, () => {
+    const isSelectedModelSupported = availableImageModels.value.some((model) => model.key === selectedImageModel.value)
+    if (!isSelectedModelSupported) {
+      selectedImageModel.value = availableImageModels.value[0]?.key || (REQUIRE_USER_MODELS ? '' : DEFAULT_IMAGE_MODEL)
+    }
+  }, { immediate: true })
+  watch(currentProvider, (provider) => {
+    const isSelectedModelSupported = availableVideoModels.value.some((model) => model.key === selectedVideoModel.value)
+    if (!isSelectedModelSupported) {
+      selectedVideoModel.value = availableVideoModels.value[0]?.key || getProviderVideoFallback(provider)
+    }
+  }, { immediate: true })
 
   return {
-    // Provider
     currentProvider,
     providerList,
     providerConfig,
@@ -532,80 +661,61 @@ export const useModelStore = defineStore('model', () => {
     clearProvider,
     adaptRequest,
     adaptResponse,
-
-    // All models (built-in + custom)
     allChatModels,
     allImageModels,
     allVideoModels,
-
-    // Available models filtered by provider
     availableChatModels,
     availableImageModels,
     availableVideoModels,
-
-    // Model options for UI (dropdown format)
     imageModelOptions,
     videoModelOptions,
     chatModelOptions,
-
-    // All model options (not filtered by provider)
     allImageModelOptions,
     allVideoModelOptions,
     allChatModelOptions,
-
-    // Selected models
     selectedChatModel,
     selectedImageModel,
     selectedVideoModel,
-
-    // Custom models
     customChatModels,
     customImageModels,
     customVideoModels,
-
-    // Custom models by provider
     customChatModelsByProvider,
     customImageModelsByProvider,
     customVideoModelsByProvider,
-
-    // Add/Remove methods
     addCustomChatModel,
     addCustomImageModel,
     addCustomVideoModel,
     removeCustomChatModel,
     removeCustomImageModel,
     removeCustomVideoModel,
-
-    // Add/Remove by provider methods
     addCustomChatModelByProvider,
     addCustomImageModelByProvider,
     addCustomVideoModelByProvider,
     removeCustomChatModelByProvider,
     removeCustomImageModelByProvider,
     removeCustomVideoModelByProvider,
-
-    // Get model
     getChatModel,
     getImageModel,
     getVideoModel,
-
-    // Get API endpoints
+    getImageModelProtocol,
+    updateCustomImageModelProtocol,
     getImageEndpoint,
+    getImageEditEndpoint,
     getVideoEndpoint,
     getVideoTaskEndpoint,
     getChatEndpoint,
-
-    // Get models by provider (for ApiSettings)
     getModelsByProvider,
-
-    // Clear all custom models
+    getProviderChatFallback,
     clearCustomModels,
-
-    // API Config by provider
     currentApiKey,
+    currentChatApiKey,
+    currentImageApiKey,
+    currentVideoApiKey,
+    hasAnyApiKey,
     currentBaseUrl,
     apiKeysByProvider,
     baseUrlsByProvider,
+    getApiKeyByProvider,
     setApiKeyByProvider,
     setBaseUrlByProvider,
     clearApiConfigByProvider

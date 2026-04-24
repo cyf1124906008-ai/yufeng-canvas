@@ -417,7 +417,6 @@ const handleSelect = (item) => {
 
     // Create imageConfig node
     const configNodeId = addNode('imageConfig', { x: nodeX + 900, y: nodeY }, {
-      model: 'doubao-seedream-4-5-251128',
       size: '2048x2048',
       label: '生图配置'
     })
@@ -626,7 +625,6 @@ const createInpaintWorkflow = () => {
   
   // Create imageConfig node for inpainting | 创建图生图配置节点
   const configNodeId = addNode('imageConfig', { x: nodeX + 600, y: nodeY }, {
-    model: 'doubao-seedream-4-5-251128',
     size: '2048x2048',
     label: '局部重绘',
     inpaintMode: true
@@ -848,7 +846,6 @@ const handleImageGen = () => {
 
   // Create imageConfig node for generation | 创建生图配置节点
   const configNodeId = addNode('imageConfig', { x: nodeX + 900, y: nodeY }, {
-    model: 'doubao-seedream-4-5-251128',
     size: '2048x2048',
     label: '生图配置'
   })

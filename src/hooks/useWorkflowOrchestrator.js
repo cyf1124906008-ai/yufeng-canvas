@@ -9,13 +9,14 @@
  */
 
 import { ref, watch } from 'vue'
-import { streamChatCompletions } from '@/api'
 import { 
   nodes, 
   addNode, 
   addEdge, 
   updateNode 
 } from '@/stores/canvas'
+import { useChat } from './useApi'
+import { useModelStore } from '@/stores/pinia'
 
 // Workflow types | 工作流类型
 const WORKFLOW_TYPES = {
@@ -177,6 +178,8 @@ const INTENT_ANALYSIS_PROMPT = `你是一个工作流分析助手。根据用户
  * Workflow Orchestrator Composable
  */
 export const useWorkflowOrchestrator = () => {
+  const modelStore = useModelStore()
+
   // State | 状态
   const isAnalyzing = ref(false)
   const isExecuting = ref(false)
@@ -307,16 +310,17 @@ export const useWorkflowOrchestrator = () => {
     isAnalyzing.value = true
     
     try {
-      let response = ''
-      for await (const chunk of streamChatCompletions({
-        model: 'gpt-4o',
-        messages: [
-          { role: 'system', content: INTENT_ANALYSIS_PROMPT },
-          { role: 'user', content: userInput }
-        ]
-      })) {
-        response += chunk
+      if (!modelStore.currentChatApiKey || !modelStore.selectedChatModel) {
+        addLog('info', '未配置文本模型，使用默认文生图工作流')
+        return { workflow_type: WORKFLOW_TYPES.TEXT_TO_IMAGE }
       }
+
+      const { send } = useChat({
+        systemPrompt: INTENT_ANALYSIS_PROMPT,
+        model: modelStore.selectedChatModel
+      })
+
+      const response = await send(userInput, true)
       
       const jsonMatch = response.match(/\{[\s\S]*\}/)
       if (!jsonMatch) {

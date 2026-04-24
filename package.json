@@ -1,12 +1,26 @@
 {
-  "name": "ai-canvas",
+  "name": "yufeng-canvas",
+  "productName": "YUFENG Canvas",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.8",
+  "description": "Visual AI canvas desktop app built with Vue, Vite and Electron",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cyf1124906008-ai/yufeng-canvas.git"
+  },
+  "main": "electron/main.cjs",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "web:dev": "vite",
+    "web:build": "vite build",
+    "desktop:renderer": "cross-env APP_TARGET=desktop vite build",
+    "desktop:dev": "concurrently -k \"cross-env APP_TARGET=desktop vite\" \"wait-on tcp:5173 && cross-env APP_TARGET=desktop ELECTRON_RENDERER_URL=http://127.0.0.1:5173 electron .\"",
+    "desktop:start": "cross-env APP_TARGET=desktop electron .",
+    "desktop:build": "pnpm desktop:renderer && electron-builder --dir",
+    "desktop:dist": "pnpm desktop:renderer && electron-builder --win nsis"
   },
   "dependencies": {
     "@vicons/ionicons5": "^0.13.0",
@@ -23,8 +37,52 @@
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.0.4",
     "autoprefixer": "^10.4.23",
+    "concurrently": "^9.2.1",
+    "cross-env": "^7.0.3",
+    "electron": "^37.2.6",
+    "electron-builder": "^26.0.12",
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.0",
-    "vite": "^5.2.0"
+    "vite": "^5.2.0",
+    "wait-on": "^8.0.5"
+  },
+  "build": {
+    "appId": "ai.yufeng.canvas",
+    "productName": "YUFENG Canvas",
+    "icon": "build/icon.ico",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist-desktop/**/*",
+      "build/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "electron",
+      "electron-winstaller",
+      "esbuild",
+      "vue-demi"
+    ]
   }
 }

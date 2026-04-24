@@ -1,39 +1,87 @@
 <template>
-  <!-- API Settings Modal | API 设置弹窗 -->
-  <n-modal v-model:show="showModal" preset="card" title="API 设置" style="width: 560px;">
+  <n-modal
+    v-model:show="showModal"
+    preset="card"
+    title="API 设置"
+    style="width: min(720px, calc(100vw - 32px));"
+  >
     <n-tabs type="line" animated>
-      <!-- API 配置标签 -->
-      <n-tab-pane name="api" tab="API 配置">
-        <n-form ref="formRef" :model="formData" label-placement="left" label-width="80">
-          <n-form-item label="渠道" path="provider">
+      <n-tab-pane name="api" tab="API 设置">
+        <n-form :model="formData" label-placement="left" label-width="96">
+          <n-form-item v-if="showProviderSelect" label="渠道" path="provider">
             <n-select
               v-model:value="formData.provider"
               :options="providerOptions"
               placeholder="选择 API 渠道"
             />
           </n-form-item>
-          <n-form-item label="Base URL" path="baseUrl">
+
+          <n-form-item v-else label="渠道">
+            <n-input :value="currentProviderLabel" readonly />
+          </n-form-item>
+
+          <n-form-item v-if="showBaseUrlInput" label="Base URL" path="baseUrl">
             <n-input
               v-model:value="formData.baseUrl"
-              placeholder="https://api.chatfire.site/v1"
+              placeholder="https://cloud.dataeyes.ai"
             />
           </n-form-item>
-          <n-form-item label="API Key" path="apiKey">
+
+          <n-form-item v-else label="服务地址">
+            <n-input :value="resolvedBaseUrl" readonly />
+          </n-form-item>
+
+          <n-form-item label="默认 Key" path="apiKey">
             <n-input
               v-model:value="formData.apiKey"
               type="password"
               show-password-on="click"
-              placeholder="请输入 API Key"
+              placeholder="统一给对话 / 生图 / 视频共用"
             />
           </n-form-item>
 
           <n-divider title-placement="left" class="!my-3">
-            <span class="text-xs text-[var(--text-secondary)]">端点路径</span>
+            <span class="text-xs text-[var(--text-secondary)]">能力覆盖 Key</span>
           </n-divider>
-          
+
+          <n-alert type="info" class="mb-4">
+            留空时会自动回退到默认 Key。这样既可以只配一把 Key，也可以给对话、生图、视频分别配置不同的 Key。
+          </n-alert>
+
+          <n-form-item label="对话 Key" path="chatApiKey">
+            <n-input
+              v-model:value="formData.chatApiKey"
+              type="password"
+              show-password-on="click"
+              placeholder="可选，用于对话 / AI 润色"
+            />
+          </n-form-item>
+
+          <n-form-item label="生图 Key" path="imageApiKey">
+            <n-input
+              v-model:value="formData.imageApiKey"
+              type="password"
+              show-password-on="click"
+              placeholder="可选，用于文生图 / 图生图"
+            />
+          </n-form-item>
+
+          <n-form-item label="视频 Key" path="videoApiKey">
+            <n-input
+              v-model:value="formData.videoApiKey"
+              type="password"
+              show-password-on="click"
+              placeholder="可选，用于文生视频 / 图生视频"
+            />
+          </n-form-item>
+
+          <n-divider title-placement="left" class="!my-3">
+            <span class="text-xs text-[var(--text-secondary)]">接口路径</span>
+          </n-divider>
+
           <div class="endpoint-list">
             <div class="endpoint-item">
-              <span class="endpoint-label">问答</span>
+              <span class="endpoint-label">对话</span>
               <n-tag size="small" type="info" class="endpoint-tag">{{ currentEndpoints.chat }}</n-tag>
             </div>
             <div class="endpoint-item">
@@ -50,43 +98,45 @@
             </div>
           </div>
 
-          <n-alert v-if="!isConfigured" type="warning" title="未配置" class="mb-4">
+          <n-alert v-if="isProductPresetMode" type="info" class="mb-4">
+            当前版本已经预置服务地址，最终用户只需要填写自己的 Key 即可。
+          </n-alert>
+
+          <n-alert v-if="!isConfigured" type="warning" title="尚未配置" class="mb-4">
             <div class="flex flex-col gap-2">
-              <p>请配置 API Key 以使用 AI 功能</p>
-              <a 
-                href="https://api.chatfire.site/login?inviteCode=EEE80324" 
+              <p>请至少填写一个可用的 API Key。</p>
+              <a
+                :href="apiKeyHelpUrl"
                 target="_blank"
-                class="text-[var(--accent-color)] hover:underline text-sm flex items-center gap-1"
+                rel="noopener noreferrer"
+                class="text-[var(--accent-color)] hover:underline text-sm"
               >
-                🔗 点击获取 API Key
-                <span class="text-xs">（新用户注册）</span>
+                点击获取 API Key
               </a>
             </div>
           </n-alert>
 
           <n-alert v-else type="success" title="已配置" class="mb-4">
-            API 已就绪，可以使用 AI 功能
+            Key 已保存，可以开始使用。
           </n-alert>
         </n-form>
       </n-tab-pane>
 
-      <!-- 模型配置标签 -->
       <n-tab-pane name="models" tab="模型配置">
         <div class="model-config-section">
-          <!-- 问答模型 -->
           <div class="model-group">
             <div class="model-group-header">
-              <span class="model-group-title">问答模型</span>
+              <span class="model-group-title">对话模型</span>
               <n-tag size="tiny" type="info">{{ allChatModels.length }} 个</n-tag>
             </div>
             <div class="model-input-row">
               <n-input
                 v-model:value="newChatModel"
-                placeholder="输入模型名称，如 gpt-4o"
+                placeholder="输入文本模型名，以 DataEyes 后台显示为准"
                 size="small"
                 @keyup.enter="handleAddChatModel"
               />
-              <n-button size="small" type="primary" @click="handleAddChatModel" :disabled="!newChatModel">
+              <n-button size="small" type="primary" :disabled="!newChatModel" @click="handleAddChatModel">
                 添加
               </n-button>
             </div>
@@ -104,7 +154,6 @@
             </div>
           </div>
 
-          <!-- 图片模型 -->
           <div class="model-group">
             <div class="model-group-header">
               <span class="model-group-title">图片模型</span>
@@ -113,29 +162,47 @@
             <div class="model-input-row">
               <n-input
                 v-model:value="newImageModel"
-                placeholder="输入模型名称，如 dall-e-3"
+                placeholder="输入图片模型名，以 DataEyes 后台显示为准"
                 size="small"
                 @keyup.enter="handleAddImageModel"
               />
-              <n-button size="small" type="primary" @click="handleAddImageModel" :disabled="!newImageModel">
+              <n-select
+                v-model:value="newImageProtocol"
+                :options="imageProtocolOptions"
+                size="small"
+                class="protocol-select"
+              />
+              <n-button size="small" type="primary" :disabled="!newImageModel" @click="handleAddImageModel">
                 添加
               </n-button>
             </div>
-            <div class="model-tags">
-              <n-tag
+            <div class="model-list">
+              <div
                 v-for="model in allImageModels"
                 :key="model.key"
-                size="small"
-                :closable="model.isCustom"
-                :type="model.isCustom ? 'success' : 'default'"
-                @close="handleRemoveImageModel(model.key)"
+                class="model-row"
               >
-                {{ model.label }}
-              </n-tag>
+                <n-tag
+                  size="small"
+                  :closable="model.isCustom"
+                  :type="model.isCustom ? 'success' : 'default'"
+                  @close="handleRemoveImageModel(model.key)"
+                >
+                  {{ model.label }}
+                </n-tag>
+                <n-select
+                  v-if="model.isCustom"
+                  :value="model.protocol || 'auto'"
+                  :options="imageProtocolOptions"
+                  size="tiny"
+                  class="protocol-select small"
+                  @update:value="(value) => modelStore.updateCustomImageModelProtocol(model.key, value)"
+                />
+                <n-tag v-else size="tiny" type="default">内置</n-tag>
+              </div>
             </div>
           </div>
 
-          <!-- 视频模型 -->
           <div class="model-group">
             <div class="model-group-header">
               <span class="model-group-title">视频模型</span>
@@ -144,11 +211,11 @@
             <div class="model-input-row">
               <n-input
                 v-model:value="newVideoModel"
-                placeholder="输入模型名称，如 sora-2"
+                placeholder="输入视频模型名，以 DataEyes 后台显示为准"
                 size="small"
                 @keyup.enter="handleAddVideoModel"
               />
-              <n-button size="small" type="primary" @click="handleAddVideoModel" :disabled="!newVideoModel">
+              <n-button size="small" type="primary" :disabled="!newVideoModel" @click="handleAddVideoModel">
                 添加
               </n-button>
             </div>
@@ -170,16 +237,17 @@
     </n-tabs>
 
     <template #footer>
-      <div class="flex justify-between items-center">
-        <a 
-          href="https://api.chatfire.site/login?inviteCode=EEE80324" 
+      <div class="flex flex-wrap justify-between items-center gap-3">
+        <a
+          :href="apiKeyHelpUrl"
           target="_blank"
+          rel="noopener noreferrer"
           class="text-xs text-[var(--text-secondary)] hover:text-[var(--accent-color)] transition-colors"
         >
-          没有 API Key？点击注册
+          没有 API Key？点这里申请
         </a>
         <div class="flex gap-2">
-          <n-button @click="handleClear" tertiary>清除配置</n-button>
+          <n-button tertiary @click="handleClear">清除当前配置</n-button>
           <n-button @click="showModal = false">取消</n-button>
           <n-button type="primary" @click="handleSave">保存</n-button>
         </div>
@@ -189,16 +257,25 @@
 </template>
 
 <script setup>
-/**
- * API Settings Component | API 设置组件
- * Modal for configuring API key, base URL, and custom models
- */
-import { ref, reactive, watch, computed } from 'vue'
-import { NModal, NForm, NFormItem, NInput, NButton, NAlert, NDivider, NTag, NTabs, NTabPane, NSelect } from 'naive-ui'
-import { useModelStore } from '../stores/pinia'
+import { computed, reactive, ref, watch } from 'vue'
+import {
+  NAlert,
+  NButton,
+  NDivider,
+  NForm,
+  NFormItem,
+  NInput,
+  NModal,
+  NSelect,
+  NTabPane,
+  NTabs,
+  NTag
+} from 'naive-ui'
+import { getApiKeyHelpUrl, DISTRIBUTION_CONFIG } from '../config/distribution'
 import { getProviderConfig } from '../config/providers'
+import { useModelStore } from '../stores/pinia'
+import { getCapabilityLabel, getModelCapabilityConflict } from '../utils/modelCapability'
 
-// Props | 属性
 const props = defineProps({
   show: {
     type: Boolean,
@@ -206,22 +283,52 @@ const props = defineProps({
   }
 })
 
-// Emits | 事件
 const emit = defineEmits(['update:show', 'saved'])
 
-// API Config 状态
-const isConfigured = computed(() => !!modelStore.currentApiKey)
-
-// Model Store (Pinia) | 模型配置 Store
 const modelStore = useModelStore()
+const showModal = ref(props.show)
 
-// Provider options for select | 渠道下拉选项
-const providerOptions = modelStore.providerList.map(p => ({
-  label: p.label,
-  value: p.key
-}))
+const formData = reactive({
+  provider: '',
+  apiKey: '',
+  chatApiKey: '',
+  imageApiKey: '',
+  videoApiKey: '',
+  baseUrl: ''
+})
 
-// 当前渠道的端点路径
+const newChatModel = ref('')
+const newImageModel = ref('')
+const newImageProtocol = ref('auto')
+const newVideoModel = ref('')
+
+const apiKeyHelpUrl = getApiKeyHelpUrl()
+const isConfigured = computed(() => modelStore.hasAnyApiKey)
+
+const providerOptions = computed(() =>
+  modelStore.providerList.map((provider) => ({
+    label: provider.label,
+    value: provider.key
+  }))
+)
+
+const showProviderSelect = computed(() =>
+  !DISTRIBUTION_CONFIG.api.hideProviderSelect && providerOptions.value.length > 1
+)
+
+const showBaseUrlInput = computed(() => !DISTRIBUTION_CONFIG.api.hideBaseUrlInput)
+const isProductPresetMode = computed(() => !showProviderSelect.value && !showBaseUrlInput.value)
+
+const resolveBaseUrl = (provider) =>
+  modelStore.baseUrlsByProvider[provider] || getProviderConfig(provider).defaultBaseUrl || ''
+
+const resolvedBaseUrl = computed(() => resolveBaseUrl(formData.provider))
+
+const currentProviderLabel = computed(() => {
+  const matched = providerOptions.value.find((provider) => provider.value === formData.provider)
+  return matched?.label || formData.provider
+})
+
 const currentEndpoints = computed(() => {
   const config = getProviderConfig(formData.provider)
   return config.endpoints || {
@@ -232,76 +339,95 @@ const currentEndpoints = computed(() => {
   }
 })
 
-// 全局模型列表（不区分渠道）
 const allChatModels = computed(() => modelStore.allChatModels)
 const allImageModels = computed(() => modelStore.allImageModels)
 const allVideoModels = computed(() => modelStore.allVideoModels)
 
-// Modal visibility | 弹窗可见性
-const showModal = ref(props.show)
+const imageProtocolOptions = [
+  { label: '自动识别', value: 'auto' },
+  { label: '图片接口', value: 'image' },
+  { label: 'Chat 图片接口', value: 'chat' }
+]
 
-// Form data | 表单数据
-const formData = reactive({
-  provider: modelStore.currentProvider,
-  apiKey: '',
-  baseUrl: ''
-})
+const syncForm = () => {
+  const lockedProvider = DISTRIBUTION_CONFIG.api.lockProvider
+    ? (DISTRIBUTION_CONFIG.api.defaultProvider || modelStore.currentProvider)
+    : modelStore.currentProvider
 
-// New model inputs | 新模型输入
-const newChatModel = ref('')
-const newImageModel = ref('')
-const newVideoModel = ref('')
-
-// 初始化或切换渠道时，更新 API 配置
-const updateFormApiConfig = () => {
-  const provider = formData.provider
-  const config = getProviderConfig(provider)
-  formData.apiKey = modelStore.apiKeysByProvider[provider] || ''
-  formData.baseUrl = modelStore.baseUrlsByProvider[provider] || config.defaultBaseUrl || ''
+  formData.provider = lockedProvider
+  formData.apiKey = modelStore.getApiKeyByProvider(lockedProvider, 'default')
+  formData.chatApiKey = modelStore.getApiKeyByProvider(lockedProvider, 'chat') === formData.apiKey
+    ? ''
+    : modelStore.apiKeysByProvider[lockedProvider]?.chat || ''
+  formData.imageApiKey = modelStore.getApiKeyByProvider(lockedProvider, 'image') === formData.apiKey
+    ? ''
+    : modelStore.apiKeysByProvider[lockedProvider]?.image || ''
+  formData.videoApiKey = modelStore.getApiKeyByProvider(lockedProvider, 'video') === formData.apiKey
+    ? ''
+    : modelStore.apiKeysByProvider[lockedProvider]?.video || ''
+  formData.baseUrl = resolveBaseUrl(lockedProvider)
 }
 
-// Watch prop changes | 监听属性变化
-watch(() => props.show, (val) => {
-  showModal.value = val
-  if (val) {
-    formData.provider = modelStore.currentProvider
-    updateFormApiConfig()
+watch(
+  () => props.show,
+  (value) => {
+    showModal.value = value
+    if (value) {
+      syncForm()
+    }
   }
+)
+
+watch(
+  () => formData.provider,
+  (provider) => {
+    formData.apiKey = modelStore.getApiKeyByProvider(provider, 'default')
+    formData.chatApiKey = modelStore.apiKeysByProvider[provider]?.chat || ''
+    formData.imageApiKey = modelStore.apiKeysByProvider[provider]?.image || ''
+    formData.videoApiKey = modelStore.apiKeysByProvider[provider]?.video || ''
+    formData.baseUrl = resolveBaseUrl(provider)
+  }
+)
+
+watch(showModal, (value) => {
+  emit('update:show', value)
 })
 
-// 监听渠道变化，更新表单中的 API 配置
-watch(() => formData.provider, () => {
-  updateFormApiConfig()
-})
-
-// Watch modal changes | 监听弹窗变化
-watch(showModal, (val) => {
-  emit('update:show', val)
-})
-
-// Handle add models | 处理添加模型
 const handleAddChatModel = () => {
-  if (newChatModel.value.trim()) {
-    modelStore.addCustomChatModel(newChatModel.value.trim())
-    newChatModel.value = ''
-  }
+  const modelName = newChatModel.value.trim()
+  if (!modelName) return
+  if (!ensureModelCapability(modelName, 'chat')) return
+  modelStore.addCustomChatModel(modelName)
+  newChatModel.value = ''
 }
 
 const handleAddImageModel = () => {
-  if (newImageModel.value.trim()) {
-    modelStore.addCustomImageModel(newImageModel.value.trim())
-    newImageModel.value = ''
-  }
+  const modelName = newImageModel.value.trim()
+  if (!modelName) return
+  if (!ensureModelCapability(modelName, 'image')) return
+  modelStore.addCustomImageModel(modelName, '', { protocol: newImageProtocol.value })
+  newImageModel.value = ''
+  newImageProtocol.value = 'auto'
 }
 
 const handleAddVideoModel = () => {
-  if (newVideoModel.value.trim()) {
-    modelStore.addCustomVideoModel(newVideoModel.value.trim())
-    newVideoModel.value = ''
-  }
+  const modelName = newVideoModel.value.trim()
+  if (!modelName) return
+  if (!ensureModelCapability(modelName, 'video')) return
+  modelStore.addCustomVideoModel(modelName)
+  newVideoModel.value = ''
 }
 
-// Handle remove models | 处理删除模型
+const ensureModelCapability = (modelName, expectedCapability) => {
+  const conflict = getModelCapabilityConflict(modelName, expectedCapability)
+  if (!conflict) return true
+
+  window.$message?.warning(
+    `${modelName} 看起来是${getCapabilityLabel(conflict)}模型，请添加到${getCapabilityLabel(expectedCapability)}模型列表时填写对应的模型名。`
+  )
+  return false
+}
+
 const handleRemoveChatModel = (modelKey) => {
   modelStore.removeCustomChatModel(modelKey)
 }
@@ -314,27 +440,25 @@ const handleRemoveVideoModel = (modelKey) => {
   modelStore.removeCustomVideoModel(modelKey)
 }
 
-// Handle save | 处理保存
 const handleSave = () => {
-  if (formData.provider) {
-    modelStore.setProvider(formData.provider)
-  }
-  if (formData.apiKey) {
-    modelStore.setApiKeyByProvider(formData.provider, formData.apiKey)
-  }
-  if (formData.baseUrl) {
-    modelStore.setBaseUrlByProvider(formData.provider, formData.baseUrl)
-  }
+  const provider = DISTRIBUTION_CONFIG.api.lockProvider
+    ? (DISTRIBUTION_CONFIG.api.defaultProvider || formData.provider)
+    : formData.provider
+
+  modelStore.setProvider(provider)
+  modelStore.setApiKeyByProvider(provider, formData.apiKey, 'default')
+  modelStore.setApiKeyByProvider(provider, formData.chatApiKey, 'chat')
+  modelStore.setApiKeyByProvider(provider, formData.imageApiKey, 'image')
+  modelStore.setApiKeyByProvider(provider, formData.videoApiKey, 'video')
+  modelStore.setBaseUrlByProvider(provider, showBaseUrlInput.value ? formData.baseUrl : resolvedBaseUrl.value)
+
   showModal.value = false
   emit('saved')
 }
 
-// Handle clear | 处理清除
 const handleClear = () => {
   modelStore.clearApiConfigByProvider(formData.provider)
-  modelStore.clearCustomModels()
-  formData.apiKey = ''
-  formData.baseUrl = ''
+  syncForm()
 }
 </script>
 
@@ -353,6 +477,7 @@ const handleClear = () => {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
 }
 
 .endpoint-label {
@@ -373,38 +498,54 @@ const handleClear = () => {
 }
 
 .model-group {
-  padding: 12px;
+  padding: 14px;
+  border-radius: 10px;
   background: var(--bg-secondary, #f5f5f5);
-  border-radius: 8px;
 }
 
 .model-group-header {
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: space-between;
   margin-bottom: 10px;
 }
 
 .model-group-title {
   font-size: 14px;
-  font-weight: 500;
-  color: var(--text-primary, #333);
+  font-weight: 600;
 }
 
 .model-input-row {
   display: flex;
   gap: 8px;
-  margin-bottom: 8px;
-}
-
-.model-input-row .n-input {
-  flex: 1;
+  margin-bottom: 10px;
 }
 
 .model-tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 8px;
+  gap: 8px;
+}
+
+.model-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.model-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.protocol-select {
+  width: 128px;
+  flex-shrink: 0;
+}
+
+.protocol-select.small {
+  width: 118px;
 }
 </style>

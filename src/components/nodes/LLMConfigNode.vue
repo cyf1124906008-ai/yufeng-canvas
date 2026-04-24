@@ -159,7 +159,7 @@ const props = defineProps({
 const { updateNodeInternals } = useVueFlow()
 
 // API config state | API 配置状态
-const isApiConfigured = computed(() => !!modelStore.currentApiKey)
+const isApiConfigured = computed(() => !!modelStore.currentChatApiKey)
 
 // Local state | 本地状态
 const showHandleMenu = ref(false)
@@ -417,7 +417,7 @@ const handleSelect = (item) => {
   const nodeY = currentNode?.position?.y || 0
 
   const defaultData = {
-    imageConfig: { model: 'doubao-seedream-4-5-251128', size: '2048x2048', label: '文生图' },
+    imageConfig: { size: '2048x2048', label: '文生图' },
     videoConfig: { label: '视频生成' },
     text: { content: '', label: '文本输入' }
   }
@@ -654,8 +654,10 @@ onMounted(() => {
 
   if (!model.value || !isModelAvailable) {
     // 使用 store 中的默认模型或第一个可用模型
-    model.value = modelStore.selectedChatModel || availableModels[0]?.key || 'gpt-4o-mini'
-    updateConfig()
+    model.value = modelStore.selectedChatModel || availableModels[0]?.key || ''
+    if (model.value) {
+      updateConfig()
+    }
   }
 
   if (systemPromptRef.value) {
@@ -680,10 +682,10 @@ const splitMessage = ref('')
 const modelStore = useModelStore()
 
 // 使用全部模型（不按渠道过滤）
-const modelOptions = computed(() => modelStore.allChatModelOptions)
+const modelOptions = computed(() => modelStore.chatModelOptions)
 
 // 默认模型使用选中的模型
-const model = ref(props.data?.model || modelStore.selectedChatModel || 'gpt-4o-mini')
+const model = ref(props.data?.model || modelStore.selectedChatModel || '')
 // Format options | 格式选项
 const formatOptions = [
   { label: '纯文本', value: 'text' },
@@ -826,6 +828,11 @@ const handleGenerate = async () => {
     remainingInput = remainingInput.trim()
 
     return remainingInput
+  }
+
+  if (!model.value) {
+    window.$message?.warning('请先在 API 设置的模型配置里添加文本模型')
+    return
   }
 
   isGenerating.value = true
@@ -1003,7 +1010,6 @@ const handleSplitToTextWithImage = () => {
         position: { x: baseX + colSpacing, y: segY },
         data: {
           label: `图片 ${i + 1}`,
-          model: 'doubao-seedream-4-5-251128',
           size: '2048x2048'
         }
       }

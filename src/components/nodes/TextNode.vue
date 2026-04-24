@@ -112,12 +112,11 @@ const { updateNodeInternals } = useVueFlow()
 
 // API config state | API 配置状态
 const modelStore = useModelStore()
-const isApiConfigured = computed(() => !!modelStore.currentApiKey)
+const isApiConfigured = computed(() => !!modelStore.currentChatApiKey)
 
 // Chat hook for polish | 润色用的 Chat hook
 const { send: sendChat } = useChat({
   systemPrompt: '你是一个专业的AI绘画提示词专家。将用户输入的内容美化成高质量的生图提示词，包含风格、光线、構图、细节等要素。直接返回提示词，不要其他解释。',
-  model: 'gpt-4o-mini'
 })
 
 // Local content state | 本地内容状态
@@ -440,7 +439,7 @@ const handleSelect = (item) => {
   const nodeY = currentNode?.position?.y || 0
 
   const defaultData = {
-    imageConfig: { model: 'doubao-seedream-4-5-251128', size: '2048x2048', label: '文生图' },
+    imageConfig: { size: '2048x2048', label: '文生图' },
     videoConfig: { label: '视频生成' },
     llmConfig: { label: 'LLM文本生成' }
   }
@@ -627,12 +626,19 @@ const handlePolish = async () => {
     return
   }
 
+  if (!modelStore.selectedChatModel) {
+    window.$message?.warning('请先在 API 设置的模型配置里添加文本模型')
+    return
+  }
+
   isPolishing.value = true
   const originalContent = content.value
 
   try {
     // Call chat API to polish the prompt | 调用 AI 润色提示词
-    const result = await sendChat(input, true)
+    const result = await sendChat(input, true, {
+      model: modelStore.selectedChatModel
+    })
     
     if (result) {
       content.value = result
@@ -695,7 +701,6 @@ const handleImageGen = () => {
 
   // Create imageConfig node | 创建text生图配置节点
   const configNodeId = addNode('imageConfig', { x: nodeX + 400, y: nodeY }, {
-    model: 'doubao-seedream-4-5-251128',
     size: '2048x2048',
     label: '文生图'
   })

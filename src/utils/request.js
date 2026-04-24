@@ -1,42 +1,39 @@
 /**
- * HTTP Request Utility | HTTP 请求工具
- * Axios-based request with interceptors
+ * HTTP request utility.
  */
 
 import axios from 'axios'
+import { getRuntimeApiKey, getRuntimeBaseUrl, getRuntimeProvider } from './runtimeConfig'
+import { addRuntimeLog } from '@/stores/canvas'
 
-// Base URL from environment or default
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://api.chatfire.site'
-
-// Create axios instance | 创建 axios 实例
 const instance = axios.create({
-  baseURL: "/",
-  timeout: 30000000
+  baseURL: '/',
+  timeout: 240000
 })
 
-// Request interceptor | 请求拦截器
 instance.interceptors.request.use(
   (config) => {
-    // Get current provider | 获取当前渠道
-    const currentProvider = localStorage.getItem('api-provider') || 'chatfire'
+    const currentProvider = getRuntimeProvider()
+    const capability = config.metadata?.capability || 'default'
+    const apiKey = getRuntimeApiKey(currentProvider, capability)
+    const isAbsoluteUrl = /^https?:\/\//i.test(config.url || '')
 
-    // Get API keys from new storage | 从新存储结构获取 API Keys
-    let apiKey = ''
-    try {
-      const apiKeysJson = localStorage.getItem('api-keys-by-provider')
-      const apiKeys = apiKeysJson ? JSON.parse(apiKeysJson) : {}
-      apiKey = apiKeys[currentProvider] || ''
-    } catch (e) {
-      apiKey = ''
+    if (!isAbsoluteUrl) {
+      config.baseURL = getRuntimeBaseUrl(currentProvider)
     }
 
-    // Skip auth for certain endpoints | 跳过某些端点的认证
     const noAuthEndpoints = ['/model/page', '/model/fullName', '/model/types']
-    const isNoAuth = noAuthEndpoints.some(ep => config.url?.includes(ep))
+    const isNoAuth = noAuthEndpoints.some((endpoint) => config.url?.includes(endpoint))
 
     if (apiKey && !isNoAuth) {
-      config.headers['Authorization'] = `Bearer ${apiKey}`
+      config.headers = config.headers || {}
+      config.headers.Authorization = `Bearer ${apiKey}`
     }
+
+    addRuntimeLog('info', `请求开始：${String(config.method || 'GET').toUpperCase()} ${config.url}`, {
+      capability,
+      provider: currentProvider
+    })
 
     return config
   },
@@ -46,66 +43,66 @@ instance.interceptors.request.use(
   }
 )
 
-// Response interceptor | 响应拦截器
 instance.interceptors.response.use(
-  (res) => {
-    const { data, code, message } = res.data || {}
-    
-    // Handle stream response | 处理流响应
-    if (res.config.responseType === 'stream') {
-      return res.data
+  (response) => {
+    const { code, message } = response.data || {}
+
+    if (response.config.responseType === 'stream') {
+      return response.data
     }
-    
-    // Handle blob response | 处理 blob 响应
-    if (res.data instanceof Blob) {
-      return res.data
+
+    if (response.data instanceof Blob) {
+      return response.data
     }
-    
-    // Success response | 成功响应
-    if (code === 200 || res.status === 200) {
-      return res.data
+
+    if (code === 200 || response.status === 200) {
+      addRuntimeLog('success', `请求成功：${response.config?.url || ''}`, {
+        status: response.status
+      })
+      return response.data
     }
-    
-    // Error response | 错误响应
+
+    addRuntimeLog('error', `请求失败：${message || 'Request failed'}`, {
+      url: response.config?.url,
+      status: response.status
+    })
     window.$message?.error(message || 'Request failed')
-    return Promise.reject(res.data)
+    return Promise.reject(response.data)
   },
   (error) => {
     const { response } = error
-    
+
     if (response) {
       const { status, data } = response
       const message = data?.message || data?.error?.message || error.message
-      
+      addRuntimeLog('error', `请求失败：${message || 'Request failed'}`, {
+        url: error.config?.url,
+        status
+      })
+
       if (status === 401) {
-        window.$message?.error('API Key 无效或已过期')
+        window.$message?.error('API Key invalid or expired')
       } else if (status === 429) {
-        window.$message?.error('请求过于频繁，请稍后再试')
+        window.$message?.error('Too many requests, please try again later')
       } else {
-        window.$message?.error(message || '请求失败')
+        window.$message?.error(message || 'Request failed')
       }
     } else {
-      window.$message?.error(error.message || '网络错误')
+      addRuntimeLog('error', `网络异常：${error.code === 'ECONNABORTED' ? '请求超时' : (error.message || 'Network error')}`, {
+        url: error.config?.url,
+        code: error.code
+      })
+      window.$message?.error(error.message || 'Network error')
     }
-    
+
     return Promise.reject(error)
   }
 )
 
-/**
- * Set API base URL | 设置 API 基础 URL
- * @param {string} url - Base URL
- */
 export const setBaseUrl = (url) => {
   instance.defaults.baseURL = url
 }
 
-/**
- * Get current base URL | 获取当前基础 URL
- * @returns {string}
- */
-export const getBaseUrl = () => {
-  return instance.defaults.baseURL
-}
+export const getBaseUrl = () => instance.defaults.baseURL
 
 export default instance

@@ -63,7 +63,9 @@
           />
         </div>
 
-        <span class="text-sm text-white font-medium relative z-10">{{ data.taskId ? '创作中，预计等待 1 分钟' : '任务创建中...' }}</span>
+        <span class="text-sm text-white font-medium relative z-10">{{ loadingText }}</span>
+        <span v-if="data.taskId" class="text-xs text-white/80 relative z-10">任务 ID：{{ data.taskId }}</span>
+        <span v-if="data.progress" class="text-xs text-white/80 relative z-10">进度：{{ data.progress }}%</span>
       </div>
       <!-- Error state | 错误状态 -->
       <div 
@@ -140,7 +142,7 @@
  * Video node component | 视频节点组件
  * Displays and manages video content
  */
-import { ref, nextTick, watch, onMounted } from 'vue'
+import { ref, computed, nextTick, watch, onMounted } from 'vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { NIcon, NSpin } from 'naive-ui'
 import { TrashOutline, ExpandOutline, VideocamOutline, CopyOutline, CloseCircleOutline, DownloadOutline, EyeOutline, CreateOutline } from '@vicons/ionicons5'
@@ -176,6 +178,14 @@ const operations = [
 // Polling state | 轮询状态
 const isPolling = ref(false)
 
+const loadingText = computed(() => {
+  if (props.data?.taskId) {
+    return '创作中，最多等待 3 分钟'
+  }
+
+  return '任务创建中...'
+})
+
 // Watch for taskId changes and start polling | 监听 taskId 变化并开始轮询
 watch(() => props.data?.taskId, (taskId) => {
   if (taskId && !props.data?.url && !isPolling.value) {
@@ -209,8 +219,10 @@ const startPolling = async (taskId) => {
     updateNode(props.id, {
       url: result.url,
       loading: false,
+      error: '',
       progress: 100,
       label: '视频生成',
+      finishedAt: Date.now(),
       taskId: null  // 清除 taskId
     })
     window.$message?.success('视频生成成功')
@@ -220,6 +232,7 @@ const startPolling = async (taskId) => {
       loading: false,
       error: err.message || '生成失败',
       label: '生成失败',
+      finishedAt: Date.now(),
       taskId: null  // 清除 taskId
     })
     window.$message?.error(err.message || '视频生成失败')

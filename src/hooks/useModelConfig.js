@@ -14,6 +14,10 @@ import {
   DEFAULT_IMAGE_MODEL,
   DEFAULT_VIDEO_MODEL
 } from '@/config/models'
+import { DISTRIBUTION_CONFIG } from '@/config/distribution'
+import { isModelAllowedForCapability } from '@/utils/modelCapability'
+
+const REQUIRE_USER_MODELS = DISTRIBUTION_CONFIG.models?.requireUserModels === true
 
 /**
  * 检查模型是否支持指定渠道
@@ -84,14 +88,14 @@ const customChatModels = ref(getStoredJson(STORAGE_KEYS.CUSTOM_CHAT_MODELS, []))
 const customImageModels = ref(getStoredJson(STORAGE_KEYS.CUSTOM_IMAGE_MODELS, []))
 const customVideoModels = ref(getStoredJson(STORAGE_KEYS.CUSTOM_VIDEO_MODELS, []))
 
-// 按渠道存储的自定义模型 | 结构: { 'openai': [{key, label}], 'chatfire': [{key, label}] }
+// Provider-scoped custom models. Example: { dataeyes: [{ key, label }] }
 const customChatModelsByProvider = ref(getStoredJson(STORAGE_KEYS.CUSTOM_CHAT_MODELS_BY_PROVIDER || 'custom-chat-models-by-provider', {}))
 const customImageModelsByProvider = ref(getStoredJson(STORAGE_KEYS.CUSTOM_IMAGE_MODELS_BY_PROVIDER || 'custom-image-models-by-provider', {}))
 const customVideoModelsByProvider = ref(getStoredJson(STORAGE_KEYS.CUSTOM_VIDEO_MODELS_BY_PROVIDER || 'custom-video-models-by-provider', {}))
 
-const selectedChatModel = ref(getStored(STORAGE_KEYS.SELECTED_CHAT_MODEL, DEFAULT_CHAT_MODEL))
-const selectedImageModel = ref(getStored(STORAGE_KEYS.SELECTED_IMAGE_MODEL, DEFAULT_IMAGE_MODEL))
-const selectedVideoModel = ref(getStored(STORAGE_KEYS.SELECTED_VIDEO_MODEL, DEFAULT_VIDEO_MODEL))
+const selectedChatModel = ref(getStored(STORAGE_KEYS.SELECTED_CHAT_MODEL, REQUIRE_USER_MODELS ? '' : DEFAULT_CHAT_MODEL))
+const selectedImageModel = ref(getStored(STORAGE_KEYS.SELECTED_IMAGE_MODEL, REQUIRE_USER_MODELS ? '' : DEFAULT_IMAGE_MODEL))
+const selectedVideoModel = ref(getStored(STORAGE_KEYS.SELECTED_VIDEO_MODEL, REQUIRE_USER_MODELS ? '' : DEFAULT_VIDEO_MODEL))
 
 /**
  * Model Configuration Hook
@@ -102,7 +106,7 @@ export const useModelConfig = () => {
 
   // Combined models (built-in + custom, including provider-specific custom models)
   const allChatModels = computed(() => [
-    ...CHAT_MODELS.map(m => ({ ...m, isCustom: false })),
+    ...(REQUIRE_USER_MODELS ? [] : CHAT_MODELS.map(m => ({ ...m, isCustom: false }))),
     ...customChatModels.value.map(m => ({
       label: m.label || m.key,
       key: m.key,
@@ -115,35 +119,35 @@ export const useModelConfig = () => {
       isCustom: true,
       provider: [currentProvider.value]
     }))
-  ])
+  ].filter((model) => isModelAllowedForCapability(model.key, 'chat')))
 
   const allImageModels = computed(() => [
-    ...IMAGE_MODELS.map(m => ({ ...m, isCustom: false })),
+    ...(REQUIRE_USER_MODELS ? [] : IMAGE_MODELS.map(m => ({ ...m, isCustom: false }))),
     ...customImageModels.value.map(m => ({
       label: m.label || m.key,
       key: m.key,
       isCustom: true,
-      sizes: [],
-      defaultParams: { quality: 'standard', style: 'vivid' }
+      sizes: ['1024x1024', '1536x1024', '1024x1536', '1792x1024', '1024x1792'],
+      defaultParams: { size: '1024x1024', quality: 'standard', style: 'vivid' }
     })),
     // 添加当前渠道的自定义模型
     ...(customImageModelsByProvider.value[currentProvider.value] || []).map(m => ({
       label: m.label || m.key,
       key: m.key,
       isCustom: true,
-      sizes: [],
-      defaultParams: { quality: 'standard', style: 'vivid' },
+      sizes: ['1024x1024', '1536x1024', '1024x1536', '1792x1024', '1024x1792'],
+      defaultParams: { size: '1024x1024', quality: 'standard', style: 'vivid' },
       provider: [currentProvider.value]
     }))
-  ])
+  ].filter((model) => isModelAllowedForCapability(model.key, 'image')))
 
   const allVideoModels = computed(() => [
-    ...VIDEO_MODELS.map(m => ({ ...m, isCustom: false })),
+    ...(REQUIRE_USER_MODELS ? [] : VIDEO_MODELS.map(m => ({ ...m, isCustom: false }))),
     ...customVideoModels.value.map(m => ({
       label: m.label || m.key,
       key: m.key,
       isCustom: true,
-      ratios: ['16x9', '9:16', '1:1'],
+      ratios: ['16:9', '9:16', '1:1', '4:3', '3:4'],
       durs: [{ label: '5 秒', key: 5 }, { label: '10 秒', key: 10 }],
       defaultParams: { ratio: '16:9', duration: 5 }
     })),
@@ -152,12 +156,12 @@ export const useModelConfig = () => {
       label: m.label || m.key,
       key: m.key,
       isCustom: true,
-      ratios: ['16x9', '9:16', '1:1'],
+      ratios: ['16:9', '9:16', '1:1', '4:3', '3:4'],
       durs: [{ label: '5 秒', key: 5 }, { label: '10 秒', key: 10 }],
       defaultParams: { ratio: '16:9', duration: 5 },
       provider: [currentProvider.value]
     }))
-  ])
+  ].filter((model) => isModelAllowedForCapability(model.key, 'video')))
 
   // Available models filtered by provider | 根据渠道过滤的可用模型
   const availableChatModels = computed(() =>
@@ -180,7 +184,7 @@ export const useModelConfig = () => {
   // 获取指定渠道的模型（包括内置 + 该渠道自定义）
   const getModelsByProvider = (provider) => {
     const chat = [
-      ...CHAT_MODELS.filter(m => isModelSupported(m, provider)).map(m => ({ ...m, isCustom: false })),
+      ...(REQUIRE_USER_MODELS ? [] : CHAT_MODELS.filter(m => isModelSupported(m, provider)).map(m => ({ ...m, isCustom: false }))),
       ...(customChatModelsByProvider.value[provider] || []).map(m => ({
         label: m.label || m.key,
         key: m.key,
@@ -189,23 +193,23 @@ export const useModelConfig = () => {
       }))
     ]
     const image = [
-      ...IMAGE_MODELS.filter(m => isModelSupported(m, provider)).map(m => ({ ...m, isCustom: false })),
+      ...(REQUIRE_USER_MODELS ? [] : IMAGE_MODELS.filter(m => isModelSupported(m, provider)).map(m => ({ ...m, isCustom: false }))),
       ...(customImageModelsByProvider.value[provider] || []).map(m => ({
         label: m.label || m.key,
         key: m.key,
         isCustom: true,
-        sizes: [],
-        defaultParams: { quality: 'standard', style: 'vivid' },
+        sizes: ['1024x1024', '1536x1024', '1024x1536', '1792x1024', '1024x1792'],
+        defaultParams: { size: '1024x1024', quality: 'standard', style: 'vivid' },
         provider: [provider]
       }))
     ]
     const video = [
-      ...VIDEO_MODELS.filter(m => isModelSupported(m, provider)).map(m => ({ ...m, isCustom: false })),
+      ...(REQUIRE_USER_MODELS ? [] : VIDEO_MODELS.filter(m => isModelSupported(m, provider)).map(m => ({ ...m, isCustom: false }))),
       ...(customVideoModelsByProvider.value[provider] || []).map(m => ({
         label: m.label || m.key,
         key: m.key,
         isCustom: true,
-        ratios: ['16x9', '9:16', '1:1'],
+        ratios: ['16:9', '9:16', '1:1', '4:3', '3:4'],
         durs: [{ label: '5 秒', key: 5 }, { label: '10 秒', key: 10 }],
         defaultParams: { ratio: '16:9', duration: 5 },
         provider: [provider]
@@ -241,18 +245,21 @@ export const useModelConfig = () => {
   const addCustomChatModel = (modelKey, label = '') => {
     if (!modelKey || customChatModels.value.some(m => m.key === modelKey)) return false
     customChatModels.value.push({ key: modelKey, label: label || modelKey })
+    selectedChatModel.value = modelKey
     return true
   }
 
   const addCustomImageModel = (modelKey, label = '') => {
     if (!modelKey || customImageModels.value.some(m => m.key === modelKey)) return false
     customImageModels.value.push({ key: modelKey, label: label || modelKey })
+    selectedImageModel.value = modelKey
     return true
   }
 
   const addCustomVideoModel = (modelKey, label = '') => {
     if (!modelKey || customVideoModels.value.some(m => m.key === modelKey)) return false
     customVideoModels.value.push({ key: modelKey, label: label || modelKey })
+    selectedVideoModel.value = modelKey
     return true
   }
 
@@ -262,7 +269,7 @@ export const useModelConfig = () => {
     if (idx > -1) {
       customChatModels.value.splice(idx, 1)
       if (selectedChatModel.value === modelKey) {
-        selectedChatModel.value = DEFAULT_CHAT_MODEL
+        selectedChatModel.value = availableChatModels.value[0]?.key || (REQUIRE_USER_MODELS ? '' : DEFAULT_CHAT_MODEL)
       }
       return true
     }
@@ -274,7 +281,7 @@ export const useModelConfig = () => {
     if (idx > -1) {
       customImageModels.value.splice(idx, 1)
       if (selectedImageModel.value === modelKey) {
-        selectedImageModel.value = DEFAULT_IMAGE_MODEL
+        selectedImageModel.value = availableImageModels.value[0]?.key || (REQUIRE_USER_MODELS ? '' : DEFAULT_IMAGE_MODEL)
       }
       return true
     }
@@ -286,7 +293,7 @@ export const useModelConfig = () => {
     if (idx > -1) {
       customVideoModels.value.splice(idx, 1)
       if (selectedVideoModel.value === modelKey) {
-        selectedVideoModel.value = DEFAULT_VIDEO_MODEL
+        selectedVideoModel.value = availableVideoModels.value[0]?.key || (REQUIRE_USER_MODELS ? '' : DEFAULT_VIDEO_MODEL)
       }
       return true
     }
@@ -301,6 +308,7 @@ export const useModelConfig = () => {
     }
     if (customChatModelsByProvider.value[provider].some(m => m.key === modelKey)) return false
     customChatModelsByProvider.value[provider].push({ key: modelKey, label: label || modelKey })
+    selectedChatModel.value = modelKey
     return true
   }
 
@@ -311,6 +319,7 @@ export const useModelConfig = () => {
     }
     if (customImageModelsByProvider.value[provider].some(m => m.key === modelKey)) return false
     customImageModelsByProvider.value[provider].push({ key: modelKey, label: label || modelKey })
+    selectedImageModel.value = modelKey
     return true
   }
 
@@ -321,6 +330,7 @@ export const useModelConfig = () => {
     }
     if (customVideoModelsByProvider.value[provider].some(m => m.key === modelKey)) return false
     customVideoModelsByProvider.value[provider].push({ key: modelKey, label: label || modelKey })
+    selectedVideoModel.value = modelKey
     return true
   }
 
@@ -365,9 +375,9 @@ export const useModelConfig = () => {
     customChatModels.value = []
     customImageModels.value = []
     customVideoModels.value = []
-    selectedChatModel.value = DEFAULT_CHAT_MODEL
-    selectedImageModel.value = DEFAULT_IMAGE_MODEL
-    selectedVideoModel.value = DEFAULT_VIDEO_MODEL
+    selectedChatModel.value = REQUIRE_USER_MODELS ? '' : DEFAULT_CHAT_MODEL
+    selectedImageModel.value = REQUIRE_USER_MODELS ? '' : DEFAULT_IMAGE_MODEL
+    selectedVideoModel.value = REQUIRE_USER_MODELS ? '' : DEFAULT_VIDEO_MODEL
   }
 
   return {

@@ -1,17 +1,13 @@
 /**
- * Provider Hook | 渠道管理 Hook
- * 管理当前选中的 API 渠道，提供请求/响应适配功能
+ * Provider hook.
  */
 
 import { ref, computed } from 'vue'
 import { PROVIDERS, getProviderList, getDefaultProvider, getProviderConfig } from '@/config/providers'
+import { DISTRIBUTION_CONFIG } from '@/config/distribution'
 
-// 存储键名
 const STORAGE_KEY = 'api-provider'
 
-/**
- * Get stored value from localStorage | 从 localStorage 获取存储值
- */
 const getStored = (key, defaultValue = '') => {
   try {
     return localStorage.getItem(key) || defaultValue
@@ -20,9 +16,6 @@ const getStored = (key, defaultValue = '') => {
   }
 }
 
-/**
- * Set stored value to localStorage | 设置存储值到 localStorage
- */
 const setStored = (key, value) => {
   try {
     localStorage.setItem(key, value)
@@ -31,9 +24,6 @@ const setStored = (key, value) => {
   }
 }
 
-/**
- * Remove stored value from localStorage | 从 localStorage 移除存储值
- */
 const removeStored = (key) => {
   try {
     localStorage.removeItem(key)
@@ -42,73 +32,47 @@ const removeStored = (key) => {
   }
 }
 
-/**
- * 获取存储的渠道
- */
-const getStoredProvider = () => {
-  return getStored(STORAGE_KEY)
+const resolveProvider = () => {
+  const defaultProvider = DISTRIBUTION_CONFIG.api.defaultProvider || getDefaultProvider()
+
+  if (DISTRIBUTION_CONFIG.api.lockProvider) {
+    return defaultProvider
+  }
+
+  const storedProvider = getStored(STORAGE_KEY, defaultProvider)
+  return PROVIDERS[storedProvider] ? storedProvider : defaultProvider
 }
 
-/**
- * Provider Hook | 渠道管理 Hook
- */
 export const useProvider = () => {
-  // 当前选中的渠道
-  const currentProvider = ref(getStoredProvider() || getDefaultProvider())
-
-  // 渠道列表
+  const currentProvider = ref(resolveProvider())
   const providerList = getProviderList()
-
-  // 当前渠道配置
   const providerConfig = computed(() => getProviderConfig(currentProvider.value))
-
-  // 当前渠道标签
   const providerLabel = computed(() => providerConfig.value.label || currentProvider.value)
 
-  /**
-   * 设置当前渠道
-   */
   const setProvider = (provider) => {
-    if (PROVIDERS[provider]) {
-      currentProvider.value = provider
-      setStored(STORAGE_KEY, provider)
+    const nextProvider = DISTRIBUTION_CONFIG.api.lockProvider
+      ? (DISTRIBUTION_CONFIG.api.defaultProvider || getDefaultProvider())
+      : provider
+
+    if (PROVIDERS[nextProvider]) {
+      currentProvider.value = nextProvider
+      setStored(STORAGE_KEY, nextProvider)
     }
   }
 
-  /**
-   * 清除渠道配置
-   */
   const clearProvider = () => {
-    currentProvider.value = getDefaultProvider()
+    currentProvider.value = DISTRIBUTION_CONFIG.api.defaultProvider || getDefaultProvider()
     removeStored(STORAGE_KEY)
   }
 
-  /**
-   * 适配请求参数
-   * @param {string} type - 请求类型：'chat' | 'image' | 'video'
-   * @param {Object} params - 原始请求参数
-   */
   const adaptRequest = (type, params) => {
-    const config = providerConfig.value
-    if (config.requestAdapter && config.requestAdapter[type]) {
-      return config.requestAdapter[type](params)
-    }
-    // 如果没有适配器，返回原始参数
-    return params
+    const adapter = providerConfig.value.requestAdapter?.[type]
+    return adapter ? adapter(params) : params
   }
 
-  /**
-   * 适配响应数据
-   * @param {string} type - 响应类型：'chat' | 'image' | 'video'
-   * @param {Object} response - 原始响应数据
-   */
   const adaptResponse = (type, response) => {
-    const config = providerConfig.value
-    if (config.responseAdapter && config.responseAdapter[type]) {
-      return config.responseAdapter[type](response)
-    }
-    // 如果没有适配器，返回原始响应
-    return response
+    const adapter = providerConfig.value.responseAdapter?.[type]
+    return adapter ? adapter(response) : response
   }
 
   return {

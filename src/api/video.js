@@ -11,6 +11,7 @@ export const createVideoTask = (data, options = {}) => {
     url: endpoint,
     method: 'post',
     data,
+    metadata: { capability: 'video' },
     headers: requestType === 'formdata'
       ? { 'Content-Type': 'multipart/form-data' }
       : { 'Content-Type': 'application/json' }
@@ -22,7 +23,8 @@ export const getVideoTaskStatus = (taskId, options = {}) => {
   const { endpoint = '/videos' } = options
   return request({
     url: `${endpoint}`,
-    method: 'get'
+    method: 'get',
+    metadata: { capability: 'video' }
   })
 }
 // 轮询视频任务直到完成

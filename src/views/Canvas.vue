@@ -1,8 +1,8 @@
 <template>
   <!-- Canvas page | 画布页面 -->
-  <div class="h-screen w-screen flex flex-col bg-[var(--bg-primary)]">
+  <div class="canvas-shell h-screen w-screen flex flex-col bg-[var(--bg-primary)]">
     <!-- Header | 顶部导航 -->
-    <AppHeader class="bg-[var(--bg-secondary)]">
+    <AppHeader class="canvas-header">
       <template #left>
         <button 
           @click="goBack"
@@ -19,6 +19,15 @@
       </template>
       <template #right>
         <button 
+          @click="showRuntimeLogs = !showRuntimeLogs"
+          class="relative p-2 hover:bg-[var(--bg-tertiary)] rounded-lg transition-colors"
+          :class="{ 'text-[var(--accent-color)]': runtimeLogs.length > 0 }"
+          title="运行日志"
+        >
+          <n-icon :size="20"><ChatbubbleOutline /></n-icon>
+          <span v-if="runtimeErrorCount" class="log-error-dot">{{ runtimeErrorCount }}</span>
+        </button>
+        <button 
           @click="showDownloadModal = true"
           class="p-2 hover:bg-[var(--bg-tertiary)] rounded-lg transition-colors"
           :class="{ 'text-[var(--accent-color)]': hasDownloadableAssets }"
@@ -29,7 +38,7 @@
         <button 
           @click="showApiSettings = true"
           class="p-2 hover:bg-[var(--bg-tertiary)] rounded-lg transition-colors"
-          :class="{ 'text-[var(--accent-color)]': isApiConfigured }"
+          :class="{ 'text-[var(--accent-color)]': hasAnyApiConfigured }"
           title="API 设置"
         >
           <n-icon :size="20"><SettingsOutline /></n-icon>
@@ -39,6 +48,8 @@
 
     <!-- Main canvas area | 主画布区域 -->
     <div class="flex-1 relative overflow-hidden">
+      <div class="canvas-ambient one"></div>
+      <div class="canvas-ambient two"></div>
       <!-- Vue Flow canvas | Vue Flow 画布 -->
       <VueFlow
         :key="flowKey"
@@ -69,7 +80,7 @@
       </VueFlow>
 
       <!-- Left toolbar | 左侧工具栏 -->
-      <aside class="absolute left-4 top-1/2 -translate-y-1/2 flex flex-col gap-1 p-2 bg-[var(--bg-secondary)] rounded-xl border border-[var(--border-color)] shadow-lg z-10">
+      <aside class="canvas-toolbar absolute left-4 top-1/2 -translate-y-1/2 flex flex-col gap-1 p-2 z-10">
         <button 
           @click="showNodeMenu = !showNodeMenu"
           class="w-10 h-10 flex items-center justify-center rounded-xl bg-[var(--accent-color)] text-white hover:bg-[var(--accent-hover)] transition-colors"
@@ -100,7 +111,7 @@
       <!-- Node menu popup | 节点菜单弹窗 -->
       <div 
         v-if="showNodeMenu"
-        class="absolute left-20 top-1/2 -translate-y-1/2 bg-[var(--bg-secondary)] rounded-xl border border-[var(--border-color)] shadow-lg p-2 z-20"
+        class="node-menu-pop absolute left-20 top-1/2 -translate-y-1/2 p-2 z-20"
       >
         <button 
           v-for="nodeType in nodeTypeOptions" 
@@ -114,7 +125,7 @@
       </div>
 
       <!-- Bottom controls | 底部控制 -->
-      <div class="absolute bottom-4 left-4 flex items-center gap-2 bg-[var(--bg-secondary)] rounded-lg border border-[var(--border-color)] p-1">
+      <div class="zoom-dock absolute bottom-4 left-4 flex items-center gap-2 p-1">
         <!-- <button 
           @click="showGrid = !showGrid" 
           :class="showGrid ? 'bg-[var(--accent-color)] text-white' : 'hover:bg-[var(--bg-tertiary)]'"
@@ -141,12 +152,43 @@
         </div>
       </div>
 
+      <aside v-if="showRuntimeLogs" class="runtime-log-panel absolute right-4 top-4 z-30">
+        <div class="runtime-log-head">
+          <div>
+            <p class="runtime-log-kicker">RUN LOG</p>
+            <h3>运行日志</h3>
+          </div>
+          <div class="flex items-center gap-2">
+            <button class="runtime-log-clear" @click="clearRuntimeLogs">清空</button>
+            <button class="runtime-log-close" @click="showRuntimeLogs = false">×</button>
+          </div>
+        </div>
+        <div v-if="runtimeLogs.length === 0" class="runtime-log-empty">
+          暂无日志。开始生成后，请求、任务 ID、轮询和错误会显示在这里。
+        </div>
+        <div v-else class="runtime-log-list">
+          <article
+            v-for="log in runtimeLogs"
+            :key="log.id"
+            class="runtime-log-item"
+            :class="`is-${log.level}`"
+          >
+            <div class="runtime-log-line">
+              <span class="runtime-log-level">{{ log.level }}</span>
+              <time>{{ formatLogTime(log.timestamp) }}</time>
+            </div>
+            <p>{{ log.message }}</p>
+            <pre v-if="log.meta && Object.keys(log.meta).length">{{ JSON.stringify(log.meta, null, 2) }}</pre>
+          </article>
+        </div>
+      </aside>
+
       <!-- Bottom input panel (floating) | 底部输入面板（悬浮） -->
-      <div class="absolute bottom-4 left-1/2 -translate-x-1/2 w-full max-w-2xl px-4 z-20">
+      <div class="composer-dock absolute bottom-4 left-1/2 -translate-x-1/2 w-full max-w-3xl px-4 z-20">
         <!-- Processing indicator | 处理中指示器 -->
         <div 
           v-if="isProcessing" 
-          class="mb-3 p-3 bg-[var(--bg-primary)] rounded-xl border border-[var(--accent-color)] animate-pulse"
+          class="processing-card mb-3 p-3 animate-pulse"
         >
           <div class="flex items-center gap-2 text-sm text-[var(--accent-color)] mb-2">
             <n-spin :size="14" />
@@ -157,7 +199,7 @@
           </div>
         </div>
 
-        <div class="bg-[var(--bg-primary)] rounded-xl border border-[var(--border-color)] p-3">
+        <div class="composer-card p-3">
           <textarea
             v-model="chatInput"
             :placeholder="inputPlaceholder"
@@ -196,7 +238,7 @@
         </div>
         
         <!-- Quick suggestions | 快捷建议 -->
-        <div class="flex flex-wrap items-center justify-center gap-2 mt-2">
+        <div class="canvas-suggestions flex flex-wrap items-center justify-center gap-2 mt-2">
           <span class="text-xs text-[var(--text-secondary)]">推荐：</span>
           <button 
             v-for="tag in suggestions" 
@@ -206,7 +248,7 @@
           >
             {{ tag }}
           </button>
-          <button class="p-1 hover:bg-[var(--bg-tertiary)] rounded-lg transition-colors">
+          <button class="p-1 hover:bg-[var(--bg-tertiary)] rounded-lg transition-colors" @click="refreshSuggestions" title="换一批">
             <n-icon :size="14"><RefreshOutline /></n-icon>
           </button>
         </div>
@@ -274,7 +316,7 @@ import {
   AppsOutline,
   ChatbubbleOutline
 } from '@vicons/ionicons5'
-import { nodes, edges, addNode, addNodes, addEdge, addEdges, updateNode, initSampleData, loadProject, saveProject, clearCanvas, canvasViewport, updateViewport, undo, redo, canUndo, canRedo, manualSaveHistory, startBatchOperation, endBatchOperation } from '../stores/canvas'
+import { nodes, edges, runtimeLogs, clearRuntimeLogs, addNode, addNodes, addEdge, addEdges, updateNode, initSampleData, loadProject, saveProject, clearCanvas, canvasViewport, updateViewport, undo, redo, canUndo, canRedo, manualSaveHistory, startBatchOperation, endBatchOperation } from '../stores/canvas'
 import { loadAllModels } from '../stores/models'
 import { useChat, useWorkflowOrchestrator } from '../hooks'
 import { useModelStore } from '../stores/pinia'
@@ -288,7 +330,8 @@ import AppHeader from '../components/AppHeader.vue'
 
 // API Config state | API 配置状态
 const modelStore = useModelStore()
-const isApiConfigured = computed(() => !!modelStore.currentApiKey)
+const hasAnyApiConfigured = computed(() => modelStore.hasAnyApiKey)
+const isChatConfigured = computed(() => !!modelStore.currentChatApiKey)
 
 // Initialize models on page load | 页面加载时初始化模型
 onMounted(() => {
@@ -300,12 +343,10 @@ const CHAT_TEMPLATES = {
   imagePrompt: {
     name: '生图提示词',
     systemPrompt: '你是一个专业的AI绘画提示词专家。将用户输入的内容美化成高质量的生图提示词，包含风格、光线、構图、细节等要素。直接返回提示词，不要其他解释。',
-    model: 'gpt-4o-mini'
   },
   videoPrompt: {
     name: '视频提示词',
     systemPrompt: '你是一个专业的AI视频提示词专家。将用户输入的内容美化成高质量的视频生成提示词，包含运动、场景、镜头等要素。直接返回提示词，不要其他解释。',
-    model: 'gpt-4o-mini'
   }
 }
 
@@ -319,8 +360,7 @@ const {
   currentResponse, 
   send: sendChat 
 } = useChat({
-  systemPrompt: CHAT_TEMPLATES.imagePrompt.systemPrompt,
-  model: CHAT_TEMPLATES.imagePrompt.model
+  systemPrompt: CHAT_TEMPLATES.imagePrompt.systemPrompt
 })
 
 // Workflow orchestrator hook | 工作流编排 hook
@@ -388,6 +428,7 @@ const showRenameModal = ref(false)
 const showDeleteModal = ref(false)
 const showDownloadModal = ref(false)
 const showWorkflowPanel = ref(false)
+const showRuntimeLogs = ref(false)
 const renameValue = ref('')
 
 // Check if has downloadable assets | 检查是否有可下载素材
@@ -396,6 +437,13 @@ const hasDownloadableAssets = computed(() => {
     (n.type === 'image' || n.type === 'video') && n.data?.url
   )
 })
+
+const runtimeErrorCount = computed(() => runtimeLogs.value.filter((log) => log.level === 'error').length)
+
+const formatLogTime = (timestamp) => {
+  const date = new Date(timestamp)
+  return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}:${date.getSeconds().toString().padStart(2, '0')}`
+}
 
 
 // Project info | 项目信息
@@ -435,7 +483,7 @@ const nodeTypeOptions = [
 const inputPlaceholder = '你可以试着说"帮我生成一个二次元的卡通角色"'
 
 // Quick suggestions | 快捷建议
-const suggestions = [
+const legacySuggestions = [
   '像个魔法森林',
   '三只不同的小猫',
   '生成多角度分镜',
@@ -443,6 +491,29 @@ const suggestions = [
 ]
 
 // Add new node | 添加新节点
+const suggestionPool = [
+  '赛博东方茶馆，雨夜霓虹，电影感主视觉',
+  '三只不同性格的小猫，儿童绘本分镜',
+  '夏日田野环绕漫步，清新广告短片',
+  '未来感运动鞋发布海报，金属材质和蓝色光效',
+  '古风少女在竹林练剑，飘带与逆光',
+  '日式街角美食摄影，暖色灯光和雨后街面',
+  '低多边形游戏场景，漂浮岛屿和瀑布',
+  '机器人管家整理书房，多角度分镜',
+  '国潮包装设计，玉兰花、山水纹样、纸质肌理',
+  '宇航员走进发光森林，首尾帧视频',
+  '让照片里的海浪缓慢涌动，图生视频',
+  '透明耳机电商主图，水晶质感，高级灰背景',
+  '咖啡杯热气升起，晨光穿过窗帘',
+  '像素风城市夜景，雨滴反射霓虹灯牌'
+]
+
+const suggestions = ref([])
+
+const refreshSuggestions = () => {
+  suggestions.value = [...suggestionPool].sort(() => Math.random() - 0.5).slice(0, 5)
+}
+
 const addNewNode = async (type) => {
   // Calculate viewport center position | 计算视口中心位置
   const viewportCenterX = -viewport.value.x / viewport.value.zoom + (window.innerWidth / 2) / viewport.value.zoom
@@ -688,8 +759,14 @@ const handlePolish = async () => {
   if (!input) return
   
   // Check API configuration | 检查 API 配置
-  if (!isApiConfigured.value) {
+  if (!isChatConfigured.value) {
     window.$message?.warning('请先配置 API Key')
+    showApiSettings.value = true
+    return
+  }
+
+  if (!modelStore.selectedChatModel) {
+    window.$message?.warning('请先在 API 设置的模型配置里添加文本模型')
     showApiSettings.value = true
     return
   }
@@ -699,7 +776,9 @@ const handlePolish = async () => {
 
   try {
     // Call chat API to polish the prompt | 调用 AI 润色提示词
-    const result = await sendChat(input, true)
+    const result = await sendChat(input, true, {
+      model: modelStore.selectedChatModel
+    })
     
     if (result) {
       chatInput.value = result
@@ -719,7 +798,7 @@ const sendMessage = async () => {
   if (!input) return
 
   // Check API configuration | 检查 API 配置
-  if (!isApiConfigured.value) {
+  if (!isChatConfigured.value) {
     window.$message?.warning('请先配置 API Key')
     showApiSettings.value = true
     return
@@ -833,6 +912,7 @@ watch(
 // Initialize | 初始化
 onMounted(() => {
   checkMobile()
+  refreshSuggestions()
   window.addEventListener('resize', checkMobile)
   
   // Initialize projects store | 初始化项目存储
@@ -870,5 +950,239 @@ onUnmounted(() => {
 .canvas-flow {
   width: 100%;
   height: 100%;
+  background:
+    linear-gradient(rgba(15, 23, 42, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(15, 23, 42, 0.035) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+.dark .canvas-flow {
+  background:
+    linear-gradient(rgba(148, 163, 184, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.08) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+.canvas-shell {
+  background:
+    radial-gradient(circle at 18% 12%, rgba(0, 163, 255, 0.16), transparent 32%),
+    radial-gradient(circle at 84% 6%, rgba(34, 197, 94, 0.14), transparent 26%),
+    linear-gradient(135deg, #f7fbff 0%, #eef7f5 52%, #f8fafc 100%);
+}
+
+.dark .canvas-shell {
+  background:
+    radial-gradient(circle at 18% 12%, rgba(0, 163, 255, 0.18), transparent 32%),
+    radial-gradient(circle at 84% 6%, rgba(34, 197, 94, 0.14), transparent 26%),
+    linear-gradient(135deg, #07111f 0%, #0b1d1d 52%, #101827 100%);
+}
+
+.canvas-header {
+  z-index: 30;
+  border-color: rgba(148, 163, 184, 0.22);
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(22px);
+}
+
+.dark .canvas-header {
+  background: rgba(8, 14, 26, 0.76);
+}
+
+.canvas-ambient {
+  position: absolute;
+  pointer-events: none;
+  border-radius: 999px;
+  filter: blur(26px);
+  opacity: 0.72;
+  z-index: 0;
+}
+
+.canvas-ambient.one {
+  width: 260px;
+  height: 260px;
+  left: 9%;
+  top: 12%;
+  background: rgba(0, 163, 255, 0.15);
+}
+
+.canvas-ambient.two {
+  width: 320px;
+  height: 320px;
+  right: 7%;
+  bottom: 7%;
+  background: rgba(34, 197, 94, 0.12);
+}
+
+.canvas-toolbar,
+.node-menu-pop,
+.zoom-dock,
+.composer-card,
+.processing-card {
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(255, 255, 255, 0.74);
+  box-shadow: 0 22px 56px rgba(15, 23, 42, 0.12);
+  backdrop-filter: blur(22px);
+}
+
+.dark .canvas-toolbar,
+.dark .node-menu-pop,
+.dark .zoom-dock,
+.dark .composer-card,
+.dark .processing-card {
+  background: rgba(15, 23, 42, 0.72);
+}
+
+.canvas-toolbar {
+  border-radius: 24px;
+}
+
+.node-menu-pop,
+.zoom-dock {
+  border-radius: 18px;
+}
+
+.composer-card,
+.processing-card {
+  border-radius: 24px;
+}
+
+.canvas-suggestions button {
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(255, 255, 255, 0.66);
+  backdrop-filter: blur(14px);
+}
+
+.dark .canvas-suggestions button {
+  background: rgba(15, 23, 42, 0.64);
+}
+
+.log-error-dot {
+  position: absolute;
+  right: 2px;
+  top: 2px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: #ef4444;
+  color: #fff;
+  font-size: 10px;
+  line-height: 16px;
+  text-align: center;
+}
+
+.runtime-log-panel {
+  width: min(390px, calc(100vw - 32px));
+  max-height: calc(100vh - 140px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow: 0 26px 80px rgba(15, 23, 42, 0.18);
+  backdrop-filter: blur(24px);
+}
+
+.dark .runtime-log-panel {
+  background: rgba(15, 23, 42, 0.86);
+}
+
+.runtime-log-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.22);
+}
+
+.runtime-log-kicker {
+  color: var(--accent-color);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  font-weight: 800;
+}
+
+.runtime-log-head h3 {
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.runtime-log-clear,
+.runtime-log-close {
+  height: 30px;
+  border-radius: 999px;
+  padding: 0 10px;
+  background: rgba(148, 163, 184, 0.14);
+  font-size: 12px;
+}
+
+.runtime-log-close {
+  width: 30px;
+  padding: 0;
+  font-size: 20px;
+  line-height: 1;
+}
+
+.runtime-log-empty {
+  padding: 18px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.runtime-log-list {
+  overflow-y: auto;
+  padding: 12px;
+}
+
+.runtime-log-item {
+  border-left: 3px solid rgba(148, 163, 184, 0.7);
+  border-radius: 14px;
+  padding: 10px 12px;
+  background: rgba(248, 250, 252, 0.72);
+  margin-bottom: 10px;
+}
+
+.dark .runtime-log-item {
+  background: rgba(2, 6, 23, 0.38);
+}
+
+.runtime-log-item.is-success {
+  border-left-color: #22c55e;
+}
+
+.runtime-log-item.is-error {
+  border-left-color: #ef4444;
+}
+
+.runtime-log-item.is-info {
+  border-left-color: #38bdf8;
+}
+
+.runtime-log-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.runtime-log-level {
+  text-transform: uppercase;
+  font-weight: 800;
+}
+
+.runtime-log-item p {
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.runtime-log-item pre {
+  margin-top: 8px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text-secondary);
+  font-size: 11px;
 }
 </style>

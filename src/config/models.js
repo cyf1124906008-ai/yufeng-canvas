@@ -46,11 +46,35 @@ export const BANANA_SIZE_OPTIONS = [
 ]
 
 // Image generation models | 图片生成模型
+export const GPT_IMAGE_SIZE_OPTIONS = [
+    { label: '1024x1024', key: '1024x1024' },
+    { label: '1536x1024 (横版)', key: '1536x1024' },
+    { label: '1024x1536 (竖版)', key: '1024x1536' }
+]
+
 export const IMAGE_MODELS = [
+    {
+        label: 'GPT Image 2',
+        key: 'gpt-image-2',
+        provider: ['dataeyes', 'openai'],
+        sizes: GPT_IMAGE_SIZE_OPTIONS.map(s => s.key),
+        defaultParams: {
+            size: '1024x1024'
+        }
+    },
+    {
+        label: 'GPT Image 2 SP',
+        key: 'gpt-image-2-sp',
+        provider: ['dataeyes', 'openai'],
+        sizes: GPT_IMAGE_SIZE_OPTIONS.map(s => s.key),
+        defaultParams: {
+            size: '1024x1024'
+        }
+    },
     {
         label: 'Nano Banana 2',
         key: 'nano-banana-2',
-        provider: ['chatfire'], // 火宝渠道
+    provider: ['yufeng'],
         sizes: BANANA_SIZE_OPTIONS.map(s => s.key),
         // qualities: SEEDREAM_QUALITY_OPTIONS,
         // getSizesByQuality: (quality) => quality === '4k' ? SEEDREAM_4K_SIZE_OPTIONS : SEEDREAM_SIZE_OPTIONS,
@@ -63,7 +87,7 @@ export const IMAGE_MODELS = [
     {
         label: 'Nano Banana Pro',
         key: 'nano-banana-pro',
-        provider: ['chatfire'], // 火宝渠道
+    provider: ['yufeng'],
         sizes: BANANA_SIZE_OPTIONS.map(s => s.key),
         // qualities: SEEDREAM_QUALITY_OPTIONS,
         // getSizesByQuality: (quality) => quality === '4k' ? SEEDREAM_4K_SIZE_OPTIONS : SEEDREAM_SIZE_OPTIONS,
@@ -76,7 +100,7 @@ export const IMAGE_MODELS = [
     {
         label: '豆包 Seedream 4.5',
         key: 'doubao-seedream-4-5-251128',
-        provider: ['chatfire'], // 火宝渠道
+    provider: ['yufeng'],
         sizes: SEEDREAM_SIZE_OPTIONS.map(s => s.key),
         qualities: SEEDREAM_QUALITY_OPTIONS,
         getSizesByQuality: (quality) => quality === '4k' ? SEEDREAM_4K_SIZE_OPTIONS : SEEDREAM_SIZE_OPTIONS,
@@ -89,7 +113,7 @@ export const IMAGE_MODELS = [
     {
         label: 'Nano Banana',
         key: 'nano-banana',
-        provider: ['chatfire'], // 火宝渠道
+    provider: ['yufeng'],
         tips: '尺寸写在提示词中: 尺寸 9:16',
         sizes: [],
         defaultParams: {
@@ -118,11 +142,22 @@ export const SEEDANCE_RESOLUTION_OPTIONS = [
 
 // Video generation models | 视频生成模型
 export const VIDEO_MODELS = [
+    {
+        label: 'Kling v2.5 Turbo',
+        key: 'kling-v2-5-turbo',
+        provider: ['dataeyes'],
+        type: 't2v+i2v',
+        ratios: ['16:9', '9:16', '1:1', '4:3', '3:4'],
+        durs: [{ label: '5 s', key: 5 }, { label: '10 s', key: 10 }],
+        resolutions: ['720p', '1080p'],
+        defaultResolution: '720p',
+        defaultParams: { ratio: '16:9', duration: 5, resolution: '720p' }
+    },
      // Seedance 模型 - 1.5 Pro
     {
         label: 'Seedance 1.5 Pro (图文视频)',
         key: 'doubao-seedance-1-5-pro-251215',
-        provider: ['chatfire'],
+    provider: ['yufeng'],
         type: 't2v+i2v',
         ratios: ['16:9', '4:3', '1:1', '3:4', '9:16', '21:9'],
         durs: [{ label: '5 秒', key: 5 }, { label: '10 秒', key: 10 }],
@@ -134,7 +169,7 @@ export const VIDEO_MODELS = [
     {
         label: 'Seedance 1.0 Lite (文生视频)',
         key: 'doubao-seedance-1-0-lite-t2v-250428',
-        provider: ['chatfire'],
+    provider: ['yufeng'],
         type: 't2v', // 文生视频
         ratios: ['16:9', '4:3', '1:1', '3:4', '9:16', '21:9'],
         durs: [{ label: '5 秒', key: 5 }, { label: '10 秒', key: 10 }],
@@ -146,7 +181,7 @@ export const VIDEO_MODELS = [
     {
         label: 'Seedance 1.0 Lite (图生视频)',
         key: 'doubao-seedance-1-0-lite-i2v-250428',
-        provider: ['chatfire'],
+    provider: ['yufeng'],
         type: 'i2v', // 图生视频
         ratios: ['16:9'],
         durs: [{ label: '5 秒', key: 5 }, { label: '10 秒', key: 10 }],
@@ -158,7 +193,7 @@ export const VIDEO_MODELS = [
     {
         label: 'Seedance 1.0 Pro (图文视频)',
         key: 'doubao-seedance-1-0-pro-250528',
-        provider: ['chatfire'],
+    provider: ['yufeng'],
         type: 't2v+i2v', // 图文视频
         ratios: ['16:9', '4:3', '1:1', '3:4', '9:16', '21:9', '16:9'],
         durs: [{ label: '5 秒', key: 5 }, { label: '10 秒', key: 10 }],
@@ -171,7 +206,7 @@ export const VIDEO_MODELS = [
     {
         label: 'Seedance 1.0 Pro Fast (图文视频)',
         key: 'doubao-seedance-1-0-pro-fast-251015',
-        provider: ['chatfire'],
+    provider: ['yufeng'],
         type: 't2v+i2v',
         ratios: ['16:9', '4:3', '1:1', '3:4', '9:16', '21:9'],
         durs: [{ label: '5 秒', key: 5 }, { label: '10 秒', key: 10 }],
@@ -183,7 +218,7 @@ export const VIDEO_MODELS = [
     // {
     //     label: '可灵 Kling v2.5-turbo',
     //     key: 'kling-v2-1',
-    //     provider: ['chatfire'], // 仅火宝渠道
+//     provider: ['yufeng'],
     //     ratios: VIDEO_RATIO_LIST.map(s => s.key),
     //     durs: [{ label: '5 秒', key: 5 }, { label: '10 秒', key: 10 }],
     //     defaultParams: { ratio: '9:16', duration: 10 }
@@ -218,16 +253,17 @@ export const VIDEO_MODELS = [
 
 // Chat/LLM models | 对话模型
 export const CHAT_MODELS = [
-    { label: 'GPT-4o Mini', key: 'gpt-4o-mini', provider: ['openai'] },
+    { label: 'GPT-4o Mini', key: 'gpt-4o-mini', provider: ['openai', 'dataeyes'] },
     { label: 'GPT-4o', key: 'gpt-4o', provider: ['openai'] },
     { label: 'GPT-5.2', key: 'gpt-5.2', provider: ['openai'] },
-    { label: 'DeepSeek Chat', key: 'deepseek-chat', provider: ['openai', 'chatfire'] },
-    { label: '豆包 Seed Flash', key: 'doubao-seed-1-6-flash-250615', provider: ['chatfire'] },
+  { label: 'DeepSeek Chat', key: 'deepseek-chat', provider: ['openai', 'yufeng'] },
+  { label: '豆包 Seed Flash', key: 'doubao-seed-1-6-flash-250615', provider: ['yufeng'] },
     { label: 'Gemini 3 Pro', key: 'gemini-3-pro', provider: ['openai'] }
 ]
 
 // Image size options | 图片尺寸选项
 export const IMAGE_SIZE_OPTIONS = [
+    ...GPT_IMAGE_SIZE_OPTIONS,
     { label: '2048x2048', key: '2048x2048' },
     { label: '1792x1024 (横版)', key: '1792x1024' },
     { label: '1024x1792 (竖版)', key: '1024x1792' }
@@ -255,14 +291,32 @@ export const VIDEO_DURATION_OPTIONS = [
 ]
 
 // Default values | 默认值
-export const DEFAULT_IMAGE_MODEL = 'nano-banana-pro'
+export const DEFAULT_IMAGE_MODEL = 'gpt-image-2-sp'
 export const DEFAULT_VIDEO_MODEL = 'doubao-seedance-1-5-pro-251215'
 export const DEFAULT_CHAT_MODEL = 'gpt-4o-mini'
-export const DEFAULT_IMAGE_SIZE = '2048x2048'
+export const DEFAULT_IMAGE_SIZE = '1024x1024'
 export const DEFAULT_VIDEO_RATIO = '16:9'
 export const DEFAULT_VIDEO_DURATION = 5
 
+export const getDefaultChatModelForProvider = (provider) => {
+    if (!provider) {
+        return DEFAULT_CHAT_MODEL
+    }
+
+    const supportedModel = CHAT_MODELS.find((model) => !model.provider || model.provider.includes(provider))
+    return supportedModel?.key || DEFAULT_CHAT_MODEL
+}
+
 // Get model by key | 根据 key 获取模型
+export const getDefaultVideoModelForProvider = (provider) => {
+    if (!provider) {
+        return DEFAULT_VIDEO_MODEL
+    }
+
+    const supportedModel = VIDEO_MODELS.find((model) => !model.provider || model.provider.includes(provider))
+    return supportedModel?.key || DEFAULT_VIDEO_MODEL
+}
+
 export const getModelByName = (key) => {
     const allModels = [...IMAGE_MODELS, ...VIDEO_MODELS, ...CHAT_MODELS]
     return allModels.find(m => m.key === key)

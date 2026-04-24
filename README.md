@@ -1,170 +1,61 @@
-# AI Canvas
+# YUFENG Canvas
 
-一个基于 Vue Flow 的可视化 AI 创作画布，支持文生图、视频生成等 AI 工作流的节点式编排。
-[体验地址](https://marketing.chatfire.site/huobao-canvas/)
+YUFENG Canvas 是一个桌面端 AI 视觉工作流画布，基于 Vue Flow、Vue 3、Vite 和 Electron 构建。它面向 DataEyes OpenAI 兼容接口，支持用户自行填写 API Key 和模型名，把文生图、图生图、文生视频、图生视频组织成可复用的节点流程。
 
-![Vue](https://img.shields.io/badge/Vue-3.5-4FC08D?logo=vue.js)
-![Vite](https://img.shields.io/badge/Vite-5.2-646CFF?logo=vite)
-![License](https://img.shields.io/badge/License-MIT-blue)
+[申请 DataEyes API Key](https://dataeyes.ai/?promoter_code=nqg9bv83)
 
-## 📸 截图
+## 功能
 
-### 首页
-![首页](./doc/home.png)
+- 节点式无限画布：文本、图片配置、图片、视频配置、视频、LLM 文本节点自由连接。
+- 文生图和图生图：支持参考图、多输入提示词、比例/尺寸选择。
+- 文生视频和图生视频：支持提示词、首帧、尾帧、参考图、比例和时长配置。
+- AI 润色：使用用户自己配置的文本模型优化提示词。
+- 多 Key 配置：可使用一个默认 Key，也可为文本、图片、视频分别配置 Key。
+- 用户自填模型：安装包不内置固定模型名，避免服务商模型名变化导致请求错误。
+- 本地项目管理：项目数据保存到本机，支持复制、重命名、删除和缩略图预览。
+- 桌面安装包：Electron + NSIS，可直接分发给 Windows 用户安装。
 
-### 画布
-![画布](./doc/canvas.png)
-
-### API 配置
-![API 配置](./doc/api-config.png)
-
-## ✨ 特性
-
-- 🎨 **可视化节点编排** - 基于 Vue Flow 的无限画布，支持拖拽、缩放、连接
-- 🖼️ **文生图工作流** - 支持配置提示词、模型、尺寸等参数生成图片
-- 🎬 **视频生成工作流** - 支持图生视频，可设置首帧/尾帧图片
-- 🤖 **AI 提示词润色** - 一键 AI 优化提示词，提升生成质量
-- 🌓 **深色/浅色主题** - 支持主题切换，保护眼睛
-- 💾 **本地项目存储** - 项目数据本地持久化，支持多项目管理
-- ↩️ **撤销/重做** - 完整的操作历史记录
-
-## 📦 节点类型
-
-| 节点 | 描述 |
-|------|------|
-| **文本节点** | 输入/编辑提示词文本 |
-| **文生图配置** | 配置图片生成参数（模型、尺寸、数量等） |
-| **图片节点** | 展示生成的图片或上传本地图片 |
-| **视频生成配置** | 配置视频生成参数（支持首帧/尾帧图片） |
-| **视频节点** | 展示生成的视频 |
-
-## 🚀 快速开始
-
-### 环境要求
-
-- Node.js >= 18
-- pnpm / npm / yarn
-
-### 安装
+## 快速开始
 
 ```bash
-# 克隆项目
-git clone https://github.com/chatfire-AI/huobao-canvas.git
-cd huobao-canvas
-
-# 安装依赖
+git clone https://github.com/cyf1124906008-ai/yufeng-canvas.git
+cd yufeng-canvas
 pnpm install
-# 或
-npm install
-
-# 启动开发服务器
 pnpm dev
-# 或
-npm run dev
 ```
 
-### 构建
+## 桌面打包
 
 ```bash
-pnpm build
-# 或
-npm run build
+pnpm desktop:dist
 ```
 
-## ⚙️ 配置
+打包产物会生成到 `release/` 目录。
 
-首次使用需要配置 API：
+## 用户配置
 
-1. 点击右上角设置图标 ⚙️
-2. 填入 API Base URL 和 API Key
-3. 选择需要使用的模型
+首次打开软件后进入 `API 设置`：
 
-支持 OpenAI 兼容的 API 接口。
+1. 填写自己的 DataEyes API Key。
+2. 在 `模型配置` 中添加文本模型、图片模型、视频模型。
+3. 保存后即可创建项目并生成图片或视频。
 
-## 🛠️ 技术栈
+默认服务地址为：
 
-- **框架**: [Vue 3](https://vuejs.org/) + [Vite](https://vitejs.dev/)
-- **画布**: [Vue Flow](https://vueflow.dev/)
-- **UI 组件**: [Naive UI](https://www.naiveui.com/)
-- **样式**: [Tailwind CSS](https://tailwindcss.com/)
-- **图标**: [@vicons/ionicons5](https://www.xicons.org/)
-- **路由**: [Vue Router](https://router.vuejs.org/)
-
-## 📁 项目结构
-
-```
-src/
-├── api/          # API 请求封装
-├── assets/       # 静态资源
-├── components/   # 组件
-│   ├── nodes/    # 节点组件
-│   └── edges/    # 边组件
-├── hooks/        # 组合式函数
-├── router/       # 路由配置
-├── stores/       # 状态管理
-├── utils/        # 工具函数
-└── views/        # 页面视图
+```text
+https://cloud.dataeyes.ai
 ```
 
-## 🔄 自动执行工作流
+## 技术栈
 
-开启「自动执行」模式后，系统会通过 AI 分析用户意图，自动编排并执行工作流。
+- Vue 3
+- Vite
+- Electron
+- Vue Flow
+- Naive UI
+- Tailwind CSS
+- Pinia
 
-### 工作流类型
+## License
 
-| 类型 | 触发条件 | 说明 |
-|------|---------|------|
-| `text_to_image` | 默认 | 文生图工作流 |
-| `text_to_image_to_video` | 包含"视频"、"动画"等关键词 | 文生图生视频工作流 |
-| `storyboard` | 包含"分镜"、"场景"、"镜头"等关键词 | 分镜工作流 |
-
-### 工作流 1: 文生图 / 文生图生视频
-
-![工作流架构](./doc/workflow.png)
-
-### 工作流 2: 分镜工作流 (Storyboard)
-
-![分镜工作流](./doc/workflow2.png)
-
-**示例输入:** `蜡笔小新去上学。分镜一：清晨的战争；分镜二：出发的风姿`
-
-**AI 解析:**
-- 提取角色: 蜡笔小新 (外观描述)
-- 拆分分镜: 清晨的战争、出发的风姿
-
-**执行流程:**
-1. 生成角色参考图
-2. 依次生成各分镜图片 (连接角色参考图保持一致性)
-
-### 执行流程
-
-1. **AI 意图分析** - 分析用户输入，判断工作流类型，生成优化后的提示词
-2. **创建节点** - 按顺序创建文本节点和配置节点
-3. **串行执行** - 配置节点自动执行，等待上一步完成后再执行下一步
-4. **输出结果** - 生成图片/视频节点展示结果
-
-### 核心组件
-
-- `useWorkflowOrchestrator` - 工作流编排器 Hook
-- `waitForConfigComplete` - 等待配置节点完成
-- `waitForOutputReady` - 等待输出节点就绪
-
-## 🤝 贡献
-
-欢迎提交 Issue 和 Pull Request！
-
-1. Fork 本仓库
-2. 创建特性分支 (`git checkout -b feature/amazing-feature`)
-3. 提交更改 (`git commit -m 'Add amazing feature'`)
-4. 推送到分支 (`git push origin feature/amazing-feature`)
-5. 提交 Pull Request
-
-## 联系我
-
-扫码添加微信交流：
-
-<img src="./doc/wx-group.jpg" width="200" alt="微信二维码" />
-
-## 📄 License
-
-[MIT](./LICENSE)
+MIT
