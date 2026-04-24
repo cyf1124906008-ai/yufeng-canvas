@@ -2,11 +2,14 @@
  * Workflow Templates Configuration | 工作流模板配置
  * 预设工作流模板，支持一键添加到画布
  */
-import workflowCover1 from '@/assets/workflow01.jpeg'
-import workflowCover2 from '@/assets/workflow02.jpeg'
-
-import scene01 from '@/assets/scene01.jpeg'
-import shot01 from '@/assets/shot01.jpeg'
+import coverMultiAngle from '@/assets/workflow-covers/multi-angle.svg'
+import coverEcommerce from '@/assets/workflow-covers/ecommerce.svg'
+import coverCharacter from '@/assets/workflow-covers/character.svg'
+import coverScene from '@/assets/workflow-covers/scene.svg'
+import coverPictureBook from '@/assets/workflow-covers/picture-book.svg'
+import coverTextVideo from '@/assets/workflow-covers/text-video.svg'
+import coverImageVideo from '@/assets/workflow-covers/image-video.svg'
+import coverBrandKit from '@/assets/workflow-covers/brand-kit.svg'
 
 // Multi-angle prompts | 多角度提示词模板
 export const MULTI_ANGLE_PROMPTS = {
@@ -40,6 +43,201 @@ export const MULTI_ANGLE_PROMPTS = {
   }
 }
 
+const createIdFactory = () => {
+  let nodeIdCounter = 0
+  return () => `workflow_node_${Date.now()}_${nodeIdCounter++}`
+}
+
+const connect = (source, target, extra = {}) => ({
+  id: `edge_${source}_${target}`,
+  source,
+  target,
+  sourceHandle: 'right',
+  targetHandle: 'left',
+  ...extra
+})
+
+const createTextToImagePreset = ({
+  prompt,
+  promptLabel,
+  configLabel,
+  resultLabel,
+  size = '1440x2560'
+}) => (startPosition) => {
+  const getNodeId = createIdFactory()
+  const textId = getNodeId()
+  const configId = getNodeId()
+  const resultId = getNodeId()
+
+  return {
+    nodes: [
+      {
+        id: textId,
+        type: 'text',
+        position: { x: startPosition.x, y: startPosition.y },
+        data: { content: prompt, label: promptLabel }
+      },
+      {
+        id: configId,
+        type: 'imageConfig',
+        position: { x: startPosition.x + 420, y: startPosition.y },
+        data: { label: configLabel, size }
+      },
+      {
+        id: resultId,
+        type: 'image',
+        position: { x: startPosition.x + 820, y: startPosition.y },
+        data: { url: '', label: resultLabel }
+      }
+    ],
+    edges: [
+      connect(textId, configId, { type: 'promptOrder', data: { promptOrder: 1 } }),
+      connect(configId, resultId)
+    ]
+  }
+}
+
+const createTextToVideoPreset = ({
+  prompt,
+  ratio = '16:9',
+  dur = 5
+}) => (startPosition) => {
+  const getNodeId = createIdFactory()
+  const textId = getNodeId()
+  const videoConfigId = getNodeId()
+  const videoId = getNodeId()
+
+  return {
+    nodes: [
+      {
+        id: textId,
+        type: 'text',
+        position: { x: startPosition.x, y: startPosition.y },
+        data: { content: prompt, label: '视频提示词' }
+      },
+      {
+        id: videoConfigId,
+        type: 'videoConfig',
+        position: { x: startPosition.x + 420, y: startPosition.y },
+        data: { label: '文生视频', ratio, dur }
+      },
+      {
+        id: videoId,
+        type: 'video',
+        position: { x: startPosition.x + 800, y: startPosition.y },
+        data: { url: '', label: '视频结果' }
+      }
+    ],
+    edges: [
+      connect(textId, videoConfigId, { type: 'promptOrder', data: { promptOrder: 1 } }),
+      connect(videoConfigId, videoId)
+    ]
+  }
+}
+
+const createImageToVideoPreset = ({
+  prompt,
+  ratio = '9:16',
+  dur = 5
+}) => (startPosition) => {
+  const getNodeId = createIdFactory()
+  const imageId = getNodeId()
+  const textId = getNodeId()
+  const videoConfigId = getNodeId()
+  const videoId = getNodeId()
+
+  return {
+    nodes: [
+      {
+        id: imageId,
+        type: 'image',
+        position: { x: startPosition.x, y: startPosition.y },
+        data: { url: '', label: '首帧图片' }
+      },
+      {
+        id: textId,
+        type: 'text',
+        position: { x: startPosition.x, y: startPosition.y + 250 },
+        data: { content: prompt, label: '运镜提示词' }
+      },
+      {
+        id: videoConfigId,
+        type: 'videoConfig',
+        position: { x: startPosition.x + 430, y: startPosition.y + 100 },
+        data: { label: '图生视频', ratio, dur }
+      },
+      {
+        id: videoId,
+        type: 'video',
+        position: { x: startPosition.x + 810, y: startPosition.y + 100 },
+        data: { url: '', label: '视频结果' }
+      }
+    ],
+    edges: [
+      connect(imageId, videoConfigId, { type: 'imageRole', data: { imageRole: 'first_frame_image' } }),
+      connect(textId, videoConfigId, { type: 'promptOrder', data: { promptOrder: 1 } }),
+      connect(videoConfigId, videoId)
+    ]
+  }
+}
+
+const createBrandVisualKit = (startPosition) => {
+  const colSpacing = 430
+  const rowSpacing = 260
+  const getNodeId = createIdFactory()
+  const nodes = []
+  const edges = []
+
+  const brandBriefId = getNodeId()
+  nodes.push({
+    id: brandBriefId,
+    type: 'text',
+    position: { x: startPosition.x, y: startPosition.y + rowSpacing },
+    data: {
+      label: '品牌简报',
+      content: '品牌名称：YUFENG Lab\n关键词：未来感、清爽、可信赖、创作者工具\n主色：深青黑、荧光绿、科技蓝\n受众：AI 创作者、短视频团队、电商设计师\n目标：生成一套可用于官网、社媒和产品发布的品牌视觉。'
+    }
+  })
+
+  const prompts = [
+    ['品牌主视觉海报', '根据品牌简报生成一张高级科技感品牌主视觉海报，中心构图，抽象Y形光轨，深青黑背景，荧光绿和科技蓝点缀，适合官网首屏。', '1440x2560'],
+    ['社媒方图', '根据品牌简报生成一张适合小红书/朋友圈发布的方形宣传图，干净留白，醒目的标题区域，包含抽象AI画布和节点元素。', '1024x1024'],
+    ['产品发布横幅', '根据品牌简报生成一张16:9产品发布横幅，展示桌面软件界面氛围、画布节点、生成图片和视频的视觉流程，高级、简洁、有品牌识别度。', '1920x1080'],
+    ['应用商店封面', '根据品牌简报生成一张应用商店封面图，突出本地AI视觉工作台、工作流、图片与视频生成，明亮可信，适合软件下载页。', '1440x1024']
+  ]
+
+  prompts.forEach(([label, content, size], index) => {
+    const y = startPosition.y + index * rowSpacing
+    const promptId = getNodeId()
+    const configId = getNodeId()
+    const imageId = getNodeId()
+
+    nodes.push({
+      id: promptId,
+      type: 'text',
+      position: { x: startPosition.x + colSpacing, y },
+      data: { label: `${label}提示词`, content }
+    })
+    nodes.push({
+      id: configId,
+      type: 'imageConfig',
+      position: { x: startPosition.x + colSpacing * 2, y },
+      data: { label, size }
+    })
+    nodes.push({
+      id: imageId,
+      type: 'image',
+      position: { x: startPosition.x + colSpacing * 3, y },
+      data: { url: '', label: `${label}结果` }
+    })
+    edges.push(connect(brandBriefId, configId, { type: 'promptOrder', data: { promptOrder: 1 } }))
+    edges.push(connect(promptId, configId, { type: 'promptOrder', data: { promptOrder: 2 } }))
+    edges.push(connect(configId, imageId))
+  })
+
+  return { nodes, edges }
+}
+
 /**
  * Workflow Templates | 工作流模板
  */
@@ -50,7 +248,7 @@ export const WORKFLOW_TEMPLATES = [
     description: '生成角色的正视、侧视、后视、俯视四宫格分镜图',
     icon: 'GridOutline',
     category: 'storyboard',
-    cover: workflowCover1,
+    cover: coverMultiAngle,
     // 节点配置
     createNodes: (startPosition) => {
       const nodeSpacing = 400
@@ -180,7 +378,7 @@ export const WORKFLOW_TEMPLATES = [
     description: '根据产品信息和图片，生成模特图、侧面展示图、俯瞰展示图',
     icon: 'ShoppingOutline',
     category: 'ecommerce',
-    cover: workflowCover2,
+    cover: coverEcommerce,
     // 节点配置
     createNodes: (startPosition) => {
       const colSpacing = 500  // 列间距
@@ -446,7 +644,7 @@ export const WORKFLOW_TEMPLATES = [
     description: '根据角色描述生成一致性角色形象，后续多角度图依赖正面图保持一致性',
     icon: 'PersonOutline',
     category: 'drama',
-    cover: shot01,
+    cover: coverCharacter,
     createNodes: (startPosition) => {
       const colSpacing = 400
       const rowSpacing = 280
@@ -700,7 +898,7 @@ export const WORKFLOW_TEMPLATES = [
     description: '先生成基础场景，再基于基础场景生成多时段变体，保持场景一致性',
     icon: 'ImageOutline',
     category: 'drama',
-    cover: scene01,
+    cover: coverScene,
     createNodes: (startPosition) => {
       const colSpacing = 400
       const rowSpacing = 260
@@ -1024,6 +1222,56 @@ export const WORKFLOW_TEMPLATES = [
   //     return { nodes, edges }
   //   }
   // },
+  {
+    id: 'brand-visual-kit',
+    name: '品牌视觉套装',
+    description: '从品牌简报生成主视觉、社媒方图、发布横幅和应用商店封面',
+    icon: 'ImageOutline',
+    category: 'brand',
+    cover: coverBrandKit,
+    createNodes: createBrandVisualKit
+  },
+  {
+    id: 'text-to-short-video',
+    name: '文生短视频',
+    description: '预置提示词、比例、时长和结果节点，适合直接生成短片',
+    icon: 'VideocamOutline',
+    category: 'video',
+    cover: coverTextVideo,
+    createNodes: createTextToVideoPreset({
+      prompt: '生成一个 5 秒电影感短片：雨夜城市街角，一只发光的小狐狸穿过霓虹灯下的巷子，镜头缓慢推进，地面积水反射灯牌，氛围神秘、精致、无文字。',
+      ratio: '16:9',
+      dur: 5
+    })
+  },
+  {
+    id: 'image-to-video-motion',
+    name: '首帧图生视频',
+    description: '上传首帧图后生成运镜视频，适合产品、角色和海报动效',
+    icon: 'VideocamOutline',
+    category: 'video',
+    cover: coverImageVideo,
+    createNodes: createImageToVideoPreset({
+      prompt: '保持首帧主体一致，镜头缓慢向前推进，增加轻微景深、光影流动和空气颗粒感，画面稳定、高级、电影感，不要改变主体结构。',
+      ratio: '9:16',
+      dur: 5
+    })
+  },
+  {
+    id: 'social-poster-variations',
+    name: '社媒海报变体',
+    description: '一键生成适合小红书、朋友圈和宣传页的竖版海报',
+    icon: 'ImageOutline',
+    category: 'brand',
+    cover: coverBrandKit,
+    createNodes: createTextToImagePreset({
+      promptLabel: '海报提示词',
+      configLabel: '竖版海报',
+      resultLabel: '海报结果',
+      size: '1440x2560',
+      prompt: '生成一张高级社媒竖版海报：深青黑渐变背景，中心有简洁的Y形发光符号，周围是AI画布节点、图片缩略图、视频播放符号，构图简洁、留白充足、适合软件产品宣传，无文字。'
+    })
+  },
   // ========== 儿童绘本工作流 ==========
   {
     id: 'picture-book-generator',
@@ -1031,7 +1279,7 @@ export const WORKFLOW_TEMPLATES = [
     description: '角色生成 → 剧情文字 → 绘本插画，支持角色一致性',
     icon: 'BookOutline',
     category: 'creative',
-    cover: "",
+    cover: coverPictureBook,
     createNodes: (startPosition) => {
       const colSpacing = 420
       const rowSpacing = 280
