@@ -6,6 +6,7 @@
 import { computed } from 'vue'
 import { NConfigProvider, NMessageProvider, NDialogProvider, darkTheme } from 'naive-ui'
 import { isDark } from './stores/theme'
+import AppFeedbackProvider from './components/AppFeedbackProvider.vue'
 
 // Naive UI theme based on dark mode | 基于深色模式的 Naive UI 主题
 const theme = computed(() => isDark.value ? darkTheme : null)
@@ -46,7 +47,9 @@ const themeOverrides = {
   <n-config-provider :theme="theme" :theme-overrides="themeOverrides">
     <n-message-provider>
       <n-dialog-provider>
-        <router-view />
+        <app-feedback-provider>
+          <router-view />
+        </app-feedback-provider>
       </n-dialog-provider>
     </n-message-provider>
   </n-config-provider>
