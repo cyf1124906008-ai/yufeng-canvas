@@ -184,6 +184,39 @@
         </div>
       </section>
 
+      <section class="inspiration-section">
+        <div class="section-title">
+          <div>
+            <p class="eyebrow">GPT IMAGE 2 PROMPT LIBRARY</p>
+            <h2>灵感案例库</h2>
+            <p class="section-desc">
+              精选并改编自开源提示词案例，点击卡片就能把提示词带入画布继续创作。
+            </p>
+          </div>
+          <button class="source-link" @click="openPromptSource">
+            查看来源
+          </button>
+        </div>
+
+        <div class="inspiration-grid">
+          <button
+            v-for="item in inspirationCases"
+            :key="item.title"
+            class="inspiration-card"
+            @click="createFromTemplate(item.prompt)"
+          >
+            <div class="inspiration-image">
+              <img :src="item.image" :alt="item.title" />
+            </div>
+            <div class="inspiration-body">
+              <span>{{ item.category }}</span>
+              <h3>{{ item.title }}</h3>
+              <p>{{ item.prompt }}</p>
+            </div>
+          </button>
+        </div>
+      </section>
+
       <section ref="projectsSection" class="projects-section">
         <div class="section-title">
           <div>
@@ -290,6 +323,12 @@ import AppHeader from '../components/AppHeader.vue'
 import showcaseBrand from '../assets/showcase-brand.png'
 import showcaseStoryboard from '../assets/showcase-storyboard.png'
 import showcaseVideo from '../assets/showcase-video.png'
+import {
+  CANVAS_PROMPT_SUGGESTIONS,
+  HOME_CHAT_SUGGESTIONS,
+  INSPIRATION_CASES,
+  PROMPT_LIBRARY_SOURCE
+} from '../config/promptLibrary'
 
 const router = useRouter()
 const dialog = useDialog()
@@ -317,32 +356,10 @@ const {
   systemPrompt: '你是 YUFENG Canvas 的创意助手。回答要直接、有帮助；如果用户在做视觉创作，可以主动给出可执行的提示词、镜头、构图、比例和下一步建议。'
 })
 
-const suggestionPool = [
-  '赛博东方茶馆，雨夜霓虹，电影感主视觉',
-  '三只不同性格的小猫，儿童绘本分镜',
-  '夏日田野环绕漫步，清新广告短片',
-  '未来感运动鞋发布海报，金属材质和蓝色光效',
-  '古风少女在竹林练剑，飘带与逆光',
-  '一组美食摄影：日式街角拉面店，暖色灯光',
-  '低多边形游戏场景，漂浮岛屿和瀑布',
-  '生成多角度分镜：机器人管家整理书房',
-  '国潮包装设计，玉兰花、山水纹样、纸质肌理',
-  '首尾帧视频：宇航员走进发光森林',
-  '图生视频：让照片里的海浪缓慢涌动',
-  '电商主图：透明耳机，水晶质感，高级灰背景',
-  '短视频镜头：咖啡杯热气升起，晨光穿过窗帘',
-  '像素风城市夜景，雨滴反射霓虹灯牌',
-  '电影海报：孤独骑士站在沙漠巨门前'
-]
-
+const suggestionPool = CANVAS_PROMPT_SUGGESTIONS
 const visibleSuggestions = ref([])
-
-const chatSuggestions = [
-  '帮我把一个新茶饮品牌拆成 3 个视觉方向',
-  '把这个提示词优化成更适合生图的版本',
-  '给我一个 6 镜头短视频分镜',
-  '帮我分析图片模型和视频模型应该怎么选'
-]
+const chatSuggestions = HOME_CHAT_SUGGESTIONS
+const inspirationCases = INSPIRATION_CASES
 
 const featureCards = [
   {
@@ -520,6 +537,14 @@ const sendHomeChat = async () => {
 const createFromTemplate = (prompt) => {
   inputText.value = prompt
   handleCreateWithInput()
+}
+
+const openPromptSource = () => {
+  if (window.desktopApp?.openExternal) {
+    window.desktopApp.openExternal(PROMPT_LIBRARY_SOURCE.url)
+    return
+  }
+  window.open(PROMPT_LIBRARY_SOURCE.url, '_blank', 'noopener,noreferrer')
 }
 
 const handleCreateWithInput = () => {
@@ -977,6 +1002,7 @@ onMounted(() => {
 }
 
 .showcase-section,
+.inspiration-section,
 .projects-section {
   margin-top: 72px;
 }
@@ -991,6 +1017,34 @@ onMounted(() => {
   font-size: 26px;
   font-weight: 900;
   letter-spacing: -0.04em;
+}
+
+.section-desc {
+  max-width: 600px;
+  margin-top: 8px;
+  color: var(--text-secondary);
+  line-height: 1.75;
+}
+
+.source-link {
+  padding: 10px 14px;
+  border: 1px solid rgba(148, 163, 184, 0.34);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.62);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 800;
+  transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+}
+
+.source-link:hover {
+  transform: translateY(-2px);
+  border-color: rgba(34, 197, 94, 0.55);
+  background: rgba(255, 255, 255, 0.86);
+}
+
+.dark .source-link {
+  background: rgba(15, 23, 42, 0.58);
 }
 
 .showcase-grid {
@@ -1053,6 +1107,84 @@ onMounted(() => {
   margin-top: 6px;
   color: rgba(255, 255, 255, 0.76);
   font-size: 13px;
+}
+
+.inspiration-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.inspiration-card {
+  overflow: hidden;
+  border: 1px solid rgba(148, 163, 184, 0.26);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.66);
+  text-align: left;
+  box-shadow: 0 20px 46px rgba(15, 23, 42, 0.08);
+  transition: transform 0.22s ease, border-color 0.22s ease, box-shadow 0.22s ease;
+}
+
+.inspiration-card:hover {
+  transform: translateY(-5px);
+  border-color: rgba(34, 197, 94, 0.58);
+  box-shadow: 0 28px 60px rgba(15, 23, 42, 0.14);
+}
+
+.dark .inspiration-card {
+  background: rgba(15, 23, 42, 0.58);
+}
+
+.inspiration-image {
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  background: rgba(148, 163, 184, 0.12);
+}
+
+.inspiration-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.45s ease;
+}
+
+.inspiration-card:hover .inspiration-image img {
+  transform: scale(1.06);
+}
+
+.inspiration-body {
+  padding: 14px;
+}
+
+.inspiration-body span {
+  display: inline-flex;
+  margin-bottom: 9px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(34, 197, 94, 0.12);
+  color: #047857;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.dark .inspiration-body span {
+  color: #86efac;
+}
+
+.inspiration-body h3 {
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.inspiration-body p {
+  display: -webkit-box;
+  margin-top: 8px;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.65;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
 }
 
 .empty-state {
@@ -1183,6 +1315,7 @@ onMounted(() => {
 @media (max-width: 960px) {
   .hero-grid,
   .showcase-grid,
+  .inspiration-grid,
   .project-grid {
     grid-template-columns: 1fr;
   }

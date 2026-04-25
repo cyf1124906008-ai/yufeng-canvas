@@ -327,6 +327,7 @@ import ApiSettings from '../components/ApiSettings.vue'
 import DownloadModal from '../components/DownloadModal.vue'
 import WorkflowPanel from '../components/WorkflowPanel.vue'
 import AppHeader from '../components/AppHeader.vue'
+import { CANVAS_PROMPT_SUGGESTIONS } from '../config/promptLibrary'
 
 // API Config state | API 配置状态
 const modelStore = useModelStore()
@@ -483,30 +484,10 @@ const nodeTypeOptions = [
 const inputPlaceholder = '你可以试着说"帮我生成一个二次元的卡通角色"'
 
 // Quick suggestions | 快捷建议
-const legacySuggestions = [
-  '像个魔法森林',
-  '三只不同的小猫',
-  '生成多角度分镜',
-  '夏日田野环绕漫步'
-]
+const legacySuggestions = CANVAS_PROMPT_SUGGESTIONS.slice(0, 4)
 
 // Add new node | 添加新节点
-const suggestionPool = [
-  '赛博东方茶馆，雨夜霓虹，电影感主视觉',
-  '三只不同性格的小猫，儿童绘本分镜',
-  '夏日田野环绕漫步，清新广告短片',
-  '未来感运动鞋发布海报，金属材质和蓝色光效',
-  '古风少女在竹林练剑，飘带与逆光',
-  '日式街角美食摄影，暖色灯光和雨后街面',
-  '低多边形游戏场景，漂浮岛屿和瀑布',
-  '机器人管家整理书房，多角度分镜',
-  '国潮包装设计，玉兰花、山水纹样、纸质肌理',
-  '宇航员走进发光森林，首尾帧视频',
-  '让照片里的海浪缓慢涌动，图生视频',
-  '透明耳机电商主图，水晶质感，高级灰背景',
-  '咖啡杯热气升起，晨光穿过窗帘',
-  '像素风城市夜景，雨滴反射霓虹灯牌'
-]
+const suggestionPool = CANVAS_PROMPT_SUGGESTIONS
 
 const suggestions = ref([])
 

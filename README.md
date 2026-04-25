@@ -16,6 +16,7 @@
 - 图片生成：支持文生图、图生图、参考图输入和比例/尺寸选择。
 - 视频生成：支持文生视频、首帧图生视频、比例、时长和任务轮询。
 - 公共工作流：内置多角度分镜、电商套图、短剧角色、场景变体、品牌视觉、短视频、绘本等模板，一键放到画布使用。
+- 灵感案例库：内置 GPT Image 2 提示词案例卡片，点击即可把提示词带入画布继续二创。
 - 模型自定义：用户自己填写 DataEyes API Key 和模型名；文本、图片、视频可以分别配置不同 Key。
 - 运行日志：记录请求、任务 ID、成功、失败、超时和原始响应，方便定位问题。
 - 客户端更新：应用右上角可检查 GitHub 最新版本。
@@ -91,6 +92,10 @@ pnpm desktop:dist
 - Naive UI
 - Tailwind CSS
 - Pinia
+
+## 素材来源
+
+部分提示词灵感和案例图片改编/选自 [EvoLinkAI/awesome-gpt-image-2-prompts](https://github.com/EvoLinkAI/awesome-gpt-image-2-prompts)，原项目采用 Apache-2.0 License。YUFENG Canvas 内置文案已整理成适合节点画布的一键创作模板。
 
 ## License
 
