@@ -6,6 +6,7 @@ import { ref, computed, watch } from 'vue'
 
 // Storage key | 存储键
 const STORAGE_KEY = 'ai-canvas-projects'
+const RUNTIME_NODE_FIELDS = ['loading', 'progress', 'attempt', 'isPolling']
 
 // Generate unique ID | 生成唯一ID
 const generateId = () => `project_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
@@ -50,6 +51,9 @@ const cleanNodeForStorage = (node) => {
   if (!node.data) return node
   
   const cleanedData = { ...node.data }
+  RUNTIME_NODE_FIELDS.forEach(field => {
+    delete cleanedData[field]
+  })
   
   // Remove base64 data | 移除 base64 数据
   if (cleanedData.base64) {

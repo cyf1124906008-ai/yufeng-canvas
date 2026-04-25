@@ -48,7 +48,7 @@
     <div class="p-3">
       <!-- Loading state | 加载状态 -->
       <div 
-        v-if="(data.taskId && !data.url) || (data.loading && !data.taskId)"
+        v-if="isActiveGeneration"
         class="aspect-video rounded-lg bg-gradient-to-br from-cyan-400 via-blue-300 to-amber-200 flex flex-col items-center justify-center gap-3 relative overflow-hidden"
       >
         <!-- Animated gradient overlay | 动画渐变遮罩 -->
@@ -185,6 +185,7 @@ const operations = [
 
 // Polling state | 轮询状态
 const isPolling = ref(false)
+const isActiveGeneration = computed(() => Boolean(isPolling.value || props.data?.loading))
 
 const loadingText = computed(() => {
   if (props.data?.taskId) {
@@ -195,16 +196,16 @@ const loadingText = computed(() => {
 })
 
 // Watch for taskId changes and start polling | 监听 taskId 变化并开始轮询
-watch(() => props.data?.taskId, (taskId) => {
-  if (taskId && !props.data?.url && !isPolling.value) {
+watch(() => [props.data?.taskId, props.data?.loading], ([taskId, loading]) => {
+  if (taskId && loading && !props.data?.url && !isPolling.value) {
     startPolling(taskId)
   }
 })
 
 // 页面刷新后恢复轮询 | Resume polling after page refresh
 onMounted(() => {
-  const { taskId, url } = props.data || {}
-  if (taskId && !url && !isPolling.value) {
+  const { taskId, url, loading } = props.data || {}
+  if (taskId && loading && !url && !isPolling.value) {
     startPolling(taskId)
   }
 })
@@ -214,6 +215,11 @@ const startPolling = async (taskId) => {
   if (isPolling.value) return
 
   isPolling.value = true
+  updateNode(props.id, {
+    loading: true,
+    error: '',
+    updatedAt: Date.now()
+  })
 
   try {
     const result = await pollVideoTask(taskId, (attempt, percentage) => {

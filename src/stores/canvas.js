@@ -54,6 +54,33 @@ const historyIndex = ref(-1)
 const MAX_HISTORY = 50
 let isRestoring = false
 
+const RUNTIME_NODE_FIELDS = ['loading', 'progress', 'attempt', 'isPolling']
+
+const clearRuntimeNodeFields = (node, { markInterrupted = false } = {}) => {
+  if (!node?.data) return node
+
+  const data = { ...node.data }
+  const wasLoading = data.loading === true
+
+  RUNTIME_NODE_FIELDS.forEach(field => {
+    delete data[field]
+  })
+
+  const hasStaleVideoTask = node.type === 'video' && data.taskId && !data.url
+
+  if (markInterrupted && (wasLoading || hasStaleVideoTask) && !data.url && !data.error && (node.type === 'image' || node.type === 'video')) {
+    data.error = hasStaleVideoTask
+      ? '上次视频任务未完成，可点击重新查询结果'
+      : '上次生成未完成，请重新生成'
+    data.label = '生成未完成'
+  }
+
+  return { ...node, data }
+}
+
+const sanitizeNodesForLoad = (rawNodes = []) => rawNodes.map(node => clearRuntimeNodeFields(node, { markInterrupted: true }))
+const sanitizeNodesForSave = (rawNodes = []) => rawNodes.map(node => clearRuntimeNodeFields(node))
+
 // Position change threshold for history | 位置变化阈值
 const POSITION_THRESHOLD = 10
 
@@ -448,7 +475,7 @@ export const loadProject = (projectId) => {
   
   if (canvasData) {
     // Restore nodes | 恢复节点
-    nodes.value = canvasData.nodes || []
+    nodes.value = sanitizeNodesForLoad(canvasData.nodes || [])
     edges.value = canvasData.edges || []
     canvasViewport.value = canvasData.viewport || { x: 100, y: 50, zoom: 0.8 }
     
@@ -486,7 +513,7 @@ export const loadProject = (projectId) => {
 export const saveProject = () => {
   if (!currentProjectId.value) return
   updateProjectCanvas(currentProjectId.value, {
-    nodes: nodes.value,
+    nodes: sanitizeNodesForSave(nodes.value),
     edges: edges.value,
     viewport: canvasViewport.value
   })
