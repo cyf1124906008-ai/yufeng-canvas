@@ -2,13 +2,13 @@
   <div class="home-shell min-h-screen h-screen overflow-y-auto text-[var(--text-primary)]">
     <AppHeader class="home-header">
       <template #left>
-        <div class="brand-lockup">
+        <button class="brand-lockup" title="回到首页顶部" @click="scrollToTop">
           <img src="../assets/logo.png" alt="YUFENG Canvas" class="brand-logo" />
           <div>
             <p class="brand-name">YUFENG Canvas</p>
             <p class="brand-subtitle">AI visual workflow studio</p>
           </div>
-        </div>
+        </button>
       </template>
       <template #right>
         <button
@@ -27,10 +27,12 @@
       <section class="hero-grid">
         <div class="hero-copy">
           <div class="eyebrow">YUFENG CREATIVE CANVAS</div>
-          <h1>把灵感拆成节点，让图片和视频按流程长出来。</h1>
-          <p class="hero-desc">
-            一个给创作者用的本地 AI 视觉工作台。填入自己的 Key 和模型名后，就能把图片、视频和提示词编排成可复用的创作流程。
-          </p>
+          <transition name="hero-copy" mode="out-in">
+            <div :key="currentHero.id" class="hero-line">
+              <h1>{{ currentHero.title }}</h1>
+              <p class="hero-desc">{{ currentHero.desc }}</p>
+            </div>
+          </transition>
 
           <div class="hero-actions">
             <button class="primary-action" @click="handleCreateWithInput">
@@ -40,6 +42,10 @@
             <button class="secondary-action" @click="showApiSettings = true">
               <n-icon :size="18"><SettingsOutline /></n-icon>
               配置模型
+            </button>
+            <button class="secondary-action" @click="scrollToInspiration">
+              <n-icon :size="18"><SparklesOutline /></n-icon>
+              看案例
             </button>
           </div>
 
@@ -184,7 +190,7 @@
         </div>
       </section>
 
-      <section class="inspiration-section">
+      <section ref="inspirationSection" class="inspiration-section">
         <div class="section-title">
           <div>
             <p class="eyebrow">GPT IMAGE 2 PROMPT LIBRARY</p>
@@ -288,7 +294,7 @@
 </template>
 
 <script setup>
-import { computed, h, onMounted, ref } from 'vue'
+import { computed, h, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { NButton, NDropdown, NIcon, NInput, NModal, NSpin, useDialog } from 'naive-ui'
 import {
@@ -343,7 +349,9 @@ const showRenameModal = ref(false)
 const renameValue = ref('')
 const renameTargetId = ref(null)
 const projectsSection = ref(null)
+const inspirationSection = ref(null)
 const videoRefs = new Map()
+let heroTimer = null
 
 const isApiConfigured = computed(() => modelStore.hasAnyApiKey)
 const isChatConfigured = computed(() => !!modelStore.currentChatApiKey && !!modelStore.selectedChatModel)
@@ -360,6 +368,32 @@ const suggestionPool = CANVAS_PROMPT_SUGGESTIONS
 const visibleSuggestions = ref([])
 const chatSuggestions = HOME_CHAT_SUGGESTIONS
 const inspirationCases = INSPIRATION_CASES
+const heroIndex = ref(0)
+
+const heroSlides = [
+  {
+    id: 'flow',
+    title: '把灵感拆成节点，让图片和视频按流程长出来。',
+    desc: '一个给创作者用的本地 AI 视觉工作台。填入自己的 Key 和模型名后，就能把图片、视频和提示词编排成可复用的创作流程。'
+  },
+  {
+    id: 'model',
+    title: '换模型、接参考图、跑视频，都放在同一张画布里。',
+    desc: '文本、图片、视频模型可以分别配置，提示词、参考图、首尾帧和结果节点也能继续复用，不再散落在不同网页里。'
+  },
+  {
+    id: 'case',
+    title: '从一个案例开始，快速搭出自己的创作流水线。',
+    desc: '公共工作流和灵感案例库已经准备好，点击模板就能进入画布，再替换成你的产品、角色、场景或短视频创意。'
+  },
+  {
+    id: 'debug',
+    title: '请求、任务、报错都有日志，生成失败也能追到原因。',
+    desc: '运行日志会记录请求地址、模型、任务 ID、轮询状态和原始响应，方便判断是模型能力、参数还是供应商返回的问题。'
+  }
+]
+
+const currentHero = computed(() => heroSlides[heroIndex.value])
 
 const featureCards = [
   {
@@ -570,9 +604,26 @@ const scrollToProjects = () => {
   projectsSection.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
+const scrollToInspiration = () => {
+  inspirationSection.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
+const scrollToTop = () => {
+  document.querySelector('.home-shell')?.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
 onMounted(() => {
   initProjectsStore()
   refreshSuggestions()
+  heroTimer = window.setInterval(() => {
+    heroIndex.value = (heroIndex.value + 1) % heroSlides.length
+  }, 4200)
+})
+
+onUnmounted(() => {
+  if (heroTimer) {
+    window.clearInterval(heroTimer)
+  }
 })
 </script>
 
@@ -608,6 +659,15 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 12px;
+  border-radius: 18px;
+  padding: 4px 8px 4px 4px;
+  text-align: left;
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.brand-lockup:hover {
+  background: rgba(34, 197, 94, 0.08);
+  transform: translateY(-1px);
 }
 
 .brand-logo {
@@ -691,6 +751,27 @@ onMounted(() => {
   font-weight: 900;
 }
 
+.hero-line {
+  min-height: 310px;
+}
+
+.hero-copy-enter-active,
+.hero-copy-leave-active {
+  transition: opacity 0.42s ease, transform 0.42s ease, filter 0.42s ease;
+}
+
+.hero-copy-enter-from {
+  opacity: 0;
+  filter: blur(8px);
+  transform: translateY(18px);
+}
+
+.hero-copy-leave-to {
+  opacity: 0;
+  filter: blur(8px);
+  transform: translateY(-14px);
+}
+
 .hero-desc {
   max-width: 620px;
   margin-top: 22px;
@@ -710,6 +791,7 @@ onMounted(() => {
 }
 
 .hero-actions {
+  flex-wrap: wrap;
   gap: 14px;
   margin-top: 28px;
 }
@@ -746,6 +828,13 @@ onMounted(() => {
 .send-button:hover {
   transform: translateY(-2px);
   box-shadow: 0 24px 46px rgba(0, 163, 255, 0.28);
+}
+
+.send-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+  transform: none;
+  box-shadow: none;
 }
 
 .feature-strip {
@@ -990,6 +1079,13 @@ onMounted(() => {
   padding: 7px 11px;
   background: rgba(255, 255, 255, 0.68);
   font-size: 13px;
+  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+}
+
+.suggestion-cloud button:hover {
+  transform: translateY(-1px);
+  border-color: rgba(34, 197, 94, 0.5);
+  background: rgba(255, 255, 255, 0.9);
 }
 
 .dark .suggestion-cloud button {
@@ -1327,6 +1423,10 @@ onMounted(() => {
 
   .hero-copy h1 {
     font-size: 44px;
+  }
+
+  .hero-line {
+    min-height: 290px;
   }
 }
 </style>
