@@ -2,7 +2,7 @@
   "name": "yufeng-canvas",
   "productName": "YUFENG Canvas",
   "private": true,
-  "version": "0.1.16",
+  "version": "0.1.17",
   "description": "Visual AI canvas desktop app built with Vue, Vite and Electron",
   "repository": {
     "type": "git",
@@ -29,6 +29,7 @@
     "@vue-flow/core": "^1.48.1",
     "@vue-flow/minimap": "^1.5.4",
     "axios": "^1.13.2",
+    "electron-updater": "^6.8.3",
     "naive-ui": "^2.43.2",
     "pinia": "^3.0.4",
     "vue": "^3.5.24",
@@ -50,9 +51,17 @@
     "appId": "ai.yufeng.canvas",
     "productName": "YUFENG Canvas",
     "icon": "build/icon.ico",
+    "artifactName": "YUFENG-Canvas-Setup-${version}.${ext}",
     "directories": {
       "output": "release"
     },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "cyf1124906008-ai",
+        "repo": "yufeng-canvas"
+      }
+    ],
     "files": [
       "dist-desktop/**/*",
       "build/**/*",
