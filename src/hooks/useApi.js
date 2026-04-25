@@ -279,8 +279,9 @@ export const useChat = (options = {}) => {
         userContent = content
       }
 
+      const systemPrompt = chatOptions.systemPrompt || options.systemPrompt
       const msgList = [
-        ...(options.systemPrompt ? [{ role: 'system', content: options.systemPrompt }] : []),
+        ...(systemPrompt ? [{ role: 'system', content: systemPrompt }] : []),
         ...messages.value,
         { role: 'user', content: userContent }
       ]
@@ -524,7 +525,8 @@ export const useVideoGeneration = () => {
       ratio: params.ratio,
       duration: params.dur,
       hasFirstFrame: !!params.first_frame_image,
-      hasLastFrame: !!params.last_frame_image
+      hasLastFrame: !!params.last_frame_image,
+      referenceImageCount: params.images?.length || 0
     })
 
     // Build request data | 构建请求数据
@@ -535,6 +537,7 @@ export const useVideoGeneration = () => {
     // Add optional params | 添加可选参数
     if (params.first_frame_image) requestData.first_frame_image = params.first_frame_image
     if (params.last_frame_image) requestData.last_frame_image = params.last_frame_image
+    if (params.images?.length) requestData.images = params.images
     if (params.ratio) requestData.size = params.ratio
     if (params.resolution || modelConfig?.defaultParams?.resolution || modelConfig?.defaultResolution) {
       requestData.resolution = params.resolution || modelConfig?.defaultParams?.resolution || modelConfig?.defaultResolution

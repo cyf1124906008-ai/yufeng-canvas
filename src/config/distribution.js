@@ -14,10 +14,10 @@ export const DISTRIBUTION_CONFIG = {
   },
   api: {
     defaultProvider: 'dataeyes',
-    lockProvider: true,
-    hideProviderSelect: true,
-    lockBaseUrl: true,
-    hideBaseUrlInput: true,
+    lockProvider: false,
+    hideProviderSelect: false,
+    lockBaseUrl: false,
+    hideBaseUrlInput: false,
     presetBaseUrls: {
       dataeyes: 'https://cloud.dataeyes.ai'
     }

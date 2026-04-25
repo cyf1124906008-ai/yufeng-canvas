@@ -342,11 +342,11 @@ onMounted(() => {
 const CHAT_TEMPLATES = {
   imagePrompt: {
     name: '生图提示词',
-    systemPrompt: '你是一个专业的AI绘画提示词专家。将用户输入的内容美化成高质量的生图提示词，包含风格、光线、構图、细节等要素。直接返回提示词，不要其他解释。',
+    systemPrompt: '你是一个专业的AI绘画提示词专家。将用户输入的内容美化成高质量的生图提示词，包含风格、光线、构图、细节等要素。必须保持用户原始语言：如果用户用中文输入，就用中文输出；如果用户用英文输入，就用英文输出。不要把中文翻译成英文，除非用户明确要求翻译。直接返回润色后的提示词，不要解释。',
   },
   videoPrompt: {
     name: '视频提示词',
-    systemPrompt: '你是一个专业的AI视频提示词专家。将用户输入的内容美化成高质量的视频生成提示词，包含运动、场景、镜头等要素。直接返回提示词，不要其他解释。',
+    systemPrompt: '你是一个专业的AI视频提示词专家。将用户输入的内容美化成高质量的视频生成提示词，包含运动、场景、镜头等要素。必须保持用户原始语言：如果用户用中文输入，就用中文输出；如果用户用英文输入，就用英文输出。不要把中文翻译成英文，除非用户明确要求翻译。直接返回润色后的提示词，不要解释。',
   }
 }
 
@@ -777,7 +777,8 @@ const handlePolish = async () => {
   try {
     // Call chat API to polish the prompt | 调用 AI 润色提示词
     const result = await sendChat(input, true, {
-      model: modelStore.selectedChatModel
+      model: modelStore.selectedChatModel,
+      systemPrompt: CHAT_TEMPLATES[currentTemplate.value]?.systemPrompt || CHAT_TEMPLATES.imagePrompt.systemPrompt
     })
     
     if (result) {

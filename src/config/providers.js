@@ -54,6 +54,7 @@ const createOpenAICompatibleProvider = (label, defaultBaseUrl) => ({
       }
       if (params.first_frame_image) adapted.first_frame_image = params.first_frame_image
       if (params.last_frame_image) adapted.last_frame_image = params.last_frame_image
+      if (params.images?.length) adapted.images = params.images
       if (params.size) adapted.size = params.size
       if (params.resolution) adapted.resolution = params.resolution
       if (params.seconds !== undefined) adapted.seconds = String(params.seconds)
@@ -144,6 +145,26 @@ export const PROVIDERS = {
             })
           }
 
+          if (params.last_frame_image) {
+            content.push({
+              type: 'image_url',
+              image_url: {
+                url: params.last_frame_image
+              }
+            })
+          }
+
+          if (params.images?.length) {
+            params.images.forEach((image) => {
+              content.push({
+                type: 'image_url',
+                image_url: {
+                  url: image
+                }
+              })
+            })
+          }
+
           return {
             model,
             content,
@@ -171,6 +192,8 @@ export const PROVIDERS = {
           }
 
           if (params.first_frame_image) adapted.image = params.first_frame_image
+          if (params.last_frame_image) adapted.last_frame_image = params.last_frame_image
+          if (params.images?.length) adapted.images = params.images
           return adapted
         }
 
@@ -180,6 +203,7 @@ export const PROVIDERS = {
         }
         if (params.first_frame_image) adapted.first_frame_image = params.first_frame_image
         if (params.last_frame_image) adapted.last_frame_image = params.last_frame_image
+        if (params.images?.length) adapted.images = params.images
         if (params.size) adapted.size = params.size
         if (params.seconds) adapted.seconds = params.seconds
         return adapted
@@ -207,6 +231,7 @@ export const PROVIDERS = {
   },
   openai: createOpenAICompatibleProvider('OpenAI', 'https://api.openai.com'),
   dataeyes: createOpenAICompatibleProvider('DataEyes', 'https://cloud.dataeyes.ai'),
+  custom: createOpenAICompatibleProvider('自定义兼容接口', 'https://cloud.dataeyes.ai'),
   default: 'dataeyes'
 }
 
