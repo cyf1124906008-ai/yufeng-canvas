@@ -946,7 +946,10 @@ onUnmounted(() => {
 }
 
 .canvas-shell {
+  position: relative;
+  isolation: isolate;
   background:
+    radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.08), transparent 16%),
     radial-gradient(circle at 18% 12%, rgba(0, 163, 255, 0.16), transparent 32%),
     radial-gradient(circle at 84% 6%, rgba(34, 197, 94, 0.14), transparent 26%),
     linear-gradient(135deg, #f7fbff 0%, #eef7f5 52%, #f8fafc 100%);
@@ -954,20 +957,41 @@ onUnmounted(() => {
 
 .dark .canvas-shell {
   background:
+    radial-gradient(circle at 50% 0%, rgba(230, 255, 247, 0.07), transparent 16%),
     radial-gradient(circle at 18% 12%, rgba(0, 163, 255, 0.18), transparent 32%),
     radial-gradient(circle at 84% 6%, rgba(34, 197, 94, 0.14), transparent 26%),
     linear-gradient(135deg, #07111f 0%, #0b1d1d 52%, #101827 100%);
 }
 
+.canvas-shell::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.24;
+  background-image:
+    radial-gradient(circle, rgba(255, 255, 255, 0.42) 0 1px, transparent 1.4px),
+    radial-gradient(circle, rgba(45, 212, 191, 0.36) 0 1px, transparent 1.4px);
+  background-size: 96px 96px, 156px 156px;
+  mask-image: radial-gradient(ellipse at 56% 42%, #000 0 45%, transparent 76%);
+  z-index: 0;
+}
+
 .canvas-header {
   z-index: 30;
-  border-color: rgba(148, 163, 184, 0.22);
-  background: rgba(255, 255, 255, 0.72);
-  backdrop-filter: blur(22px);
+  width: min(1440px, calc(100vw - 24px));
+  margin: 12px auto 0;
+  border: 1px solid rgba(255, 255, 255, 0.48);
+  border-radius: 28px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.74), rgba(255, 255, 255, 0.42));
+  box-shadow: 0 22px 70px rgba(15, 23, 42, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.66);
+  backdrop-filter: blur(28px) saturate(1.35);
 }
 
 .dark .canvas-header {
-  background: rgba(8, 14, 26, 0.76);
+  border-color: rgba(203, 255, 239, 0.12);
+  background: linear-gradient(135deg, rgba(8, 16, 28, 0.74), rgba(8, 36, 36, 0.48));
+  box-shadow: 0 22px 74px rgba(0, 0, 0, 0.34), inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 .canvas-ambient {
@@ -1000,10 +1024,12 @@ onUnmounted(() => {
 .zoom-dock,
 .composer-card,
 .processing-card {
-  border: 1px solid rgba(148, 163, 184, 0.28);
-  background: rgba(255, 255, 255, 0.74);
-  box-shadow: 0 22px 56px rgba(15, 23, 42, 0.12);
-  backdrop-filter: blur(22px);
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.76), rgba(255, 255, 255, 0.42)),
+    radial-gradient(circle at 16% 0%, rgba(34, 255, 181, 0.1), transparent 34%);
+  box-shadow: 0 24px 68px rgba(15, 23, 42, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.66);
+  backdrop-filter: blur(26px) saturate(1.3);
 }
 
 .dark .canvas-toolbar,
@@ -1011,11 +1037,28 @@ onUnmounted(() => {
 .dark .zoom-dock,
 .dark .composer-card,
 .dark .processing-card {
-  background: rgba(15, 23, 42, 0.72);
+  border-color: rgba(203, 255, 239, 0.12);
+  background:
+    linear-gradient(135deg, rgba(15, 23, 42, 0.76), rgba(6, 78, 59, 0.22)),
+    radial-gradient(circle at 16% 0%, rgba(34, 255, 181, 0.08), transparent 34%);
 }
 
 .canvas-toolbar {
   border-radius: 24px;
+  overflow: hidden;
+}
+
+.canvas-toolbar button,
+.zoom-dock button,
+.node-menu-pop button {
+  transition: transform 0.18s ease, background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.canvas-toolbar button:hover,
+.zoom-dock button:hover,
+.node-menu-pop button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 28px rgba(34, 197, 94, 0.12);
 }
 
 .node-menu-pop,
@@ -1025,7 +1068,20 @@ onUnmounted(() => {
 
 .composer-card,
 .processing-card {
-  border-radius: 24px;
+  border-radius: 28px;
+}
+
+.composer-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.composer-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(circle at 88% 18%, rgba(34, 255, 181, 0.16), transparent 26%);
 }
 
 .canvas-suggestions button {
@@ -1059,15 +1115,20 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border: 1px solid rgba(148, 163, 184, 0.28);
-  border-radius: 24px;
-  background: rgba(255, 255, 255, 0.86);
-  box-shadow: 0 26px 80px rgba(15, 23, 42, 0.18);
-  backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  border-radius: 30px;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(34, 255, 181, 0.12), transparent 34%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.88), rgba(241, 245, 249, 0.74));
+  box-shadow: 0 34px 110px rgba(15, 23, 42, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(28px) saturate(1.32);
 }
 
 .dark .runtime-log-panel {
-  background: rgba(15, 23, 42, 0.86);
+  border-color: rgba(203, 255, 239, 0.13);
+  background:
+    radial-gradient(circle at 12% 0%, rgba(34, 255, 181, 0.1), transparent 34%),
+    linear-gradient(135deg, rgba(12, 22, 36, 0.9), rgba(7, 34, 36, 0.78));
 }
 
 .runtime-log-head {
@@ -1118,10 +1179,11 @@ onUnmounted(() => {
 }
 
 .runtime-log-item {
+  border: 1px solid rgba(148, 163, 184, 0.18);
   border-left: 3px solid rgba(148, 163, 184, 0.7);
-  border-radius: 14px;
+  border-radius: 18px;
   padding: 10px 12px;
-  background: rgba(248, 250, 252, 0.72);
+  background: rgba(248, 250, 252, 0.6);
   margin-bottom: 10px;
 }
 

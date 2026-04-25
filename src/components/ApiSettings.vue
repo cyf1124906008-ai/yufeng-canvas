@@ -2,6 +2,7 @@
   <n-modal
     v-model:show="showModal"
     preset="card"
+    class="api-settings-modal"
     title="API 设置"
     style="width: min(720px, calc(100vw - 32px));"
   >
@@ -463,14 +464,50 @@ const handleClear = () => {
 </script>
 
 <style scoped>
+:deep(.api-settings-modal.n-card) {
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 30px;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(34, 255, 181, 0.16), transparent 34%),
+    radial-gradient(circle at 92% 8%, rgba(14, 165, 233, 0.16), transparent 34%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(241, 245, 249, 0.78));
+  box-shadow: 0 38px 120px rgba(15, 23, 42, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(28px) saturate(1.28);
+}
+
+:global(.dark) :deep(.api-settings-modal.n-card) {
+  border-color: rgba(203, 255, 239, 0.14);
+  background:
+    radial-gradient(circle at 12% 0%, rgba(34, 255, 181, 0.12), transparent 34%),
+    radial-gradient(circle at 92% 8%, rgba(14, 165, 233, 0.12), transparent 34%),
+    linear-gradient(135deg, rgba(12, 22, 36, 0.92), rgba(7, 34, 36, 0.82));
+  box-shadow: 0 38px 120px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+:deep(.n-tabs-tab.n-tabs-tab--active) {
+  font-weight: 900;
+}
+
+:deep(.n-input),
+:deep(.n-base-selection) {
+  border-radius: 16px;
+}
+
 .endpoint-list {
   display: flex;
   flex-direction: column;
   gap: 8px;
   margin-bottom: 16px;
   padding: 12px;
-  background: var(--bg-secondary, #f5f5f5);
-  border-radius: 6px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(255, 255, 255, 0.44);
+  border-radius: 18px;
+  backdrop-filter: blur(16px);
+}
+
+:global(.dark) .endpoint-list {
+  background: rgba(15, 23, 42, 0.44);
 }
 
 .endpoint-item {
@@ -499,8 +536,19 @@ const handleClear = () => {
 
 .model-group {
   padding: 14px;
-  border-radius: 10px;
-  background: var(--bg-secondary, #f5f5f5);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 20px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.58), rgba(255, 255, 255, 0.32)),
+    radial-gradient(circle at 16% 0%, rgba(34, 255, 181, 0.1), transparent 36%);
+  box-shadow: 0 18px 46px rgba(15, 23, 42, 0.08);
+  backdrop-filter: blur(18px);
+}
+
+:global(.dark) .model-group {
+  background:
+    linear-gradient(135deg, rgba(15, 23, 42, 0.58), rgba(6, 78, 59, 0.18)),
+    radial-gradient(circle at 16% 0%, rgba(34, 255, 181, 0.08), transparent 36%);
 }
 
 .model-group-header {

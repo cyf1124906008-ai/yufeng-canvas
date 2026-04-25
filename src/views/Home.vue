@@ -1,5 +1,23 @@
 <template>
-  <div class="home-shell min-h-screen h-screen overflow-y-auto text-[var(--text-primary)]">
+  <div
+    class="home-shell min-h-screen h-screen overflow-y-auto text-[var(--text-primary)]"
+    :style="stageStyle"
+    @pointermove="handlePointerMove"
+    @pointerleave="resetPointerField"
+  >
+    <div class="liquid-stage" aria-hidden="true">
+      <canvas ref="particleCanvas" class="particle-field"></canvas>
+      <div class="liquid-orb orb-a"></div>
+      <div class="liquid-orb orb-b"></div>
+      <div class="liquid-orb orb-c"></div>
+      <div class="y-signal">
+        <span></span>
+        <span></span>
+        <span></span>
+      </div>
+      <div class="mesh-grid"></div>
+    </div>
+
     <AppHeader class="home-header">
       <template #left>
         <button class="brand-lockup" title="回到首页顶部" @click="scrollToTop">
@@ -60,10 +78,31 @@
               <span>{{ item.title }}</span>
             </button>
           </div>
+
+          <div class="hero-metrics" aria-label="YUFENG Canvas 能力概览">
+            <div>
+              <strong>Text</strong>
+              <span>对话润色 / 提示词拆解</span>
+            </div>
+            <div>
+              <strong>Image</strong>
+              <span>文生图 / 图生图 / 多比例</span>
+            </div>
+            <div>
+              <strong>Video</strong>
+              <span>文生视频 / 首尾帧 / 任务日志</span>
+            </div>
+          </div>
         </div>
 
         <div class="prompt-panel">
           <div class="prompt-panel-glow"></div>
+          <div class="hero-prism" aria-hidden="true">
+            <div class="prism-core">Y</div>
+            <span class="prism-chip chip-one">workflow</span>
+            <span class="prism-chip chip-two">prompt</span>
+            <span class="prism-chip chip-three">render</span>
+          </div>
           <div class="mode-card">
             <div class="mode-tabs">
               <button :class="{ active: activeMode === 'chat' }" @click="activeMode = 'chat'">
@@ -175,9 +214,10 @@
 
         <div class="showcase-grid">
           <button
-            v-for="card in showcaseCards"
+            v-for="(card, index) in showcaseCards"
             :key="card.title"
             class="showcase-card"
+            :class="`showcase-card-${index + 1}`"
             @click="createFromTemplate(card.prompt)"
           >
             <img :src="card.image" :alt="card.title" />
@@ -185,6 +225,7 @@
               <span>{{ card.badge }}</span>
               <h3>{{ card.title }}</h3>
               <p>{{ card.desc }}</p>
+              <b>打开工作流</b>
             </div>
           </button>
         </div>
@@ -270,6 +311,12 @@
           </div>
         </div>
       </section>
+
+      <footer class="brand-footer" aria-label="YUFENG Canvas">
+        <div class="brand-footer-glow"></div>
+        <p>YUFENG Canvas</p>
+        <span>Visual AI workflow studio</span>
+      </footer>
     </main>
 
     <aside class="side-rail hidden md:flex">
@@ -369,26 +416,193 @@ const visibleSuggestions = ref([])
 const chatSuggestions = HOME_CHAT_SUGGESTIONS
 const inspirationCases = INSPIRATION_CASES
 const heroIndex = ref(0)
+const pointer = ref({ x: 0.5, y: 0.5 })
+const particleCanvas = ref(null)
+const particleMouse = { x: -9999, y: -9999, active: false }
+let particles = []
+let particleFrame = null
+let particleCleanup = null
+let particleStartedAt = 0
+
+const stageStyle = computed(() => {
+  const x = pointer.value.x
+  const y = pointer.value.y
+  const dx = (x - 0.5) * 2
+  const dy = (y - 0.5) * 2
+
+  return {
+    '--mx': `${(x * 100).toFixed(2)}%`,
+    '--my': `${(y * 100).toFixed(2)}%`,
+    '--parallax-x': `${(dx * 26).toFixed(2)}px`,
+    '--parallax-y': `${(dy * 22).toFixed(2)}px`,
+    '--tilt-x': `${(-dy * 3).toFixed(2)}deg`,
+    '--tilt-y': `${(dx * 4).toFixed(2)}deg`
+  }
+})
+
+const handlePointerMove = (event) => {
+  const rect = event.currentTarget.getBoundingClientRect()
+  const x = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width))
+  const y = Math.min(1, Math.max(0, (event.clientY - rect.top) / rect.height))
+  pointer.value = {
+    x,
+    y
+  }
+  particleMouse.x = x * window.innerWidth
+  particleMouse.y = y * window.innerHeight
+  particleMouse.active = true
+}
+
+const resetPointerField = () => {
+  pointer.value = { x: 0.5, y: 0.5 }
+  particleMouse.active = false
+  particleMouse.x = -9999
+  particleMouse.y = -9999
+}
+
+const initParticleField = () => {
+  const canvas = particleCanvas.value
+  if (!canvas) return
+
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return
+
+  const createParticles = () => {
+    const ratio = Math.min(window.devicePixelRatio || 1, 2)
+    const width = window.innerWidth
+    const height = window.innerHeight
+    canvas.width = Math.floor(width * ratio)
+    canvas.height = Math.floor(height * ratio)
+    canvas.style.width = `${width}px`
+    canvas.style.height = `${height}px`
+    ctx.setTransform(ratio, 0, 0, ratio, 0, 0)
+
+    const density = Math.min(2600, Math.max(1000, Math.floor((width * height) / 720)))
+    particles = Array.from({ length: density }, () => {
+      const x = Math.random() * width
+      const y = Math.random() * height
+      return {
+        x,
+        y,
+        px: x,
+        py: y,
+        bx: x,
+        by: y,
+        vx: 0,
+        vy: 0,
+        size: Math.random() * 0.55 + 0.25,
+        alpha: Math.random() * 0.42 + 0.32,
+        hue: Math.random(),
+        phase: Math.random() * Math.PI * 2,
+        drift: Math.random() * 18 + 8,
+        speed: Math.random() * 0.45 + 0.28
+      }
+    })
+  }
+
+  const draw = (now = performance.now()) => {
+    const width = window.innerWidth
+    const height = window.innerHeight
+    ctx.clearRect(0, 0, width, height)
+    const t = (now - particleStartedAt) / 1000
+
+    for (const dot of particles) {
+      dot.px = dot.x
+      dot.py = dot.y
+
+      const flowX = dot.bx
+        + Math.sin(t * dot.speed + dot.phase + dot.by * 0.004) * dot.drift
+        + Math.cos(t * 0.22 + dot.phase * 0.6) * 6
+      const flowY = dot.by
+        + Math.cos(t * dot.speed * 0.8 + dot.phase + dot.bx * 0.003) * dot.drift
+        + Math.sin(t * 0.18 + dot.phase * 0.7) * 5
+
+      dot.vx += Math.sin(dot.y * 0.01 + t * 0.85 + dot.phase) * 0.018
+      dot.vy += Math.cos(dot.x * 0.01 + t * 0.72 + dot.phase) * 0.018
+
+      if (particleMouse.active) {
+        const dx = dot.x - particleMouse.x
+        const dy = dot.y - particleMouse.y
+        const distSq = dx * dx + dy * dy
+        const radius = 180
+        if (distSq < radius * radius) {
+          const dist = Math.max(Math.sqrt(distSq), 1)
+          const force = (1 - dist / radius) ** 2
+          dot.vx += (dx / dist) * force * 4.8
+          dot.vy += (dy / dist) * force * 4.8
+        }
+      }
+
+      dot.vx += (flowX - dot.x) * 0.008
+      dot.vy += (flowY - dot.y) * 0.008
+      dot.vx *= 0.91
+      dot.vy *= 0.91
+      dot.x += dot.vx
+      dot.y += dot.vy
+
+      const glow = particleMouse.active
+        ? Math.max(0, 1 - Math.hypot(dot.x - particleMouse.x, dot.y - particleMouse.y) / 230)
+        : 0
+      const alpha = Math.min(0.95, dot.alpha + glow * 0.48)
+
+      if (Math.abs(dot.x - dot.px) + Math.abs(dot.y - dot.py) > 0.12) {
+        ctx.beginPath()
+        ctx.strokeStyle = dot.hue > 0.72
+          ? `rgba(96, 255, 211, ${alpha * 0.16})`
+          : dot.hue > 0.42
+            ? `rgba(126, 205, 255, ${alpha * 0.13})`
+            : `rgba(255, 255, 255, ${alpha * 0.11})`
+        ctx.lineWidth = 0.6 + glow * 0.45
+        ctx.moveTo(dot.px, dot.py)
+        ctx.lineTo(dot.x, dot.y)
+        ctx.stroke()
+      }
+
+      ctx.beginPath()
+      ctx.fillStyle = dot.hue > 0.72
+        ? `rgba(96, 255, 211, ${alpha})`
+        : dot.hue > 0.42
+          ? `rgba(126, 205, 255, ${alpha})`
+          : `rgba(255, 255, 255, ${alpha})`
+      ctx.arc(dot.x, dot.y, dot.size + glow * 0.65, 0, Math.PI * 2)
+      ctx.fill()
+    }
+
+    particleFrame = window.requestAnimationFrame(draw)
+  }
+
+  createParticles()
+  particleStartedAt = performance.now()
+  draw()
+  window.addEventListener('resize', createParticles)
+  particleCleanup = () => {
+    window.removeEventListener('resize', createParticles)
+    if (particleFrame) {
+      window.cancelAnimationFrame(particleFrame)
+      particleFrame = null
+    }
+  }
+}
 
 const heroSlides = [
   {
     id: 'flow',
-    title: '把灵感拆成节点，让图片和视频按流程长出来。',
+    title: '让灵感自己长成作品。',
     desc: '一个给创作者用的本地 AI 视觉工作台。填入自己的 Key 和模型名后，就能把图片、视频和提示词编排成可复用的创作流程。'
   },
   {
     id: 'model',
-    title: '换模型、接参考图、跑视频，都放在同一张画布里。',
+    title: '图片、视频、模型，像积木一样编排。',
     desc: '文本、图片、视频模型可以分别配置，提示词、参考图、首尾帧和结果节点也能继续复用，不再散落在不同网页里。'
   },
   {
     id: 'case',
-    title: '从一个案例开始，快速搭出自己的创作流水线。',
+    title: '从案例出发，一键生成工作流。',
     desc: '公共工作流和灵感案例库已经准备好，点击模板就能进入画布，再替换成你的产品、角色、场景或短视频创意。'
   },
   {
     id: 'debug',
-    title: '请求、任务、报错都有日志，生成失败也能追到原因。',
+    title: '每次生成，都有日志可追踪。',
     desc: '运行日志会记录请求地址、模型、任务 ID、轮询状态和原始响应，方便判断是模型能力、参数还是供应商返回的问题。'
   }
 ]
@@ -615,6 +829,7 @@ const scrollToTop = () => {
 onMounted(() => {
   initProjectsStore()
   refreshSuggestions()
+  initParticleField()
   heroTimer = window.setInterval(() => {
     heroIndex.value = (heroIndex.value + 1) % heroSlides.length
   }, 4200)
@@ -624,35 +839,188 @@ onUnmounted(() => {
   if (heroTimer) {
     window.clearInterval(heroTimer)
   }
+  particleCleanup?.()
 })
 </script>
 
 <style scoped>
 .home-shell {
+  position: relative;
+  isolation: isolate;
+  overflow-x: hidden;
   background:
-    radial-gradient(circle at 12% 12%, rgba(0, 207, 255, 0.18), transparent 34%),
-    radial-gradient(circle at 82% 8%, rgba(34, 197, 94, 0.16), transparent 28%),
-    linear-gradient(135deg, #f7fbff 0%, #eef7f5 48%, #f8fafc 100%);
+    radial-gradient(circle at 14% 6%, rgba(36, 240, 181, 0.22), transparent 30%),
+    radial-gradient(circle at 88% 16%, rgba(0, 161, 255, 0.2), transparent 28%),
+    linear-gradient(135deg, #eef8f3 0%, #f9fbff 42%, #eef6ff 100%);
 }
 
 .dark .home-shell {
   background:
-    radial-gradient(circle at 15% 10%, rgba(0, 207, 255, 0.18), transparent 34%),
-    radial-gradient(circle at 85% 12%, rgba(34, 197, 94, 0.14), transparent 30%),
-    linear-gradient(135deg, #07111f 0%, #0b1d1d 48%, #101827 100%);
+    radial-gradient(circle at 14% 8%, rgba(43, 255, 195, 0.18), transparent 30%),
+    radial-gradient(circle at 86% 14%, rgba(0, 163, 255, 0.18), transparent 28%),
+    linear-gradient(135deg, #030a12 0%, #041e1f 42%, #06101d 100%);
+}
+
+.liquid-stage {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.liquid-stage::before {
+  content: "";
+  position: absolute;
+  inset: -18%;
+  opacity: 0.34;
+  background:
+    radial-gradient(circle at var(--mx) var(--my), rgba(255, 255, 255, 0.78), transparent 0 8%, transparent 20%),
+    radial-gradient(circle at 20% 28%, rgba(32, 255, 184, 0.55), transparent 18%),
+    radial-gradient(circle at 68% 18%, rgba(0, 170, 255, 0.48), transparent 16%),
+    radial-gradient(circle at 78% 78%, rgba(252, 211, 77, 0.26), transparent 18%);
+  filter: blur(42px) saturate(1.3);
+  animation: liquid-drift 18s ease-in-out infinite alternate;
+  transform: translate3d(calc(var(--parallax-x) * -0.35), calc(var(--parallax-y) * -0.35), 0);
+  transition: transform 0.35s ease-out, background-position 0.35s ease-out;
+}
+
+.liquid-stage::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0.26;
+  background-image:
+    radial-gradient(circle, rgba(15, 23, 42, 0.26) 0 1px, transparent 1px),
+    linear-gradient(115deg, transparent 0 44%, rgba(34, 197, 94, 0.12) 45%, transparent 56%);
+  background-size: 22px 22px, 100% 100%;
+  mask-image: linear-gradient(to bottom, #000 0%, transparent 88%);
+}
+
+.dark .liquid-stage::after {
+  opacity: 0.38;
+  background-image:
+    radial-gradient(circle, rgba(196, 255, 235, 0.22) 0 1px, transparent 1px),
+    linear-gradient(115deg, transparent 0 42%, rgba(34, 197, 94, 0.12) 48%, transparent 58%);
+}
+
+.particle-field {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0.92;
+  mask-image:
+    radial-gradient(ellipse at 50% 28%, #000 0 36%, transparent 72%),
+    radial-gradient(ellipse at 52% 82%, #000 0 24%, transparent 54%);
+}
+
+.liquid-orb {
+  position: absolute;
+  border-radius: 999px;
+  filter: blur(22px);
+  mix-blend-mode: screen;
+  opacity: 0.5;
+}
+
+.orb-a {
+  width: 420px;
+  height: 420px;
+  left: -90px;
+  top: 120px;
+  background: rgba(38, 255, 188, 0.38);
+  animation: float-orb-a 13s ease-in-out infinite;
+  transform: translate3d(calc(var(--parallax-x) * -0.4), calc(var(--parallax-y) * -0.35), 0);
+}
+
+.orb-b {
+  width: 540px;
+  height: 540px;
+  right: -140px;
+  top: 80px;
+  background: rgba(0, 150, 255, 0.25);
+  animation: float-orb-b 16s ease-in-out infinite;
+  transform: translate3d(calc(var(--parallax-x) * 0.28), calc(var(--parallax-y) * 0.2), 0);
+}
+
+.orb-c {
+  width: 360px;
+  height: 360px;
+  right: 18%;
+  bottom: -110px;
+  background: rgba(34, 197, 94, 0.24);
+  animation: float-orb-c 18s ease-in-out infinite;
+  transform: translate3d(calc(var(--parallax-x) * -0.2), calc(var(--parallax-y) * 0.25), 0);
+}
+
+.y-signal {
+  position: absolute;
+  right: max(3vw, 34px);
+  top: 112px;
+  width: min(42vw, 560px);
+  aspect-ratio: 1;
+  opacity: 0.46;
+  transform: translate3d(calc(var(--parallax-x) * 0.34), calc(var(--parallax-y) * 0.2), 0) rotate(-10deg);
+  transition: transform 0.3s ease-out;
+}
+
+.y-signal span {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 52%;
+  height: 12px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, rgba(91, 255, 208, 0.88), rgba(56, 189, 248, 0.65), transparent);
+  box-shadow: 0 0 34px rgba(45, 212, 191, 0.65);
+  transform-origin: 0 50%;
+  animation: signal-pulse 3.6s ease-in-out infinite;
+}
+
+.y-signal span:nth-child(1) {
+  transform: rotate(90deg) translateX(-2%);
+}
+
+.y-signal span:nth-child(2) {
+  transform: rotate(214deg) translateX(-2%);
+  animation-delay: 0.4s;
+}
+
+.y-signal span:nth-child(3) {
+  transform: rotate(326deg) translateX(-2%);
+  animation-delay: 0.8s;
+}
+
+.mesh-grid {
+  position: absolute;
+  inset: auto 0 0;
+  height: 42%;
+  opacity: 0.26;
+  background:
+    linear-gradient(rgba(14, 165, 233, 0.16) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(20, 184, 166, 0.16) 1px, transparent 1px);
+  background-size: 58px 58px;
+  transform: perspective(700px) rotateX(62deg) translate3d(calc(var(--parallax-x) * -0.22), 120px, 0);
+  transform-origin: bottom;
 }
 
 .home-header {
   position: sticky;
-  top: 0;
+  top: 14px;
+  width: min(1180px, calc(100vw - 32px));
+  margin: 0 auto;
   z-index: 20;
-  border-color: rgba(148, 163, 184, 0.2);
-  background: rgba(255, 255, 255, 0.72);
-  backdrop-filter: blur(22px);
+  border: 1px solid rgba(255, 255, 255, 0.54);
+  border-radius: 28px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.74), rgba(255, 255, 255, 0.42));
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(28px) saturate(1.45);
 }
 
 .dark .home-header {
-  background: rgba(8, 14, 26, 0.72);
+  border-color: rgba(203, 255, 239, 0.13);
+  background: linear-gradient(135deg, rgba(8, 16, 28, 0.72), rgba(8, 36, 36, 0.42));
+  box-shadow: 0 24px 74px rgba(0, 0, 0, 0.34), inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 .brand-lockup {
@@ -725,30 +1093,47 @@ onUnmounted(() => {
 .home-main {
   width: min(1180px, calc(100vw - 40px));
   margin: 0 auto;
-  padding: 54px 0 80px;
+  padding: 86px 0 96px;
 }
 
 .hero-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(360px, 520px);
-  gap: 42px;
+  gap: 52px;
   align-items: center;
+  min-height: calc(100vh - 170px);
 }
 
 .eyebrow {
   margin-bottom: 12px;
   font-size: 12px;
   font-weight: 800;
-  letter-spacing: 0.18em;
-  color: #0f9f5f;
+  letter-spacing: 0.3em;
+  color: #0fb981;
+  text-shadow: 0 0 28px rgba(34, 197, 94, 0.26);
 }
 
 .hero-copy h1 {
-  max-width: 650px;
-  font-size: clamp(40px, 6vw, 76px);
-  line-height: 0.96;
-  letter-spacing: -0.06em;
+  max-width: 720px;
+  font-size: clamp(42px, 6.2vw, 82px);
+  line-height: 0.98;
+  letter-spacing: -0.07em;
   font-weight: 900;
+  text-wrap: balance;
+  color: transparent;
+  background:
+    linear-gradient(135deg, #082f2b 0%, #0f172a 45%, #0891b2 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  filter: drop-shadow(0 18px 34px rgba(15, 23, 42, 0.1));
+}
+
+.dark .hero-copy h1 {
+  background:
+    linear-gradient(135deg, #f8fffc 0%, #c9fff0 38%, #70d6ff 78%, #ffffff 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  filter: drop-shadow(0 20px 40px rgba(0, 255, 202, 0.12));
 }
 
 .hero-line {
@@ -775,7 +1160,7 @@ onUnmounted(() => {
 .hero-desc {
   max-width: 620px;
   margin-top: 22px;
-  color: var(--text-secondary);
+  color: color-mix(in srgb, var(--text-secondary) 82%, var(--text-primary));
   font-size: 16px;
   line-height: 1.9;
 }
@@ -803,11 +1188,29 @@ onUnmounted(() => {
   justify-content: center;
   gap: 9px;
   border-radius: 999px;
-  background: linear-gradient(135deg, #16a34a, #00a3ff);
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(135deg, #19e58d 0%, #00b8ff 100%);
   color: white;
   font-weight: 800;
-  box-shadow: 0 18px 40px rgba(22, 163, 74, 0.24);
+  box-shadow: 0 18px 40px rgba(0, 183, 255, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.42);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.primary-action::after,
+.send-button::after {
+  content: "";
+  position: absolute;
+  inset: -60% auto -60% -40%;
+  width: 42%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.5), transparent);
+  transform: skewX(-18deg);
+  transition: left 0.55s ease;
+}
+
+.primary-action:hover::after,
+.send-button:hover::after {
+  left: 125%;
 }
 
 .primary-action {
@@ -848,20 +1251,23 @@ onUnmounted(() => {
   align-items: center;
   gap: 7px;
   padding: 9px 12px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.62);
-  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 999px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.74), rgba(255, 255, 255, 0.42));
+  border: 1px solid rgba(255, 255, 255, 0.42);
   color: var(--text-secondary);
   font-size: 13px;
   cursor: pointer;
-  transition: transform 0.2s ease, border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+  backdrop-filter: blur(18px);
+  transition: transform 0.2s ease, border-color 0.2s ease, color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
 }
 
 .feature-mini:hover {
-  transform: translateY(-2px);
+  transform: translateY(-3px);
   border-color: rgba(0, 163, 255, 0.5);
   color: var(--text-primary);
   background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 18px 44px rgba(0, 163, 255, 0.14);
 }
 
 .dark .feature-mini {
@@ -870,28 +1276,141 @@ onUnmounted(() => {
 
 .prompt-panel {
   position: relative;
+  transform-style: preserve-3d;
+  transform: perspective(1000px) rotateX(var(--tilt-x)) rotateY(var(--tilt-y));
+  transition: transform 0.35s ease-out;
 }
 
 .prompt-panel-glow {
   position: absolute;
-  inset: -28px;
-  background: conic-gradient(from 120deg, rgba(0, 163, 255, 0.16), rgba(34, 197, 94, 0.18), rgba(2, 6, 23, 0), rgba(0, 163, 255, 0.16));
-  filter: blur(18px);
+  inset: -50px;
+  background: conic-gradient(from 120deg, rgba(0, 214, 255, 0.22), rgba(34, 255, 181, 0.26), rgba(2, 6, 23, 0), rgba(0, 214, 255, 0.22));
+  filter: blur(28px);
   opacity: 0.8;
+  animation: rotate-glow 11s linear infinite;
+}
+
+.hero-prism {
+  position: absolute;
+  right: -48px;
+  top: -64px;
+  width: 190px;
+  height: 190px;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.prism-core {
+  position: absolute;
+  inset: 34px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 42px;
+  background:
+    radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.9), transparent 18%),
+    linear-gradient(135deg, rgba(15, 23, 42, 0.92), rgba(6, 78, 59, 0.72));
+  color: #c8ffee;
+  font-size: 58px;
+  font-weight: 950;
+  letter-spacing: -0.12em;
+  box-shadow: 0 28px 72px rgba(0, 0, 0, 0.22), 0 0 50px rgba(45, 212, 191, 0.22);
+  transform: rotate(-12deg);
+  animation: prism-float 5.2s ease-in-out infinite;
+}
+
+.prism-chip {
+  position: absolute;
+  padding: 7px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.34);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.54);
+  color: #063328;
+  font-size: 11px;
+  font-weight: 850;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12);
+  backdrop-filter: blur(18px);
+}
+
+.dark .prism-chip {
+  background: rgba(8, 20, 34, 0.66);
+  color: #dffdf4;
+}
+
+.chip-one {
+  left: 0;
+  top: 22px;
+}
+
+.chip-two {
+  right: 2px;
+  top: 72px;
+}
+
+.chip-three {
+  left: 30px;
+  bottom: 8px;
 }
 
 .mode-card {
   position: relative;
   padding: 18px;
-  border-radius: 28px;
-  background: rgba(255, 255, 255, 0.78);
-  border: 1px solid rgba(148, 163, 184, 0.32);
-  box-shadow: 0 30px 80px rgba(15, 23, 42, 0.12);
-  backdrop-filter: blur(24px);
+  z-index: 2;
+  border-radius: 34px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.82), rgba(255, 255, 255, 0.52)),
+    radial-gradient(circle at 20% 0%, rgba(255, 255, 255, 0.95), transparent 32%);
+  border: 1px solid rgba(255, 255, 255, 0.56);
+  box-shadow: 0 40px 100px rgba(15, 23, 42, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(30px) saturate(1.4);
 }
 
 .dark .mode-card {
-  background: rgba(15, 23, 42, 0.76);
+  background:
+    linear-gradient(135deg, rgba(12, 22, 36, 0.86), rgba(10, 45, 43, 0.58)),
+    radial-gradient(circle at 20% 0%, rgba(103, 232, 249, 0.14), transparent 32%);
+  border-color: rgba(203, 255, 239, 0.14);
+}
+
+.hero-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  max-width: 620px;
+  margin-top: 28px;
+}
+
+.hero-metrics div {
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.38);
+  border-radius: 20px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.58), rgba(255, 255, 255, 0.22));
+  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.08);
+  backdrop-filter: blur(20px);
+}
+
+.dark .hero-metrics div {
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.58), rgba(6, 78, 59, 0.16));
+  border-color: rgba(203, 255, 239, 0.12);
+}
+
+.hero-metrics strong,
+.hero-metrics span {
+  display: block;
+}
+
+.hero-metrics strong {
+  color: var(--text-primary);
+  font-size: 20px;
+  font-weight: 950;
+  letter-spacing: -0.04em;
+}
+
+.hero-metrics span {
+  margin-top: 5px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .mode-tabs {
@@ -1100,6 +1619,8 @@ onUnmounted(() => {
 .showcase-section,
 .inspiration-section,
 .projects-section {
+  position: relative;
+  z-index: 2;
   margin-top: 72px;
 }
 
@@ -1107,6 +1628,79 @@ onUnmounted(() => {
   justify-content: space-between;
   gap: 20px;
   margin-bottom: 20px;
+}
+
+.brand-footer {
+  position: relative;
+  display: grid;
+  width: 100vw;
+  min-height: 270px;
+  place-items: center;
+  margin: 84px 0 0 calc(50% - 50vw);
+  overflow: visible;
+  text-align: center;
+  perspective: 900px;
+}
+
+.brand-footer-glow {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: min(84vw, 980px);
+  height: 170px;
+  border-radius: 999px;
+  background:
+    radial-gradient(ellipse at 30% 50%, rgba(34, 255, 181, 0.18), transparent 58%),
+    radial-gradient(ellipse at 68% 50%, rgba(14, 165, 233, 0.16), transparent 60%);
+  filter: blur(20px);
+  transform: translate(-50%, -50%);
+}
+
+.brand-footer p {
+  position: relative;
+  margin: 0;
+  color: rgba(15, 23, 42, 0.1);
+  max-width: 96vw;
+  font-size: min(15.2vw, 190px);
+  font-weight: 950;
+  letter-spacing: -0.082em;
+  line-height: 0.82;
+  white-space: nowrap;
+  text-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.84),
+    0 14px 32px rgba(20, 184, 166, 0.16),
+    0 42px 90px rgba(15, 23, 42, 0.16);
+  transform: rotateX(18deg) translateZ(-8px);
+  transform-origin: center bottom;
+  -webkit-text-stroke: 1px rgba(255, 255, 255, 0.18);
+}
+
+.brand-footer span {
+  position: absolute;
+  bottom: 30px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 999px;
+  padding: 8px 13px;
+  background: rgba(255, 255, 255, 0.52);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  backdrop-filter: blur(18px);
+}
+
+.dark .brand-footer p {
+  color: rgba(230, 255, 247, 0.105);
+  text-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.06),
+    0 16px 40px rgba(45, 212, 191, 0.16),
+    0 48px 120px rgba(0, 0, 0, 0.48);
+  -webkit-text-stroke: 1px rgba(203, 255, 239, 0.045);
+}
+
+.dark .brand-footer span {
+  background: rgba(15, 23, 42, 0.58);
 }
 
 .section-title h2 {
@@ -1145,17 +1739,56 @@ onUnmounted(() => {
 
 .showcase-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 16px;
 }
 
 .showcase-card {
   position: relative;
-  height: 230px;
+  height: 270px;
   overflow: hidden;
-  border-radius: 28px;
+  border-radius: 34px;
   text-align: left;
-  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  box-shadow: 0 30px 80px rgba(15, 23, 42, 0.16);
+  transform: translateZ(0);
+  transition: transform 0.28s ease, box-shadow 0.28s ease, border-color 0.28s ease;
+}
+
+.showcase-card-1 {
+  grid-column: span 3;
+  height: 320px;
+}
+
+.showcase-card-2,
+.showcase-card-3 {
+  grid-column: span 3;
+}
+
+.showcase-card-3 {
+  grid-column: span 6;
+  height: 240px;
+}
+
+.showcase-card:hover {
+  transform: translateY(-8px) scale(1.012);
+  border-color: rgba(34, 255, 181, 0.55);
+  box-shadow: 0 42px 110px rgba(4, 120, 87, 0.18);
+}
+
+.showcase-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  background: linear-gradient(115deg, transparent 0 34%, rgba(255, 255, 255, 0.28) 45%, transparent 56%);
+  transform: translateX(-50%);
+  transition: opacity 0.25s ease, transform 0.55s ease;
+}
+
+.showcase-card:hover::after {
+  opacity: 1;
+  transform: translateX(45%);
 }
 
 .showcase-card img,
@@ -1182,7 +1815,9 @@ onUnmounted(() => {
   justify-content: flex-end;
   padding: 22px;
   color: white;
-  background: linear-gradient(180deg, rgba(2, 6, 23, 0.08), rgba(2, 6, 23, 0.78));
+  background:
+    radial-gradient(circle at 22% 18%, rgba(45, 212, 191, 0.2), transparent 34%),
+    linear-gradient(180deg, rgba(2, 6, 23, 0.03), rgba(2, 6, 23, 0.86));
 }
 
 .showcase-overlay span {
@@ -1205,6 +1840,26 @@ onUnmounted(() => {
   font-size: 13px;
 }
 
+.showcase-overlay b {
+  width: fit-content;
+  margin-top: 14px;
+  border-radius: 999px;
+  padding: 7px 10px;
+  background: rgba(255, 255, 255, 0.16);
+  color: rgba(255, 255, 255, 0.94);
+  font-size: 12px;
+  font-weight: 850;
+  backdrop-filter: blur(14px);
+  transform: translateY(8px);
+  opacity: 0;
+  transition: transform 0.24s ease, opacity 0.24s ease;
+}
+
+.showcase-card:hover .showcase-overlay b {
+  transform: translateY(0);
+  opacity: 1;
+}
+
 .inspiration-grid {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -1212,19 +1867,35 @@ onUnmounted(() => {
 }
 
 .inspiration-card {
+  position: relative;
   overflow: hidden;
-  border: 1px solid rgba(148, 163, 184, 0.26);
-  border-radius: 24px;
-  background: rgba(255, 255, 255, 0.66);
+  border: 1px solid rgba(255, 255, 255, 0.38);
+  border-radius: 28px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.42));
   text-align: left;
-  box-shadow: 0 20px 46px rgba(15, 23, 42, 0.08);
-  transition: transform 0.22s ease, border-color 0.22s ease, box-shadow 0.22s ease;
+  box-shadow: 0 22px 52px rgba(15, 23, 42, 0.1);
+  backdrop-filter: blur(16px);
+  transition: transform 0.24s ease, border-color 0.24s ease, box-shadow 0.24s ease;
+}
+
+.inspiration-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  background: radial-gradient(circle at var(--mx) var(--my), rgba(34, 255, 181, 0.16), transparent 34%);
+  transition: opacity 0.24s ease;
+  pointer-events: none;
 }
 
 .inspiration-card:hover {
-  transform: translateY(-5px);
+  transform: translateY(-7px);
   border-color: rgba(34, 197, 94, 0.58);
-  box-shadow: 0 28px 60px rgba(15, 23, 42, 0.14);
+  box-shadow: 0 34px 78px rgba(4, 120, 87, 0.15);
+}
+
+.inspiration-card:hover::before {
+  opacity: 1;
 }
 
 .dark .inspiration-card {
@@ -1311,21 +1982,55 @@ onUnmounted(() => {
 }
 
 .project-card {
+  position: relative;
   padding: 10px;
-  border-radius: 24px;
-  background: rgba(255, 255, 255, 0.58);
-  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 28px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.42)),
+    radial-gradient(circle at 15% 0%, rgba(34, 255, 181, 0.12), transparent 34%);
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  box-shadow: 0 22px 58px rgba(15, 23, 42, 0.12);
+  backdrop-filter: blur(18px);
+  transition: transform 0.24s ease, box-shadow 0.24s ease, border-color 0.24s ease;
+}
+
+.project-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  opacity: 0;
+  background: linear-gradient(120deg, transparent 0 34%, rgba(255, 255, 255, 0.28) 45%, transparent 56%);
+  transform: translateX(-45%);
+  transition: opacity 0.22s ease, transform 0.55s ease;
+  pointer-events: none;
+}
+
+.project-card:hover {
+  transform: translateY(-6px);
+  border-color: rgba(34, 255, 181, 0.48);
+  box-shadow: 0 32px 82px rgba(4, 120, 87, 0.16);
+}
+
+.project-card:hover::before {
+  opacity: 1;
+  transform: translateX(55%);
 }
 
 .dark .project-card {
-  background: rgba(15, 23, 42, 0.5);
+  background:
+    linear-gradient(135deg, rgba(15, 23, 42, 0.64), rgba(6, 78, 59, 0.22)),
+    radial-gradient(circle at 15% 0%, rgba(34, 255, 181, 0.1), transparent 34%);
+  border-color: rgba(203, 255, 239, 0.12);
 }
 
 .project-thumb {
   aspect-ratio: 16 / 10;
   overflow: hidden;
-  border-radius: 18px;
-  background: rgba(148, 163, 184, 0.12);
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at 50% 10%, rgba(125, 211, 252, 0.16), transparent 35%),
+    linear-gradient(135deg, rgba(15, 23, 42, 0.06), rgba(15, 23, 42, 0.12));
   cursor: pointer;
 }
 
@@ -1335,6 +2040,17 @@ onUnmounted(() => {
   height: 100%;
   place-items: center;
   color: var(--text-secondary);
+  position: relative;
+}
+
+.project-placeholder::before {
+  content: "Y";
+  position: absolute;
+  color: rgba(34, 197, 94, 0.1);
+  font-size: 80px;
+  font-weight: 950;
+  line-height: 1;
+  transform: rotate(-12deg);
 }
 
 .project-meta {
@@ -1410,10 +2126,20 @@ onUnmounted(() => {
 
 @media (max-width: 960px) {
   .hero-grid,
-  .showcase-grid,
   .inspiration-grid,
   .project-grid {
     grid-template-columns: 1fr;
+  }
+
+  .showcase-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .showcase-card-1,
+  .showcase-card-2,
+  .showcase-card-3 {
+    grid-column: auto;
+    height: 250px;
   }
 
   .home-main {
@@ -1422,11 +2148,73 @@ onUnmounted(() => {
   }
 
   .hero-copy h1 {
-    font-size: 44px;
+    font-size: 42px;
+    line-height: 1.05;
   }
 
   .hero-line {
     min-height: 290px;
+  }
+
+  .hero-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .hero-prism {
+    display: none;
+  }
+}
+
+@keyframes liquid-drift {
+  0% {
+    transform: translate3d(-2%, -1%, 0) rotate(0deg) scale(1);
+  }
+  100% {
+    transform: translate3d(2%, 3%, 0) rotate(10deg) scale(1.08);
+  }
+}
+
+@keyframes float-orb-a {
+  50% {
+    transform: translate3d(70px, -38px, 0) scale(1.08);
+  }
+}
+
+@keyframes float-orb-b {
+  50% {
+    transform: translate3d(-90px, 44px, 0) scale(0.95);
+  }
+}
+
+@keyframes float-orb-c {
+  50% {
+    transform: translate3d(-42px, -50px, 0) scale(1.12);
+  }
+}
+
+@keyframes signal-pulse {
+  0%, 100% {
+    opacity: 0.42;
+    filter: blur(0);
+  }
+  50% {
+    opacity: 1;
+    filter: blur(1px);
+  }
+}
+
+@keyframes rotate-glow {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes prism-float {
+  0%, 100% {
+    transform: rotate(-12deg) translateY(0);
+  }
+  50% {
+    transform: rotate(-7deg) translateY(-10px);
   }
 }
 </style>
