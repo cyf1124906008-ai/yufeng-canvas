@@ -11,6 +11,12 @@ import coverTextVideo from '@/assets/workflow-covers/text-video-cover.jpg'
 import coverImageVideo from '@/assets/workflow-covers/image-video-cover.jpg'
 import coverBrandKit from '@/assets/workflow-covers/brand-kit-cover.jpg'
 import coverSocialPoster from '@/assets/workflow-covers/social-poster-cover.jpg'
+import coverAiVideoAppUi from '@/assets/inspiration-cases/ai-video-app-ui.jpg'
+import coverCameraExplodedView from '@/assets/inspiration-cases/camera-exploded-view.jpg'
+import coverCityTravelGuide from '@/assets/inspiration-cases/city-travel-guide.jpg'
+import coverFashionCampaign from '@/assets/inspiration-cases/fashion-campaign-grid.jpg'
+import coverLiveCommerce from '@/assets/inspiration-cases/douyin-live-commerce.jpg'
+import coverLanternPanorama from '@/assets/inspiration-cases/lantern-panorama-long-scroll.jpg'
 
 // Multi-angle prompts | 多角度提示词模板
 export const MULTI_ANGLE_PROMPTS = {
@@ -1451,6 +1457,99 @@ export const WORKFLOW_TEMPLATES = [
     }
   }
 ]
+
+WORKFLOW_TEMPLATES.push(
+  {
+    id: 'ai-video-app-ui',
+    name: 'AI 视频 App 首页',
+    description: '一键生成深色 iOS AI 视频工具首页，适合产品原型、落地页和 App Store 展示',
+    icon: 'ImageOutline',
+    category: 'ui',
+    cover: coverAiVideoAppUi,
+    createNodes: createTextToImagePreset({
+      promptLabel: 'UI 需求',
+      configLabel: 'App 首页图',
+      resultLabel: 'UI 结果',
+      size: '1440x2560',
+      prompt: '设计一个专业的 iOS AI Video Generator App 首页，深色主题，真实产品截图感。顶部包含应用名、Pro 标识和用户头像；Hero 卡片展示宇航员穿过发光传送门，按钮文案为 Create Video；中部有 Text to Video、Image to Video、Script to Video、Templates 四个功能入口；下方是 Recent Creations 列表和底部导航。整体像可上线的移动端产品，不要水印。'
+    })
+  },
+  {
+    id: 'camera-exploded-infographic',
+    name: '产品爆炸拆解图',
+    description: '把相机、耳机、鞋、机械键盘等产品拆成零件层级和参数说明',
+    icon: 'ImageOutline',
+    category: 'ecommerce',
+    cover: coverCameraExplodedView,
+    createNodes: createTextToImagePreset({
+      promptLabel: '产品拆解提示词',
+      configLabel: '拆解信息图',
+      resultLabel: '拆解图结果',
+      size: '1440x2560',
+      prompt: '生成一张高端工业设计爆炸视图信息图，主题为一台专业微单相机。机身、镜头、传感器、电池、按键、螺丝、接口和内部模块沿中心轴悬浮拆解排列，每个零件带编号和短标签，背景干净，细线标注，金属、玻璃、橡胶材质清晰，像真实产品发布会技术海报。'
+    })
+  },
+  {
+    id: 'city-travel-guide-card',
+    name: '城市旅行攻略图',
+    description: '生成可收藏的城市路线、预算、美食、拍照点和注意事项信息图',
+    icon: 'ImageOutline',
+    category: 'creative',
+    cover: coverCityTravelGuide,
+    createNodes: createTextToImagePreset({
+      promptLabel: '旅行攻略提示词',
+      configLabel: '攻略信息图',
+      resultLabel: '攻略图结果',
+      size: '1440x2560',
+      prompt: '制作一张“成都三日旅行攻略”竖版信息图，包含手绘地图路线、Day 1/Day 2/Day 3 行程、美食推荐、交通方式、预算、拍照点和注意事项。中文标题清晰，图标精致，排版像高质量旅行杂志页面，信息丰富但不拥挤，适合收藏分享。'
+    })
+  },
+  {
+    id: 'fashion-campaign-grid',
+    name: '六宫格时尚大片',
+    description: '为服装、饰品、香水等品牌生成一组统一风格的广告镜头',
+    icon: 'GridOutline',
+    category: 'brand',
+    cover: coverFashionCampaign,
+    createNodes: createTextToImagePreset({
+      promptLabel: 'Campaign 提示词',
+      configLabel: '六宫格广告图',
+      resultLabel: '广告图结果',
+      size: '2048x2048',
+      prompt: '生成一套 6 宫格时尚品牌广告大片，同一位模特穿黑色皮夹克、长裙和高筒靴，在城市街头完成六个不同镜头：全身行走、半身回望、鞋靴特写、皮革材质特写、街角环境、强情绪近景。统一阴天自然光、电影街拍质感、杂志 campaign 版式。'
+    })
+  },
+  {
+    id: 'live-commerce-screenshot',
+    name: '直播带货界面',
+    description: '生成真实手机直播间截图，适合电商、社媒、短视频案例演示',
+    icon: 'ImageOutline',
+    category: 'ecommerce',
+    cover: coverLiveCommerce,
+    createNodes: createTextToImagePreset({
+      promptLabel: '直播界面提示词',
+      configLabel: '直播截图',
+      resultLabel: '直播图结果',
+      size: '1440x2560',
+      prompt: '生成真实手机竖屏直播带货截图，主播正在展示一款透明蓝牙耳机，画面包含商品卡片、限时优惠券、弹幕评论、点赞动画、成交提示、购买按钮和右侧互动栏。中文 UI 清晰，平台感真实，灯光明亮，有电商转化氛围但不要出现真实品牌商标。'
+    })
+  },
+  {
+    id: 'historical-panorama-long-scroll',
+    name: '古城灯会长卷',
+    description: '生成超宽横向国风全景图，可用于海报背景、视频首帧和文化项目',
+    icon: 'ImageOutline',
+    category: 'creative',
+    cover: coverLanternPanorama,
+    createNodes: createTextToImagePreset({
+      promptLabel: '长卷提示词',
+      configLabel: '横向长卷',
+      resultLabel: '长卷结果',
+      size: '2560x1440',
+      prompt: '横向超宽古代城市元宵灯会长卷，河道穿城而过，宫殿、桥梁、楼阁、船只和密集人群铺满画面，天空漂浮大量孔明灯，暖金夜景，历史画卷质感，细节极丰富但层级清晰，适合作为视频首帧或文化海报背景。'
+    })
+  }
+)
 
 /**
  * Get workflow template by ID | 根据ID获取工作流模板

@@ -132,6 +132,7 @@ const categoryMap = {
   drama: '短剧',
   video: '视频',
   brand: '品牌',
+  ui: 'UI',
   creative: '创意'
 }
 

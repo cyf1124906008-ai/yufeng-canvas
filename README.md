@@ -181,7 +181,7 @@ pnpm desktop:dist
 
 ## Credits
 
-部分提示词灵感和案例图片改编/选自 [EvoLinkAI/awesome-gpt-image-2-prompts](https://github.com/EvoLinkAI/awesome-gpt-image-2-prompts)，原项目采用 Apache-2.0 License。YUFENG Canvas 内置文案已整理成适合节点画布的一键创作模板。
+部分提示词灵感和案例图片改编/选自 [EvoLinkAI/awesome-gpt-image-2-prompts](https://github.com/EvoLinkAI/awesome-gpt-image-2-prompts)，原项目仓库包含 Apache-2.0 License 与 README 中的 CC BY 4.0 标识说明。部分提示词模式参考 [Anil-matcha/Awesome-GPT-Image-2-API-Prompts](https://github.com/Anil-matcha/Awesome-GPT-Image-2-API-Prompts)，原项目采用 MIT License。YUFENG Canvas 内置文案已整理成适合节点画布的一键创作模板。
 
 ## License
 

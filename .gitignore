@@ -13,6 +13,7 @@ dist-desktop
 dist-ssr
 release
 appdata-backup-*/
+.reference-repos/
 *.local
 
 # Editor directories and files

@@ -118,7 +118,7 @@ Installer files are generated in `release/`.
 
 ## Credits
 
-Some prompt ideas and case images are adapted from [EvoLinkAI/awesome-gpt-image-2-prompts](https://github.com/EvoLinkAI/awesome-gpt-image-2-prompts), licensed under Apache-2.0.
+Some prompt ideas and case images are adapted from [EvoLinkAI/awesome-gpt-image-2-prompts](https://github.com/EvoLinkAI/awesome-gpt-image-2-prompts), whose repository includes Apache-2.0 licensing and CC BY 4.0 attribution notes in the README. Additional prompt patterns are adapted from [Anil-matcha/Awesome-GPT-Image-2-API-Prompts](https://github.com/Anil-matcha/Awesome-GPT-Image-2-API-Prompts), licensed under MIT.
 
 ## License
 

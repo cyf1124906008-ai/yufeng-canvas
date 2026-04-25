@@ -8,11 +8,27 @@ import profileInfographicImage from '../assets/inspiration-cases/profile-infogra
 import racingSpecPosterImage from '../assets/inspiration-cases/racing-spec-poster.jpg'
 import ramenWatercolorImage from '../assets/inspiration-cases/ramen-watercolor.jpg'
 import watercolorPictureBookImage from '../assets/inspiration-cases/watercolor-picture-book.jpg'
+import neonStorePortraitImage from '../assets/inspiration-cases/neon-store-portrait.jpg'
+import amalfiTravelPosterImage from '../assets/inspiration-cases/amalfi-travel-poster.jpg'
+import fashionCampaignGridImage from '../assets/inspiration-cases/fashion-campaign-grid.jpg'
+import cameraExplodedViewImage from '../assets/inspiration-cases/camera-exploded-view.jpg'
+import streetFashionEditorialImage from '../assets/inspiration-cases/street-fashion-editorial.jpg'
+import aiVideoAppUiImage from '../assets/inspiration-cases/ai-video-app-ui.jpg'
+import glassyUiSystemImage from '../assets/inspiration-cases/glassy-ui-system.jpg'
+import cityTravelGuideImage from '../assets/inspiration-cases/city-travel-guide.jpg'
+import personaCharacterCardImage from '../assets/inspiration-cases/persona-character-card.jpg'
+import goldSaintsCardGridImage from '../assets/inspiration-cases/gold-saints-card-grid.jpg'
+import lanternPanoramaLongScrollImage from '../assets/inspiration-cases/lantern-panorama-long-scroll.jpg'
+import douyinLiveCommerceImage from '../assets/inspiration-cases/douyin-live-commerce.jpg'
 
 export const PROMPT_LIBRARY_SOURCE = {
-  name: 'EvoLinkAI/awesome-gpt-image-2-prompts',
-  license: 'Apache-2.0',
-  url: 'https://github.com/EvoLinkAI/awesome-gpt-image-2-prompts'
+  name: 'GPT Image 2 community prompt collections',
+  license: 'Apache-2.0 / MIT / CC BY 4.0 attribution notes',
+  url: 'https://github.com/EvoLinkAI/awesome-gpt-image-2-prompts',
+  sources: [
+    'https://github.com/EvoLinkAI/awesome-gpt-image-2-prompts',
+    'https://github.com/Anil-matcha/Awesome-GPT-Image-2-API-Prompts'
+  ]
 }
 
 // Inspired by EvoLinkAI/awesome-gpt-image-2-prompts (Apache-2.0).
@@ -121,3 +137,107 @@ export const INSPIRATION_CASES = [
     image: watercolorPictureBookImage
   }
 ]
+
+CANVAS_PROMPT_SUGGESTIONS.push(
+  '便利店霓虹人像：35mm 胶片、冷白荧光灯混合粉蓝霓虹、玻璃反射、真实皮肤纹理、夜晚街头编辑大片感',
+  '复古旅行海报：阿马尔菲海岸悬崖公路、白色老爷车、柠檬枝前景、丝网印刷纹理、1950 年代明亮配色',
+  '机器拆解海报：相机或耳机爆炸视图、每个零件悬浮分层、编号标注、材质剖面、工业设计图纸质感',
+  '六宫格时尚大片：同一模特、同一套服装，生成 6 个广告镜头，包含近景、全身、细节、环境和动作变化',
+  '数据科学全景信息图：从数据采集到部署监控的完整流程，深色仪表盘风格，模块密集但层级清晰',
+  'AI 视频 App 首页 UI：深色 iOS 界面、Hero 卡片、功能入口、最近创作列表、底部导航，真实产品截图感',
+  '玻璃拟态设计系统：一套 app 组件库，包含按钮、卡片、图标、弹窗、色板、排版规范，浅色高端科技风',
+  '城市旅行攻略卡：地图路线、交通、餐厅、预算、注意事项、三日行程，杂志信息图排版，中文可读',
+  '角色介绍卡：动漫角色立绘、姓名、技能、属性、剧情简介、UI 边框和装饰元素，游戏设定集风格',
+  '黄金卡牌合集：12 张幻想战士卡牌，统一金色边框、角色半身像、星座符号、中文标题，收藏卡视觉',
+  '长卷夜景全景：古代城市元宵灯会、河道、宫殿、桥梁、密集人群、孔明灯，横向超宽卷轴构图',
+  '直播带货截图：手机竖屏直播间，主播、商品卡片、弹幕、优惠券、成交提示、真实电商平台 UI',
+  '日常手写笔记照片：打开的笔记本、黑色圆珠笔字迹、划线和涂改、窗边自然光、iPhone 俯拍质感',
+  '游戏状态界面：RPG 角色属性页，装备槽、技能树、像素或赛博 UI，信息量大但布局清楚',
+  '电影预告片缩略图：强情绪人物特写、标题留白、冲突场景、红蓝对比光，YouTube 封面质感',
+  '产品详情页长图：卖点分屏、材质微距、场景图、参数表、包装展示、白底主图，适合电商详情页',
+  '历史社交媒体截图：把历史人物做成现代社交平台主页，头像、动态、评论、热搜和时间线，幽默但精致',
+  '自然纪录片海报：野生动物近景、环境纵深、金色晨光、纪录片标题区、真实摄影和高级调色'
+)
+
+HOME_CHAT_SUGGESTIONS.push(
+  '帮我从“产品主图、详情页、短视频封面”三个方向拆一套电商工作流',
+  '把这个想法改写成 5 个不同风格的 GPT Image 2 提示词：真实摄影、海报、信息图、UI、绘本',
+  '根据我的产品/角色/场景，生成一组可直接放进节点画布的提示词链路',
+  '帮我设计一个从参考图到首帧图，再到 5 秒视频的完整工作流',
+  '我想做一个公共工作流模板，请帮我拆成输入节点、生成节点和结果节点'
+)
+
+INSPIRATION_CASES.push(
+  {
+    title: '便利店霓虹人像',
+    category: '摄影 / 人像',
+    prompt: '35mm 胶片夜景人像，便利店冷白荧光灯和街外粉蓝霓虹混合照明，玻璃门反射、轻微颗粒、高对比色偏。人物自然站在门口，真实皮肤纹理，杂志街拍编辑风格，无水印，无文字。',
+    image: neonStorePortraitImage
+  },
+  {
+    title: '复古海岸旅行海报',
+    category: '海报 / 旅行',
+    prompt: '复古旅行海报，阿马尔菲海岸悬崖公路，经典白色老爷车沿弯曲海边道路行驶，地中海蓝色海面、彩色山城、柠檬树枝前景，1950 年代丝网印刷质感，高饱和装饰插画。',
+    image: amalfiTravelPosterImage
+  },
+  {
+    title: '六宫格时尚广告',
+    category: '摄影 / 品牌',
+    prompt: '生成一套 6 宫格时尚广告大片，同一模特、同一套服装、同一品牌调性，分别包含全身、半身、特写、动作、环境、材质细节镜头，统一色调，适合服装品牌 campaign。',
+    image: fashionCampaignGridImage
+  },
+  {
+    title: '相机拆解信息图',
+    category: '产品 / 拆解',
+    prompt: '生成相机爆炸视图拆解海报，机身、镜头、传感器、电池、按钮和内部模块悬浮分层排列，带编号标注和简短说明，工业设计图纸风格，干净背景，高级科技感。',
+    image: cameraExplodedViewImage
+  },
+  {
+    title: '街头时尚编辑片',
+    category: '摄影 / 写实',
+    prompt: '真实街头时尚摄影，模特穿黑色皮夹克和长裙走过城市斑马线，背景有出租车和老建筑，阴天自然光，轻微运动感，35mm 镜头，杂志大片质感。',
+    image: streetFashionEditorialImage
+  },
+  {
+    title: 'AI 视频 App UI',
+    category: 'UI / 产品',
+    prompt: '设计一个专业的 iOS AI Video Generator App 首页，深色主题，包含 Hero 视频生成卡、文本转视频/图生视频/脚本转视频入口、最近创作列表、底部导航，真实可上线产品截图感。',
+    image: aiVideoAppUiImage
+  },
+  {
+    title: '玻璃拟态 UI 系统',
+    category: 'UI / 组件库',
+    prompt: '生成一套玻璃拟态 UI 设计系统展示图，包含按钮、卡片、弹窗、输入框、图标、色板、字体规范和组件状态，柔和透明材质，浅色背景，像真实设计稿。',
+    image: glassyUiSystemImage
+  },
+  {
+    title: '城市旅行攻略卡',
+    category: '信息图 / 旅行',
+    prompt: '制作城市旅行攻略信息图，包含路线地图、三日行程、交通方式、餐厅推荐、预算、注意事项和拍照点，杂志排版，中文标题清晰，适合收藏分享。',
+    image: cityTravelGuideImage
+  },
+  {
+    title: '游戏角色介绍卡',
+    category: '角色 / 游戏',
+    prompt: '生成游戏角色介绍页面，包含角色立绘、姓名、职业、技能、属性、背景故事和装饰 UI 边框，Persona 风格的强烈配色和排版，但不要复制具体 IP。',
+    image: personaCharacterCardImage
+  },
+  {
+    title: '黄金卡牌合集',
+    category: '角色 / 卡牌',
+    prompt: '生成 12 张幻想战士收藏卡牌合集，统一金色边框、星座符号、角色半身像、中文名称、华丽光效，每张角色不同但风格一致，横向合集展示。',
+    image: goldSaintsCardGridImage
+  },
+  {
+    title: '古城灯会长卷',
+    category: '国风 / 全景',
+    prompt: '横向超宽古代城市元宵灯会长卷，河道穿城而过，宫殿、桥梁、楼阁、船只和密集人群，天空有大量孔明灯，暖金夜景，细节极丰富，像可放大的历史画卷。',
+    image: lanternPanoramaLongScrollImage
+  },
+  {
+    title: '直播带货截图',
+    category: '电商 / 社媒',
+    prompt: '生成真实手机竖屏直播带货截图，主播在直播间展示商品，画面包含商品卡片、优惠券、弹幕、点赞、成交提示和购买按钮，中文 UI 清晰，平台感真实。',
+    image: douyinLiveCommerceImage
+  }
+)
