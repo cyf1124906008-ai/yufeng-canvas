@@ -2,14 +2,15 @@
  * Workflow Templates Configuration | 工作流模板配置
  * 预设工作流模板，支持一键添加到画布
  */
-import coverMultiAngle from '@/assets/workflow-covers/multi-angle.svg'
-import coverEcommerce from '@/assets/workflow-covers/ecommerce.svg'
-import coverCharacter from '@/assets/workflow-covers/character.svg'
-import coverScene from '@/assets/workflow-covers/scene.svg'
-import coverPictureBook from '@/assets/workflow-covers/picture-book.svg'
-import coverTextVideo from '@/assets/workflow-covers/text-video.svg'
-import coverImageVideo from '@/assets/workflow-covers/image-video.svg'
-import coverBrandKit from '@/assets/workflow-covers/brand-kit.svg'
+import coverMultiAngle from '@/assets/workflow-covers/multi-angle-cover.jpg'
+import coverEcommerce from '@/assets/workflow-covers/ecommerce-cover.jpg'
+import coverCharacter from '@/assets/workflow-covers/character-cover.jpg'
+import coverScene from '@/assets/workflow-covers/scene-cover.jpg'
+import coverPictureBook from '@/assets/workflow-covers/picture-book-cover.jpg'
+import coverTextVideo from '@/assets/workflow-covers/text-video-cover.jpg'
+import coverImageVideo from '@/assets/workflow-covers/image-video-cover.jpg'
+import coverBrandKit from '@/assets/workflow-covers/brand-kit-cover.jpg'
+import coverSocialPoster from '@/assets/workflow-covers/social-poster-cover.jpg'
 
 // Multi-angle prompts | 多角度提示词模板
 export const MULTI_ANGLE_PROMPTS = {
@@ -1263,7 +1264,7 @@ export const WORKFLOW_TEMPLATES = [
     description: '一键生成适合小红书、朋友圈和宣传页的竖版海报',
     icon: 'ImageOutline',
     category: 'brand',
-    cover: coverBrandKit,
+    cover: coverSocialPoster,
     createNodes: createTextToImagePreset({
       promptLabel: '海报提示词',
       configLabel: '竖版海报',
