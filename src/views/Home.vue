@@ -369,32 +369,53 @@
       :mask-closable="false"
     >
       <div class="onboarding-shell">
-        <div class="onboarding-orb">Y</div>
-        <p class="onboarding-kicker">FIRST RUN GUIDE</p>
-        <h2>三步跑通 YUFENG Canvas</h2>
-        <p class="onboarding-desc">第一次安装建议按这个顺序走，能最快判断 Key、模型名、图片/视频接口是不是都可用。</p>
+        <div class="onboarding-head">
+          <div class="onboarding-orb">Y</div>
+          <div>
+            <p class="onboarding-kicker">FIRST RUN SETUP</p>
+            <h2>先跑通，再创作。</h2>
+            <p class="onboarding-desc">这不是说明书，是一次可执行初始化。按顺序完成配置、测试对话、进入画布，哪里没通就会直接指向下一步。</p>
+          </div>
+        </div>
 
-        <div class="onboarding-steps">
-          <article>
-            <span>01</span>
-            <h3>配置模型</h3>
-            <p>填自己的 API Key、Base URL，并把后台模型名原样添加到文本 / 图片 / 视频分类。</p>
-          </article>
-          <article>
-            <span>02</span>
-            <h3>先测对话</h3>
-            <p>首页直接跟文本模型聊天，确认 Key 和文本模型可用，再进入画布生成。</p>
-          </article>
-          <article>
-            <span>03</span>
-            <h3>看运行日志</h3>
-            <p>生成失败时打开右上角日志，查看请求地址、模型、任务 ID、耗时和供应商原始返回。</p>
+        <div class="onboarding-progress">
+          <div>
+            <span>{{ onboardingReadyCount }}/{{ onboardingChecks.length }}</span>
+            <b>初始化完成度</b>
+          </div>
+          <div class="onboarding-progress-track">
+            <i :style="{ width: `${onboardingProgress}%` }"></i>
+          </div>
+        </div>
+
+        <div class="onboarding-console">
+          <article
+            v-for="item in onboardingChecks"
+            :key="item.key"
+            class="onboarding-check"
+            :class="{ 'is-ready': item.ready, 'is-primary': item.primary }"
+          >
+            <div class="check-index">{{ item.index }}</div>
+            <div class="check-body">
+              <div class="check-title">
+                <h3>{{ item.title }}</h3>
+                <span>{{ item.ready ? '已就绪' : '待完成' }}</span>
+              </div>
+              <p>{{ item.desc }}</p>
+              <small>{{ item.detail }}</small>
+            </div>
+            <button @click="handleOnboardingAction(item.key)">
+              {{ item.action }}
+            </button>
           </article>
         </div>
 
-        <div class="onboarding-actions">
-          <button class="secondary-action" @click="showApiSettings = true">先配置模型</button>
-          <button class="primary-action" @click="completeOnboarding">开始使用</button>
+        <div class="onboarding-footer">
+          <p>建议第一次不要跳过：先用文本模型测试一句话，再进入画布生成，排查会快很多。</p>
+          <div class="onboarding-actions">
+            <button class="secondary-action" @click="dismissOnboarding">稍后再说</button>
+            <button class="primary-action" @click="completeOnboarding">完成并进入</button>
+          </div>
         </div>
       </div>
     </n-modal>
@@ -474,6 +495,8 @@ let heroTimer = null
 
 const isApiConfigured = computed(() => modelStore.hasAnyApiKey)
 const isChatConfigured = computed(() => !!modelStore.currentChatApiKey && !!modelStore.selectedChatModel)
+const isImageConfigured = computed(() => !!modelStore.currentImageApiKey && !!modelStore.selectedImageModel)
+const isVideoConfigured = computed(() => !!modelStore.currentVideoApiKey && !!modelStore.selectedVideoModel)
 
 const {
   loading: chatLoading,
@@ -495,7 +518,7 @@ let particles = []
 let particleFrame = null
 let particleCleanup = null
 let particleStartedAt = 0
-const onboardingStorageKey = 'yufeng-canvas-onboarding-v1'
+const onboardingStorageKey = 'yufeng-canvas-onboarding-v2'
 
 const stageStyle = computed(() => {
   const x = pointer.value.x
@@ -697,6 +720,67 @@ const heroSlides = [
 ]
 
 const currentHero = computed(() => heroSlides[heroIndex.value])
+
+const localApiLabel = computed(() => {
+  const origin = 'http://127.0.0.1:43112'
+  return window.desktopApp?.getLocalApiStatus ? `${origin}/mcp` : '桌面版启动后自动开放'
+})
+
+const onboardingChecks = computed(() => [
+  {
+    key: 'api',
+    index: '01',
+    title: '配置 Key / Base URL',
+    desc: '先把自己的 API Key 和服务地址保存进去，图片、视频、对话可以共用，也可以分开填。',
+    detail: isApiConfigured.value ? `当前渠道：${modelStore.currentProvider}` : '还没有检测到可用 Key',
+    action: isApiConfigured.value ? '检查配置' : '立即配置',
+    ready: isApiConfigured.value,
+    primary: !isApiConfigured.value
+  },
+  {
+    key: 'chat',
+    index: '02',
+    title: '测试文本模型',
+    desc: '用首页对话发一条很短的请求，确认 AI 润色和 Chat 能正常调用。',
+    detail: isChatConfigured.value ? `文本模型：${modelStore.selectedChatModel}` : '需要配置文本模型名和可用 Key',
+    action: isChatConfigured.value ? '发送测试' : '去配置文本模型',
+    ready: isChatConfigured.value,
+    primary: isApiConfigured.value && !isChatConfigured.value
+  },
+  {
+    key: 'image',
+    index: '03',
+    title: '准备图片工作流',
+    desc: '检查图片模型后，一键创建一个文生图示例画布，进入后可直接点生成。',
+    detail: isImageConfigured.value ? `图片模型：${modelStore.selectedImageModel}` : '需要添加图片模型名，比如供应商后台显示的模型',
+    action: isImageConfigured.value ? '创建图片示例' : '去配置图片模型',
+    ready: isImageConfigured.value,
+    primary: isChatConfigured.value && !isImageConfigured.value
+  },
+  {
+    key: 'video',
+    index: '04',
+    title: '准备视频工作流',
+    desc: '视频模型通常是异步任务，建议配置后用短时长先测，失败时看右上角运行日志。',
+    detail: isVideoConfigured.value ? `视频模型：${modelStore.selectedVideoModel}` : '可稍后配置视频模型，不影响先用图片功能',
+    action: isVideoConfigured.value ? '创建视频示例' : '配置视频模型',
+    ready: isVideoConfigured.value,
+    primary: false
+  },
+  {
+    key: 'mcp',
+    index: '05',
+    title: '本地 API / MCP',
+    desc: '桌面端会启动本地接口，后面给 MCP、多 Agent、自动化工作流使用。',
+    detail: localApiLabel.value,
+    action: '复制 MCP 入口',
+    ready: true,
+    primary: false
+  }
+])
+
+const onboardingReadyCount = computed(() => onboardingChecks.value.filter((item) => item.ready).length)
+const onboardingProgress = computed(() => Math.round((onboardingReadyCount.value / onboardingChecks.value.length) * 100))
 
 const featureCards = [
   {
@@ -958,6 +1042,61 @@ const openPromptSource = () => {
 const completeOnboarding = () => {
   showOnboarding.value = false
   localStorage.setItem(onboardingStorageKey, 'done')
+}
+
+const dismissOnboarding = () => {
+  showOnboarding.value = false
+}
+
+const runOnboardingChatTest = async () => {
+  if (!isChatConfigured.value) {
+    showApiSettings.value = true
+    window.$message?.warning('先配置文本模型和 Key，再做连通测试')
+    return
+  }
+
+  showOnboarding.value = false
+  activeMode.value = 'chat'
+  chatText.value = '请用一句话回复：YUFENG Canvas 文本模型连接成功。'
+  await sendHomeChat()
+}
+
+const copyMcpEndpoint = async () => {
+  const endpoint = 'http://127.0.0.1:43112/mcp'
+  try {
+    await navigator.clipboard?.writeText(endpoint)
+    window.$message?.success('已复制 MCP 入口')
+  } catch {
+    window.$message?.info(endpoint)
+  }
+}
+
+const handleOnboardingAction = async (key) => {
+  if (key === 'api' || (key === 'chat' && !isChatConfigured.value) || (key === 'image' && !isImageConfigured.value) || (key === 'video' && !isVideoConfigured.value)) {
+    showApiSettings.value = true
+    return
+  }
+
+  if (key === 'chat') {
+    await runOnboardingChatTest()
+    return
+  }
+
+  if (key === 'image') {
+    completeOnboarding()
+    createFromTemplate('文生图：生成一张未来城市雨夜海报，霓虹灯、电影感构图、16:9 比例，画面要有清晰主体和高级色彩')
+    return
+  }
+
+  if (key === 'video') {
+    completeOnboarding()
+    createFromTemplate('文生视频：生成一个 5 秒镜头，雨夜城市街道中霓虹灯反射在地面，镜头缓慢推进，电影感，16:9')
+    return
+  }
+
+  if (key === 'mcp') {
+    await copyMcpEndpoint()
+  }
 }
 
 const handleCreateWithInput = () => {
@@ -2387,7 +2526,7 @@ onUnmounted(() => {
 }
 
 :global(.onboarding-modal.n-card) {
-  width: min(680px, calc(100vw - 32px));
+  width: min(920px, calc(100vw - 32px));
   overflow: hidden;
   border-radius: 36px;
   background:
@@ -2413,12 +2552,18 @@ onUnmounted(() => {
   padding: 30px;
 }
 
+.onboarding-head {
+  display: grid;
+  grid-template-columns: 78px minmax(0, 1fr);
+  gap: 18px;
+  align-items: center;
+}
+
 .onboarding-orb {
   display: grid;
   place-items: center;
   width: 78px;
   height: 78px;
-  margin-bottom: 16px;
   border: 1px solid rgba(255, 255, 255, 0.58);
   border-radius: 28px;
   color: #062c2a;
@@ -2455,15 +2600,73 @@ onUnmounted(() => {
   line-height: 1.8;
 }
 
-.onboarding-steps {
+.onboarding-progress {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
+  grid-template-columns: 170px minmax(0, 1fr);
+  gap: 16px;
+  align-items: center;
   margin-top: 22px;
+  padding: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.46);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
 }
 
-.onboarding-steps article {
-  min-height: 160px;
+.dark .onboarding-progress {
+  background: rgba(2, 12, 23, 0.32);
+  border-color: rgba(203, 255, 239, 0.12);
+}
+
+.onboarding-progress span,
+.onboarding-progress b {
+  display: block;
+}
+
+.onboarding-progress span {
+  color: var(--accent-color);
+  font-size: 22px;
+  font-weight: 950;
+}
+
+.onboarding-progress b {
+  margin-top: 2px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.onboarding-progress-track {
+  height: 12px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.08);
+  box-shadow: inset 0 1px 4px rgba(15, 23, 42, 0.16);
+}
+
+.dark .onboarding-progress-track {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.onboarding-progress-track i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #55f5b6, #11d8c5 52%, #38bdf8);
+  box-shadow: 0 0 22px rgba(85, 245, 182, 0.42);
+  transition: width 0.28s ease;
+}
+
+.onboarding-console {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.onboarding-check {
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
   padding: 16px;
   border: 1px solid rgba(148, 163, 184, 0.24);
   border-radius: 24px;
@@ -2471,37 +2674,106 @@ onUnmounted(() => {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.74), 0 18px 46px rgba(15, 23, 42, 0.08);
 }
 
-.dark .onboarding-steps article {
+.dark .onboarding-check {
   background: rgba(2, 12, 23, 0.36);
   border-color: rgba(203, 255, 239, 0.12);
 }
 
-.onboarding-steps span {
+.onboarding-check.is-ready {
+  border-color: rgba(34, 197, 94, 0.32);
+}
+
+.onboarding-check.is-primary {
+  border-color: rgba(85, 245, 182, 0.72);
+  box-shadow: 0 22px 70px rgba(17, 216, 197, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.74);
+}
+
+.check-index {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 18px;
   color: var(--accent-color);
+  background: rgba(34, 197, 94, 0.12);
   font-size: 12px;
   font-weight: 950;
   letter-spacing: 0.14em;
 }
 
-.onboarding-steps h3 {
-  margin-top: 18px;
+.check-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.check-title h3 {
   color: var(--text-primary);
   font-size: 18px;
   font-weight: 900;
 }
 
-.onboarding-steps p {
-  margin-top: 8px;
+.check-title span {
+  flex-shrink: 0;
+  padding: 3px 8px;
+  border-radius: 999px;
+  color: #047857;
+  background: rgba(34, 197, 94, 0.12);
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.onboarding-check:not(.is-ready) .check-title span {
+  color: #b45309;
+  background: rgba(245, 158, 11, 0.14);
+}
+
+.check-body p {
+  margin-top: 6px;
   color: var(--text-secondary);
   font-size: 13px;
   line-height: 1.7;
+}
+
+.check-body small {
+  display: block;
+  margin-top: 6px;
+  color: color-mix(in srgb, var(--text-secondary) 76%, var(--accent-color));
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.onboarding-check button {
+  min-width: 128px;
+  height: 40px;
+  padding: 0 16px;
+  border: 1px solid rgba(255, 255, 255, 0.46);
+  border-radius: 999px;
+  color: #052e2b;
+  background:
+    radial-gradient(circle at 22% 0%, rgba(255, 255, 255, 0.8), transparent 42%),
+    linear-gradient(135deg, #dffef7, #55f5b6 52%, #38bdf8);
+  box-shadow: 0 16px 36px rgba(17, 216, 197, 0.2);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.onboarding-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  margin-top: 18px;
+  color: var(--text-secondary);
+  font-size: 13px;
 }
 
 .onboarding-actions {
   display: flex;
   justify-content: flex-end;
   gap: 12px;
-  margin-top: 24px;
+  margin-top: 0;
+  flex-shrink: 0;
 }
 
 @media (max-width: 960px) {
@@ -2544,8 +2816,16 @@ onUnmounted(() => {
     display: none;
   }
 
-  .onboarding-steps {
+  .onboarding-head,
+  .onboarding-progress,
+  .onboarding-check,
+  .onboarding-footer {
     grid-template-columns: 1fr;
+  }
+
+  .onboarding-footer {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }
 
