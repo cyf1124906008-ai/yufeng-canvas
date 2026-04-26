@@ -48,6 +48,14 @@
       </a>
 
       <button
+        @click="showSupport = true"
+        class="p-2 rounded-lg hover:bg-[var(--bg-tertiary)] transition-colors text-[var(--text-primary)] hover:text-[var(--accent-color)]"
+        title="联系与支持"
+      >
+        <n-icon :size="20"><ChatbubbleOutline /></n-icon>
+      </button>
+
+      <button
         @click="toggleTheme"
         class="p-2 rounded-lg hover:bg-[var(--bg-tertiary)] transition-colors"
         title="切换主题"
@@ -61,6 +69,8 @@
       <slot name="right"></slot>
     </div>
   </header>
+
+  <SupportModal v-model:show="showSupport" />
 </template>
 
 <script setup>
@@ -70,10 +80,12 @@ import {
   SunnyOutline,
   MoonOutline,
   LogoGithub,
-  CloudDownloadOutline
+  CloudDownloadOutline,
+  ChatbubbleOutline
 } from '@vicons/ionicons5'
 import { isDark, toggleTheme } from '../stores/theme'
 import { getGithubUrl } from '../config/distribution'
+import SupportModal from './SupportModal.vue'
 
 defineProps({
   githubUrl: {
@@ -86,6 +98,7 @@ const dialog = useDialog()
 const updateStatus = ref({ status: 'idle' })
 const userInitiatedCheck = ref(false)
 const downloadedPromptedVersion = ref('')
+const showSupport = ref(false)
 let stopUpdateListener = null
 
 const isBusy = computed(() =>

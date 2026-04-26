@@ -1,6 +1,7 @@
 const { app, BrowserWindow, shell, ipcMain } = require('electron')
 const { autoUpdater } = require('electron-updater')
 const path = require('path')
+const http = require('http')
 const packageJson = require('../package.json')
 
 const rendererUrl = process.env.ELECTRON_RENDERER_URL
@@ -45,6 +46,15 @@ let updateState = {
 }
 let updateCheckMode = 'auto'
 let updateSourceIndex = 0
+let localApiServer = null
+const localApiPort = Number.parseInt(process.env.YUFENG_LOCAL_API_PORT || '43112', 10) || 43112
+let localApiState = {
+  enabled: process.env.YUFENG_LOCAL_API !== '0',
+  running: false,
+  port: localApiPort,
+  origin: `http://127.0.0.1:${localApiPort}`,
+  error: ''
+}
 
 const isPackagedRuntime = () => app.isPackaged && !rendererUrl
 
@@ -266,6 +276,201 @@ const checkForUpdatesInBackground = () => {
   })
 }
 
+const sendJson = (response, statusCode, data) => {
+  response.writeHead(statusCode, {
+    'Content-Type': 'application/json; charset=utf-8',
+    'Access-Control-Allow-Origin': 'http://127.0.0.1',
+    'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type'
+  })
+  response.end(JSON.stringify(data))
+}
+
+const readJsonBody = (request) => new Promise((resolve, reject) => {
+  const chunks = []
+  request.on('data', (chunk) => chunks.push(chunk))
+  request.on('end', () => {
+    if (!chunks.length) {
+      resolve({})
+      return
+    }
+
+    try {
+      resolve(JSON.parse(Buffer.concat(chunks).toString('utf8')))
+    } catch (error) {
+      reject(error)
+    }
+  })
+  request.on('error', reject)
+})
+
+const mcpTools = [
+  {
+    name: 'yufeng.health',
+    description: 'Return YUFENG Canvas local API health and version.',
+    inputSchema: {
+      type: 'object',
+      properties: {}
+    }
+  },
+  {
+    name: 'yufeng.release',
+    description: 'Return the GitHub release page for downloading the latest installer.',
+    inputSchema: {
+      type: 'object',
+      properties: {}
+    }
+  }
+]
+
+const handleMcpRequest = async (body = {}) => {
+  const id = body.id ?? null
+  const method = body.method
+
+  if (method === 'initialize') {
+    return {
+      jsonrpc: '2.0',
+      id,
+      result: {
+        protocolVersion: '2024-11-05',
+        serverInfo: {
+          name: 'yufeng-canvas-local',
+          version: packageJson.version
+        },
+        capabilities: {
+          tools: {}
+        }
+      }
+    }
+  }
+
+  if (method === 'tools/list') {
+    return {
+      jsonrpc: '2.0',
+      id,
+      result: {
+        tools: mcpTools
+      }
+    }
+  }
+
+  if (method === 'tools/call') {
+    const name = body.params?.name
+    if (name === 'yufeng.health') {
+      return {
+        jsonrpc: '2.0',
+        id,
+        result: {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                ok: true,
+                app: packageJson.productName || packageJson.name,
+                version: packageJson.version,
+                localApi: localApiState
+              }, null, 2)
+            }
+          ]
+        }
+      }
+    }
+
+    if (name === 'yufeng.release') {
+      return {
+        jsonrpc: '2.0',
+        id,
+        result: {
+          content: [
+            {
+              type: 'text',
+              text: `https://github.com/${repo}/releases/latest`
+            }
+          ]
+        }
+      }
+    }
+  }
+
+  return {
+    jsonrpc: '2.0',
+    id,
+    error: {
+      code: -32601,
+      message: `Unknown MCP method: ${method || 'empty'}`
+    }
+  }
+}
+
+const startLocalApiServer = () => {
+  if (!localApiState.enabled || localApiServer) return
+
+  localApiServer = http.createServer(async (request, response) => {
+    if (request.method === 'OPTIONS') {
+      sendJson(response, 204, {})
+      return
+    }
+
+    const url = new URL(request.url || '/', localApiState.origin)
+
+    try {
+      if (request.method === 'GET' && url.pathname === '/health') {
+        sendJson(response, 200, {
+          ok: true,
+          app: packageJson.productName || packageJson.name,
+          version: packageJson.version,
+          mcp: `${localApiState.origin}/mcp`
+        })
+        return
+      }
+
+      if (request.method === 'GET' && url.pathname === '/mcp') {
+        sendJson(response, 200, {
+          name: 'yufeng-canvas-local',
+          version: packageJson.version,
+          transport: 'json-rpc-over-http',
+          endpoint: `${localApiState.origin}/mcp`,
+          tools: mcpTools
+        })
+        return
+      }
+
+      if (request.method === 'POST' && url.pathname === '/mcp') {
+        const body = await readJsonBody(request)
+        sendJson(response, 200, await handleMcpRequest(body))
+        return
+      }
+
+      sendJson(response, 404, {
+        ok: false,
+        error: 'Not found',
+        endpoints: ['/health', '/mcp']
+      })
+    } catch (error) {
+      sendJson(response, 500, {
+        ok: false,
+        error: error?.message || 'Local API error'
+      })
+    }
+  })
+
+  localApiServer.on('error', (error) => {
+    localApiState = {
+      ...localApiState,
+      running: false,
+      error: error?.message || 'Local API failed'
+    }
+  })
+
+  localApiServer.listen(localApiPort, '127.0.0.1', () => {
+    localApiState = {
+      ...localApiState,
+      running: true,
+      error: ''
+    }
+  })
+}
+
 function createWindow() {
   const windowIcon = app.isPackaged
     ? path.join(process.resourcesPath, 'build', 'icon.png')
@@ -313,6 +518,7 @@ app.whenReady().then(() => {
 
   ipcMain.handle('app:get-version', () => packageJson.version)
   ipcMain.handle('app:get-update-status', () => updateState)
+  ipcMain.handle('app:get-local-api-status', () => localApiState)
 
   ipcMain.handle('app:check-update', async () => {
     if (!isPackagedRuntime()) {
@@ -353,6 +559,7 @@ app.whenReady().then(() => {
   })
 
   createWindow()
+  startLocalApiServer()
   setTimeout(checkForUpdatesInBackground, 8000)
 
   app.on('activate', () => {
@@ -364,6 +571,7 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
+    localApiServer?.close()
     app.quit()
   }
 })

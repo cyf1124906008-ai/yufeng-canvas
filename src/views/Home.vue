@@ -361,6 +361,44 @@
 
     <ApiSettings v-model:show="showApiSettings" @saved="refreshApiConfig" />
 
+    <n-modal
+      v-model:show="showOnboarding"
+      preset="card"
+      class="onboarding-modal"
+      :bordered="false"
+      :mask-closable="false"
+    >
+      <div class="onboarding-shell">
+        <div class="onboarding-orb">Y</div>
+        <p class="onboarding-kicker">FIRST RUN GUIDE</p>
+        <h2>三步跑通 YUFENG Canvas</h2>
+        <p class="onboarding-desc">第一次安装建议按这个顺序走，能最快判断 Key、模型名、图片/视频接口是不是都可用。</p>
+
+        <div class="onboarding-steps">
+          <article>
+            <span>01</span>
+            <h3>配置模型</h3>
+            <p>填自己的 API Key、Base URL，并把后台模型名原样添加到文本 / 图片 / 视频分类。</p>
+          </article>
+          <article>
+            <span>02</span>
+            <h3>先测对话</h3>
+            <p>首页直接跟文本模型聊天，确认 Key 和文本模型可用，再进入画布生成。</p>
+          </article>
+          <article>
+            <span>03</span>
+            <h3>看运行日志</h3>
+            <p>生成失败时打开右上角日志，查看请求地址、模型、任务 ID、耗时和供应商原始返回。</p>
+          </article>
+        </div>
+
+        <div class="onboarding-actions">
+          <button class="secondary-action" @click="showApiSettings = true">先配置模型</button>
+          <button class="primary-action" @click="completeOnboarding">开始使用</button>
+        </div>
+      </div>
+    </n-modal>
+
     <n-modal v-model:show="showRenameModal" preset="dialog" title="重命名项目">
       <n-input v-model:value="renameValue" placeholder="请输入项目名称" />
       <template #action>
@@ -419,6 +457,7 @@ const dialog = useDialog()
 const modelStore = useModelStore()
 
 const showApiSettings = ref(false)
+const showOnboarding = ref(false)
 const activeMode = ref('chat')
 const inputText = ref('')
 const chatText = ref('')
@@ -456,6 +495,7 @@ let particles = []
 let particleFrame = null
 let particleCleanup = null
 let particleStartedAt = 0
+const onboardingStorageKey = 'yufeng-canvas-onboarding-v1'
 
 const stageStyle = computed(() => {
   const x = pointer.value.x
@@ -915,6 +955,11 @@ const openPromptSource = () => {
   window.open(PROMPT_LIBRARY_SOURCE.url, '_blank', 'noopener,noreferrer')
 }
 
+const completeOnboarding = () => {
+  showOnboarding.value = false
+  localStorage.setItem(onboardingStorageKey, 'done')
+}
+
 const handleCreateWithInput = () => {
   if (!ensureConfigured()) return
   const prompt = inputText.value.trim()
@@ -950,6 +995,11 @@ onMounted(() => {
   initProjectsStore()
   refreshSuggestions()
   initParticleField()
+  if (!localStorage.getItem(onboardingStorageKey)) {
+    window.setTimeout(() => {
+      showOnboarding.value = true
+    }, 700)
+  }
   heroTimer = window.setInterval(() => {
     heroIndex.value = (heroIndex.value + 1) % heroSlides.length
   }, 4200)
@@ -2336,6 +2386,124 @@ onUnmounted(() => {
   height: 42px;
 }
 
+:global(.onboarding-modal.n-card) {
+  width: min(680px, calc(100vw - 32px));
+  overflow: hidden;
+  border-radius: 36px;
+  background:
+    radial-gradient(circle at 18% 0%, rgba(85, 245, 182, 0.24), transparent 34%),
+    radial-gradient(circle at 84% 12%, rgba(56, 189, 248, 0.2), transparent 36%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(236, 253, 245, 0.7));
+  box-shadow: 0 38px 120px rgba(15, 23, 42, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(30px) saturate(1.42);
+}
+
+:global(.dark .onboarding-modal.n-card) {
+  background:
+    radial-gradient(circle at 18% 0%, rgba(85, 245, 182, 0.15), transparent 34%),
+    radial-gradient(circle at 84% 12%, rgba(56, 189, 248, 0.12), transparent 36%),
+    linear-gradient(135deg, rgba(12, 22, 36, 0.94), rgba(7, 34, 36, 0.82));
+}
+
+:global(.onboarding-modal .n-card__content) {
+  padding: 0;
+}
+
+.onboarding-shell {
+  padding: 30px;
+}
+
+.onboarding-orb {
+  display: grid;
+  place-items: center;
+  width: 78px;
+  height: 78px;
+  margin-bottom: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.58);
+  border-radius: 28px;
+  color: #062c2a;
+  background:
+    radial-gradient(circle at 30% 18%, rgba(255, 255, 255, 0.95), transparent 30%),
+    linear-gradient(135deg, #dffef7, #55f5b6 52%, #38bdf8);
+  box-shadow: 0 26px 70px rgba(17, 216, 197, 0.34);
+  font-size: 36px;
+  font-weight: 950;
+  letter-spacing: -0.08em;
+}
+
+.onboarding-kicker {
+  color: var(--accent-color);
+  font-size: 12px;
+  font-weight: 950;
+  letter-spacing: 0.2em;
+}
+
+.onboarding-shell h2 {
+  margin-top: 6px;
+  color: var(--text-primary);
+  font-size: clamp(30px, 5vw, 48px);
+  line-height: 1;
+  font-weight: 950;
+  letter-spacing: -0.06em;
+}
+
+.onboarding-desc {
+  max-width: 540px;
+  margin-top: 12px;
+  color: var(--text-secondary);
+  font-size: 15px;
+  line-height: 1.8;
+}
+
+.onboarding-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 22px;
+}
+
+.onboarding-steps article {
+  min-height: 160px;
+  padding: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.52);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.74), 0 18px 46px rgba(15, 23, 42, 0.08);
+}
+
+.dark .onboarding-steps article {
+  background: rgba(2, 12, 23, 0.36);
+  border-color: rgba(203, 255, 239, 0.12);
+}
+
+.onboarding-steps span {
+  color: var(--accent-color);
+  font-size: 12px;
+  font-weight: 950;
+  letter-spacing: 0.14em;
+}
+
+.onboarding-steps h3 {
+  margin-top: 18px;
+  color: var(--text-primary);
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.onboarding-steps p {
+  margin-top: 8px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.onboarding-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 24px;
+}
+
 @media (max-width: 960px) {
   .hero-grid,
   .inspiration-grid,
@@ -2374,6 +2542,10 @@ onUnmounted(() => {
 
   .hero-prism {
     display: none;
+  }
+
+  .onboarding-steps {
+    grid-template-columns: 1fr;
   }
 }
 

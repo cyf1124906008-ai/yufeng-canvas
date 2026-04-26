@@ -178,11 +178,15 @@
             :class="`is-${log.level}`"
           >
             <div class="runtime-log-line">
-              <span class="runtime-log-level">{{ log.level }}</span>
+              <div class="runtime-log-tags">
+                <span class="runtime-log-level">{{ log.level }}</span>
+                <span v-if="getLogDuration(log)" class="runtime-log-chip">{{ getLogDuration(log) }}</span>
+                <span v-if="getLogTaskId(log)" class="runtime-log-chip is-task">Task {{ getLogTaskId(log) }}</span>
+              </div>
               <time>{{ formatLogTime(log.timestamp) }}</time>
             </div>
             <p>{{ log.message }}</p>
-            <pre v-if="log.meta && Object.keys(log.meta).length">{{ JSON.stringify(log.meta, null, 2) }}</pre>
+            <pre v-if="getVisibleLogMeta(log)">{{ getVisibleLogMeta(log) }}</pre>
           </article>
         </div>
       </aside>
@@ -448,6 +452,34 @@ const runtimeErrorCount = computed(() => runtimeLogs.value.filter((log) => log.l
 const formatLogTime = (timestamp) => {
   const date = new Date(timestamp)
   return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}:${date.getSeconds().toString().padStart(2, '0')}`
+}
+
+const formatDuration = (durationMs) => {
+  const value = Number(durationMs)
+  if (!Number.isFinite(value) || value <= 0) return ''
+  if (value < 1000) return `${Math.round(value)}ms`
+  if (value < 60_000) return `${(value / 1000).toFixed(value < 10_000 ? 1 : 0)}s`
+  return `${Math.floor(value / 60_000)}m ${Math.round((value % 60_000) / 1000)}s`
+}
+
+const getLogDuration = (log) => {
+  const duration = log?.meta?.durationMs ?? log?.meta?.elapsedMs ?? log?.durationMs
+  return formatDuration(duration)
+}
+
+const getLogTaskId = (log) => {
+  const taskId = log?.meta?.taskId || log?.meta?.task_id || log?.meta?.id
+  if (!taskId || typeof taskId !== 'string') return ''
+  return taskId.length > 16 ? `${taskId.slice(0, 6)}...${taskId.slice(-6)}` : taskId
+}
+
+const getVisibleLogMeta = (log) => {
+  if (!log?.meta || !Object.keys(log.meta).length) return ''
+  const hiddenKeys = new Set(['durationMs', 'elapsedMs'])
+  const visibleMeta = Object.fromEntries(
+    Object.entries(log.meta).filter(([key]) => !hiddenKeys.has(key))
+  )
+  return Object.keys(visibleMeta).length ? JSON.stringify(visibleMeta, null, 2) : ''
 }
 
 
@@ -1298,14 +1330,55 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 10px;
   margin-bottom: 6px;
   color: var(--text-secondary);
   font-size: 11px;
 }
 
+.runtime-log-tags {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
 .runtime-log-level {
   text-transform: uppercase;
   font-weight: 800;
+}
+
+.runtime-log-chip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 150px;
+  height: 22px;
+  padding: 0 8px;
+  overflow: hidden;
+  border: 1px solid rgba(34, 197, 94, 0.28);
+  border-radius: 999px;
+  color: #047857;
+  background: rgba(34, 197, 94, 0.12);
+  font-size: 10px;
+  font-weight: 850;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dark .runtime-log-chip {
+  color: #8cfbdd;
+  background: rgba(85, 245, 182, 0.12);
+}
+
+.runtime-log-chip.is-task {
+  border-color: rgba(56, 189, 248, 0.28);
+  color: #0369a1;
+  background: rgba(56, 189, 248, 0.12);
+}
+
+.dark .runtime-log-chip.is-task {
+  color: #7dd3fc;
 }
 
 .runtime-log-item p {
