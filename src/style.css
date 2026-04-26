@@ -248,6 +248,7 @@ body :is(
   box-shadow: var(--glass-control-shadow) !important;
   backdrop-filter: blur(22px) saturate(1.55) brightness(1.05);
   -webkit-backdrop-filter: blur(22px) saturate(1.55) brightness(1.05);
+  color: rgba(15, 23, 42, 0.9) !important;
   text-shadow: 0 1px 0 rgba(255, 255, 255, 0.16);
   transition:
     transform 0.2s cubic-bezier(.2, .8, .2, 1),
@@ -255,6 +256,49 @@ body :is(
     color 0.2s ease,
     box-shadow 0.2s ease,
     background 0.2s ease !important;
+}
+
+.dark :is(
+  .header-pill,
+  .brand-lockup,
+  .secondary-action,
+  .ghost-chip,
+  .new-project-button,
+  .feature-mini,
+  .source-link,
+  .canvas-toolbar button,
+  .zoom-dock button,
+  .node-menu-pop button,
+  .runtime-log-clear,
+  .runtime-log-close,
+  .category-chip,
+  .expand-btn,
+  .n-button
+) {
+  color: rgba(242, 255, 251, 0.92) !important;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.24);
+}
+
+body :is(
+  .header-pill,
+  .brand-lockup,
+  .secondary-action,
+  .ghost-chip,
+  .new-project-button,
+  .feature-mini,
+  .source-link,
+  .canvas-toolbar button,
+  .zoom-dock button,
+  .node-menu-pop button,
+  .runtime-log-clear,
+  .runtime-log-close,
+  .category-chip,
+  .expand-btn,
+  .n-button
+) :is(svg, span, .n-button__content, .n-button__icon) {
+  position: relative;
+  z-index: 1;
+  color: currentColor;
 }
 
 body :is(
@@ -400,7 +444,8 @@ body :is(
 body :is(.primary-action, .send-button, .canvas-toolbar button:first-child, .n-button--primary-type) {
   border: 1px solid rgba(195, 255, 239, 0.66) !important;
   background: var(--glass-control-primary) !important;
-  color: #f8fffd !important;
+  color: #052b28 !important;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.36);
   box-shadow:
     0 22px 58px rgba(0, 184, 255, 0.24),
     0 8px 24px rgba(34, 255, 181, 0.18),
@@ -408,6 +453,11 @@ body :is(.primary-action, .send-button, .canvas-toolbar button:first-child, .n-b
     inset 0 -18px 34px rgba(5, 150, 105, 0.22) !important;
   backdrop-filter: blur(24px) saturate(1.7) brightness(1.08);
   -webkit-backdrop-filter: blur(24px) saturate(1.7) brightness(1.08);
+}
+
+.dark :is(.primary-action, .send-button, .canvas-toolbar button:first-child, .n-button--primary-type) {
+  color: #f8fffd !important;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.3);
 }
 
 body :is(.primary-action, .send-button, .canvas-toolbar button:first-child, .n-button--primary-type):hover {

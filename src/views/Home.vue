@@ -435,12 +435,14 @@ const stageStyle = computed(() => {
     '--my': `${(y * 100).toFixed(2)}%`,
     '--parallax-x': `${(dx * 26).toFixed(2)}px`,
     '--parallax-y': `${(dy * 22).toFixed(2)}px`,
-    '--tilt-x': `${(-dy * 3).toFixed(2)}deg`,
-    '--tilt-y': `${(dx * 4).toFixed(2)}deg`
+    '--tilt-x': '0deg',
+    '--tilt-y': '0deg'
   }
 })
 
 const handlePointerMove = (event) => {
+  if (window.getSelection?.()?.type === 'Range') return
+
   const rect = event.currentTarget.getBoundingClientRect()
   const x = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width))
   const y = Math.min(1, Math.max(0, (event.clientY - rect.top) / rect.height))
@@ -1210,10 +1212,17 @@ onUnmounted(() => {
   position: relative;
   overflow: hidden;
   background: linear-gradient(135deg, #19e58d 0%, #00b8ff 100%);
-  color: white;
+  color: #052b28;
   font-weight: 800;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.34);
   box-shadow: 0 18px 40px rgba(0, 183, 255, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.42);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.dark .primary-action,
+.dark .send-button {
+  color: #f8fffd;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.3);
 }
 
 .primary-action::after,
@@ -1224,12 +1233,15 @@ onUnmounted(() => {
   width: 42%;
   background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.42), transparent);
   transform: skewX(-18deg);
+  opacity: 0;
+  pointer-events: none;
   transition: left 1.25s cubic-bezier(.18, .86, .22, 1);
 }
 
 .primary-action:hover::after,
 .send-button:hover::after {
   left: 125%;
+  opacity: 0.42;
 }
 
 .primary-action {
@@ -1296,8 +1308,7 @@ onUnmounted(() => {
 .prompt-panel {
   position: relative;
   transform-style: preserve-3d;
-  transform: perspective(1000px) rotateX(var(--tilt-x)) rotateY(var(--tilt-y));
-  transition: transform 0.35s ease-out;
+  transform: none;
 }
 
 .prompt-panel-glow {
