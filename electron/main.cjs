@@ -342,7 +342,7 @@ app.whenReady().then(() => {
       throw new Error('更新尚未下载完成')
     }
 
-    autoUpdater.quitAndInstall(false, true)
+    autoUpdater.quitAndInstall(true, true)
     return { ok: true }
   })
 
