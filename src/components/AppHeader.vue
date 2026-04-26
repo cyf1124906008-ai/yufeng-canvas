@@ -50,7 +50,7 @@
       <button
         @click="showSupport = true"
         class="p-2 rounded-lg hover:bg-[var(--bg-tertiary)] transition-colors text-[var(--text-primary)] hover:text-[var(--accent-color)]"
-        title="联系与支持"
+        title="联系作者 / 使用支持"
       >
         <n-icon :size="20"><ChatbubbleOutline /></n-icon>
       </button>

@@ -128,6 +128,7 @@
       <div 
         v-if="showNodeMenu"
         class="node-menu-pop absolute left-20 top-1/2 -translate-y-1/2 p-2 z-20"
+        data-tour="node-menu"
       >
         <button 
           v-for="nodeType in nodeTypeOptions" 
@@ -168,7 +169,7 @@
         </div>
       </div>
 
-      <aside v-if="showRuntimeLogs" class="runtime-log-panel absolute right-4 top-4 z-30">
+      <aside v-if="showRuntimeLogs" class="runtime-log-panel absolute right-4 top-4 z-30" data-tour="runtime-log-panel">
         <div class="runtime-log-head">
           <div>
             <p class="runtime-log-kicker">RUN LOG</p>
@@ -306,6 +307,7 @@
       v-model:show="showCanvasTour"
       :steps="canvasTourSteps"
       :storage-key="canvasTourStorageKey"
+      @step-change="handleCanvasTourStep"
       @finish="completeCanvasTour"
       @skip="completeCanvasTour"
     />
@@ -466,6 +468,12 @@ const canvasTourStorageKey = 'yufeng-canvas-canvas-tour-v1'
 
 const canvasTourSteps = [
   {
+    target: '.canvas-header',
+    title: '这是当前项目的控制栏',
+    body: '左侧可以返回首页、重命名或管理当前项目；右侧放着指引、日志、素材下载和模型设置。画布内所有生成问题，都优先从右侧这些入口排查。',
+    side: 'bottom'
+  },
+  {
     target: '[data-tour="canvas-toolbar"]',
     title: '画布左侧是工具栏',
     body: '这里负责添加节点、打开公共工作流、插入文字、图片、文生图、视频生成等模块。新用户先从绿色加号或工作流按钮开始最稳。',
@@ -478,21 +486,42 @@ const canvasTourSteps = [
     side: 'right'
   },
   {
+    target: '[data-tour="node-menu"]',
+    title: '节点菜单怎么选',
+    body: '文本节点用于写提示词；文生图配置节点用于选择图片模型、尺寸和参数；视频生成配置节点用于文生视频或图生视频；图片/视频节点用于承接结果或作为参考素材。',
+    hint: '普通用户不知道从哪开始时，优先用“文生图配置”或“视频生成配置”。',
+    side: 'right'
+  },
+  {
     target: '[data-tour="workflow-panel"]',
     title: '公共工作流一键导入',
     body: '这里是给普通用户最快上手的入口。点击模板会直接把配置好的节点放到画布上，再替换成自己的提示词或素材。',
     side: 'right'
   },
   {
+    target: '[data-tour="workflow-panel-open"]',
+    title: '公共工作流面板',
+    body: '这里会按分类展示已经配置好的案例工作流。点任意卡片会把节点、连线和默认参数一次性放到画布，后续只需要改提示词、模型和比例。',
+    hint: '这比手动添加节点更适合新手，也适合做产品演示。',
+    side: 'right'
+  },
+  {
     target: '[data-tour="canvas-composer"]',
     title: '底部输入框会帮你搭流程',
-    body: '输入一句需求后，默认会创建提示词和生成配置节点；打开自动执行后，会尝试分析你的意图并直接启动对应工作流。',
+    body: '输入一句需求后，默认会创建提示词和生成配置节点；打开“自动执行”后，会尝试分析你的意图并直接启动对应工作流。AI 润色会调用文本模型优化提示词。',
+    hint: '如果用户只是想快速生成，先在这里输入一句完整需求。需要精细控制，再去节点里改比例、模型和参考图。',
     side: 'top'
   },
   {
     target: '[data-tour="runtime-logs"]',
     title: '模型请求日志在右上角',
     body: '生成失败、扣费但没返回、视频任务轮询等问题，都优先打开这里看。它会记录请求地址、模型、任务 ID、耗时和原始响应。',
+    side: 'left'
+  },
+  {
+    target: '[data-tour="runtime-log-panel"]',
+    title: '日志面板怎么判断问题',
+    body: '看到 SUCCESS 说明请求至少打到了供应商；看到 ERROR 要看状态码和返回信息；视频任务会显示任务 ID、轮询次数和最终地址。复制这块内容给作者，排查会快很多。',
     side: 'left'
   },
   {
@@ -504,7 +533,7 @@ const canvasTourSteps = [
   {
     target: '[data-tour="canvas-settings"]',
     title: '模型不通就回到设置',
-    body: '图片、视频、文本模型可以分别配置 Key 和模型名。换供应商、换模型、排查 500 或 Network Error，都从这里开始。',
+    body: '图片、视频、文本模型可以分别配置 Key 和模型名。换供应商、换模型、排查 500 或 Network Error，都从这里开始。模型名必须和供应商后台完全一致。',
     side: 'left'
   },
   {
@@ -970,11 +999,20 @@ const goBack = () => {
 }
 
 const completeCanvasTour = () => {
+  showNodeMenu.value = false
+  showWorkflowPanel.value = false
+  showRuntimeLogs.value = false
   localStorage.setItem(canvasTourStorageKey, 'done')
 }
 
 const startCanvasTour = () => {
   showCanvasTour.value = true
+}
+
+const handleCanvasTourStep = (step) => {
+  showNodeMenu.value = step?.target === '[data-tour="node-menu"]'
+  showWorkflowPanel.value = step?.target === '[data-tour="workflow-panel-open"]'
+  showRuntimeLogs.value = step?.target === '[data-tour="runtime-log-panel"]'
 }
 
 // Check if mobile | 检测是否移动端
@@ -1033,11 +1071,13 @@ onMounted(() => {
     })
   }
 
-  if (sessionStorage.getItem('yufeng-canvas-start-canvas-tour') && !localStorage.getItem(canvasTourStorageKey)) {
+  const shouldStartCanvasTour = sessionStorage.getItem('yufeng-canvas-start-canvas-tour')
+    || !localStorage.getItem(canvasTourStorageKey)
+  if (shouldStartCanvasTour) {
     sessionStorage.removeItem('yufeng-canvas-start-canvas-tour')
     window.setTimeout(() => {
       showCanvasTour.value = true
-    }, 900)
+    }, 1100)
   }
 })
 

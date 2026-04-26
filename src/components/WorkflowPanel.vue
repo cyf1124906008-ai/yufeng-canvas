@@ -1,7 +1,7 @@
 <template>
   <!-- Workflow panel | 工作流浮动面板 -->
   <Transition name="panel-slide">
-    <div v-if="visible" class="workflow-panel" v-click-outside="handleClickOutside">
+    <div v-if="visible" class="workflow-panel" data-tour="workflow-panel-open" v-click-outside="handleClickOutside">
       <div class="panel-atmosphere" aria-hidden="true"></div>
       <!-- Header | 头部 -->
       <div class="panel-header">

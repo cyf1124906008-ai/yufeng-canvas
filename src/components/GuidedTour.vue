@@ -50,7 +50,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['update:show', 'finish', 'skip'])
+const emit = defineEmits(['update:show', 'finish', 'skip', 'step-change'])
 
 const currentIndex = ref(0)
 const targetRect = ref(null)
@@ -61,7 +61,29 @@ const currentStepNumber = computed(() => `${currentIndex.value + 1}/${Math.max(p
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value))
 
-const updateTarget = async () => {
+const measureTarget = () => {
+  const selector = currentStep.value?.target
+  if (!selector) {
+    targetRect.value = null
+    return
+  }
+
+  const element = document.querySelector(selector)
+  if (!element) {
+    targetRect.value = null
+    return
+  }
+
+  const rect = element.getBoundingClientRect()
+  targetRect.value = {
+    top: rect.top,
+    left: rect.left,
+    width: rect.width,
+    height: rect.height
+  }
+}
+
+const updateTarget = async ({ scroll = false } = {}) => {
   if (!props.show) return
   await nextTick()
 
@@ -77,16 +99,13 @@ const updateTarget = async () => {
     return
   }
 
-  element.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' })
-  window.setTimeout(() => {
-    const rect = element.getBoundingClientRect()
-    targetRect.value = {
-      top: rect.top,
-      left: rect.left,
-      width: rect.width,
-      height: rect.height
-    }
-  }, 220)
+  if (scroll) {
+    element.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' })
+    window.setTimeout(measureTarget, 260)
+    return
+  }
+
+  measureTarget()
 }
 
 const spotlightStyle = computed(() => {
@@ -172,26 +191,30 @@ const handleKeydown = (event) => {
 watch(
   () => props.show,
   (visible) => {
-    if (visible) {
-      currentIndex.value = 0
-      updateTarget()
+  if (visible) {
+    currentIndex.value = 0
+      emit('step-change', currentStep.value, currentIndex.value)
+      updateTarget({ scroll: true })
       window.addEventListener('keydown', handleKeydown)
-      window.addEventListener('resize', updateTarget)
-      window.addEventListener('scroll', updateTarget, true)
+      window.addEventListener('resize', measureTarget)
+      window.addEventListener('scroll', measureTarget, true)
     } else {
       window.removeEventListener('keydown', handleKeydown)
-      window.removeEventListener('resize', updateTarget)
-      window.removeEventListener('scroll', updateTarget, true)
+      window.removeEventListener('resize', measureTarget)
+      window.removeEventListener('scroll', measureTarget, true)
     }
   }
 )
 
-watch(currentIndex, updateTarget)
+watch(currentIndex, () => {
+  emit('step-change', currentStep.value, currentIndex.value)
+  updateTarget({ scroll: true })
+})
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleKeydown)
-  window.removeEventListener('resize', updateTarget)
-  window.removeEventListener('scroll', updateTarget, true)
+  window.removeEventListener('resize', measureTarget)
+  window.removeEventListener('scroll', measureTarget, true)
 })
 </script>
 
@@ -208,21 +231,47 @@ onBeforeUnmount(() => {
   inset: 0;
   background:
     radial-gradient(circle at var(--tour-x, 50%) var(--tour-y, 45%), rgba(30, 255, 214, 0.12), transparent 28%),
-    rgba(2, 8, 16, 0.58);
-  backdrop-filter: blur(3px);
+    rgba(2, 8, 16, 0.48);
 }
 
 .tour-spotlight {
   position: fixed;
   border-radius: 24px;
-  border: 1px solid rgba(111, 255, 221, 0.85);
+  border: 2px solid rgba(111, 255, 221, 0.95);
   box-shadow:
-    0 0 0 9999px rgba(2, 8, 16, 0.26),
-    0 0 34px rgba(45, 255, 211, 0.5),
-    inset 0 0 28px rgba(255, 255, 255, 0.15);
-  background: rgba(255, 255, 255, 0.04);
+    0 0 0 9999px rgba(2, 8, 16, 0.24),
+    0 0 38px rgba(45, 255, 211, 0.6),
+    inset 0 0 34px rgba(255, 255, 255, 0.18);
+  background: rgba(98, 255, 219, 0.08);
   pointer-events: none;
   transition: all 0.28s ease;
+  overflow: hidden;
+}
+
+.tour-spotlight::before {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: inherit;
+  padding: 3px;
+  background: conic-gradient(from 0deg, transparent 0 16%, #6dffd9 26%, #2cbcff 34%, transparent 46% 100%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: tour-ring-spin 4.8s linear infinite;
+}
+
+.tour-spotlight::after {
+  content: "";
+  position: absolute;
+  top: 8px;
+  left: 14px;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #74ffe1;
+  box-shadow: 0 0 18px #74ffe1;
+  animation: tour-orbit 3.6s ease-in-out infinite;
 }
 
 .tour-card {
@@ -239,7 +288,7 @@ onBeforeUnmount(() => {
   box-shadow:
     0 24px 70px rgba(0, 0, 0, 0.42),
     inset 0 1px 0 rgba(255, 255, 255, 0.2);
-  backdrop-filter: blur(28px) saturate(1.65);
+  backdrop-filter: blur(12px) saturate(1.25);
   transition: all 0.28s ease;
 }
 
@@ -361,11 +410,12 @@ onBeforeUnmount(() => {
 }
 
 .tour-secondary {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.16);
+  color: #ecfeff;
 }
 
 .tour-secondary:disabled {
-  opacity: 0.38;
+  opacity: 0.55;
   cursor: not-allowed;
 }
 
@@ -394,17 +444,17 @@ onBeforeUnmount(() => {
   .tour-dim {
     background:
       radial-gradient(circle at 50% 45%, rgba(20, 184, 166, 0.16), transparent 32%),
-      rgba(232, 250, 255, 0.62);
+      rgba(226, 246, 247, 0.5);
   }
 
   .tour-card {
     color: #09222d;
     background:
-      linear-gradient(145deg, rgba(255, 255, 255, 0.82), rgba(210, 255, 244, 0.64)),
-      rgba(255, 255, 255, 0.68);
-    border-color: rgba(15, 118, 110, 0.18);
+      linear-gradient(145deg, rgba(255, 255, 255, 0.96), rgba(222, 255, 247, 0.88)),
+      rgba(255, 255, 255, 0.9);
+    border-color: rgba(15, 118, 110, 0.28);
     box-shadow:
-      0 28px 70px rgba(19, 95, 115, 0.18),
+      0 28px 70px rgba(19, 95, 115, 0.22),
       inset 0 1px 0 rgba(255, 255, 255, 0.72);
   }
 
@@ -416,7 +466,29 @@ onBeforeUnmount(() => {
   .tour-card-head button,
   .tour-secondary,
   .tour-hint {
-    background: rgba(255, 255, 255, 0.55);
+    color: #09222d;
+    background: rgba(255, 255, 255, 0.72);
+  }
+}
+
+@keyframes tour-ring-spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+@keyframes tour-orbit {
+  0%, 100% {
+    transform: translate(0, 0);
+  }
+  25% {
+    transform: translate(calc(100% + 22px), 0);
+  }
+  50% {
+    transform: translate(calc(100% + 22px), calc(100% + 22px));
+  }
+  75% {
+    transform: translate(0, calc(100% + 22px));
   }
 }
 </style>

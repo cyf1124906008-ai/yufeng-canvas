@@ -12,34 +12,46 @@
         <div class="support-mark">Y</div>
         <div>
           <p class="support-kicker">YUFENG SUPPORT</p>
-          <h2>遇到问题，直接从这里找人和看入口。</h2>
-          <p>安装、模型配置、扣费异常、工作流建议，都可以通过下面入口反馈。二维码图片后续可以替换为正式素材。</p>
+          <h2>联系作者与使用支持</h2>
+          <p>安装、模型配置、扣费异常、工作流建议、售后指导，都可以从这里联系。建议反馈时带上运行日志截图、模型名和请求时间。</p>
         </div>
       </div>
 
       <div class="support-grid">
         <article class="support-card">
           <div class="qr-card qr-author">
-            <span>YF</span>
+            <img :src="wechatQr" alt="作者微信二维码" />
           </div>
           <div>
             <n-icon :size="20"><ChatbubbleOutline /></n-icon>
             <h3>联系作者</h3>
-            <p>用于 bug 反馈、安装失败、模型接口异常和功能建议。</p>
+            <p>微信扫码联系作者。用于 bug 反馈、安装失败、模型接口异常、扣费但无结果、功能建议。</p>
           </div>
-          <button @click="openExternal(githubIssuesUrl)">提交 GitHub Issue</button>
+          <button @click="copyAuthorContact">复制作者联系方式</button>
         </article>
 
         <article class="support-card">
-          <div class="qr-card qr-group">
-            <span>群</span>
+          <div class="support-api-icon support-mail-icon">
+            <n-icon :size="28"><MailOutline /></n-icon>
           </div>
           <div>
-            <n-icon :size="20"><SparklesOutline /></n-icon>
-            <h3>官方群聊</h3>
-            <p>售后、使用指导、工作流交流。正式二维码上传后会在这里显示。</p>
+            <n-icon :size="20"><MailOutline /></n-icon>
+            <h3>邮箱反馈</h3>
+            <p>适合发送完整问题描述、截图、视频录屏、供应商后台错误信息和复现步骤。</p>
           </div>
-          <button @click="copySupportText">复制支持信息</button>
+          <button @click="copyEmail">复制邮箱</button>
+        </article>
+
+        <article class="support-card">
+          <div class="support-api-icon support-github-icon">
+            <n-icon :size="28"><LogoGithub /></n-icon>
+          </div>
+          <div>
+            <n-icon :size="20"><LogoGithub /></n-icon>
+            <h3>GitHub Issue</h3>
+            <p>开源问题、更新建议、可复现 bug 可以提交到仓库，方便跟踪和后续版本修复。</p>
+          </div>
+          <button @click="openExternal(githubIssuesUrl)">提交 GitHub Issue</button>
         </article>
 
         <article class="support-card support-card-wide">
@@ -48,7 +60,7 @@
           </div>
           <div>
             <h3>API Key 与模型配置</h3>
-            <p>用户需要填写自己的 Key、Base URL 和模型名。推荐先申请 DataEyes 账号，再把后台显示的模型名原样填入。</p>
+            <p>用户需要填写自己的 Key、Base URL 和模型名。模型名要和供应商后台完全一致；文本、图片、视频可以共用一个 Key，也可以分别配置。</p>
           </div>
           <button @click="openExternal(apiKeyHelpUrl)">申请 / 查看 API Key</button>
         </article>
@@ -74,8 +86,9 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { NIcon, NModal } from 'naive-ui'
-import { ChatbubbleOutline, SettingsOutline, SparklesOutline } from '@vicons/ionicons5'
+import { ChatbubbleOutline, LogoGithub, MailOutline, SettingsOutline, SparklesOutline } from '@vicons/ionicons5'
 import { getApiKeyHelpUrl, getGithubUrl } from '../config/distribution'
+import wechatQr from '../assets/wechat-qr.jpg'
 
 defineProps({
   show: {
@@ -88,6 +101,7 @@ const emit = defineEmits(['update:show'])
 
 const apiKeyHelpUrl = getApiKeyHelpUrl()
 const githubIssuesUrl = computed(() => `${getGithubUrl().replace(/\/$/, '')}/issues`)
+const authorEmail = '16689675868@163.com'
 const localApiStatus = ref({
   running: false,
   origin: 'http://127.0.0.1:43112',
@@ -103,12 +117,31 @@ const openExternal = (url) => {
 }
 
 const copySupportText = async () => {
-  const text = `YUFENG Canvas 支持入口\nGitHub: ${getGithubUrl()}\nIssues: ${githubIssuesUrl.value}\nAPI Key: ${apiKeyHelpUrl}`
+  const text = `YUFENG Canvas 支持入口\n微信：请在软件“联系支持”里扫码\n邮箱：${authorEmail}\nGitHub: ${getGithubUrl()}\nIssues: ${githubIssuesUrl.value}\nAPI Key: ${apiKeyHelpUrl}`
   try {
     await navigator.clipboard?.writeText(text)
     window.$message?.success('已复制支持信息')
   } catch {
     window.$message?.info(text)
+  }
+}
+
+const copyAuthorContact = async () => {
+  const text = `微信：请在 YUFENG Canvas 的“联系支持”里扫码\n邮箱：${authorEmail}`
+  try {
+    await navigator.clipboard?.writeText(text)
+    window.$message?.success('已复制作者联系方式')
+  } catch {
+    window.$message?.info(text)
+  }
+}
+
+const copyEmail = async () => {
+  try {
+    await navigator.clipboard?.writeText(authorEmail)
+    window.$message?.success('已复制邮箱')
+  } catch {
+    window.$message?.info(authorEmail)
   }
 }
 
@@ -225,6 +258,11 @@ onMounted(async () => {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72), 0 18px 44px rgba(15, 23, 42, 0.08);
 }
 
+.support-card:nth-child(3) {
+  grid-column: 1 / -1;
+  grid-template-columns: 68px 1fr auto;
+}
+
 .dark .support-card {
   background: rgba(2, 12, 23, 0.34);
   border-color: rgba(203, 255, 239, 0.12);
@@ -251,6 +289,16 @@ onMounted(async () => {
   color: #dffef7;
   font-size: 24px;
   font-weight: 950;
+  overflow: hidden;
+  background: #fff;
+  padding: 8px;
+}
+
+.qr-card img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 16px;
 }
 
 .qr-group {
@@ -263,6 +311,16 @@ onMounted(async () => {
   width: 58px;
   height: 58px;
   color: #55f5b6;
+}
+
+.support-mail-icon {
+  color: #052e2b;
+  background: linear-gradient(135deg, #d9fff5, #55f5b6);
+}
+
+.support-github-icon {
+  color: #ecfeff;
+  background: linear-gradient(135deg, #020617, #064e3b);
 }
 
 .support-card h3 {

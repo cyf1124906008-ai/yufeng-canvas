@@ -807,44 +807,46 @@ const onboardingProgress = computed(() => Math.round((onboardingReadyCount.value
 const homeTourSteps = [
   {
     target: '[data-tour="api-settings"]',
-    title: '先把模型接通',
-    body: '这里进入 API 设置。用户可以填写自己的 Base URL、API Key，并分别添加文本、图片、视频模型名称。模型名称必须和供应商后台一致。',
-    hint: '如果别人电脑连不上，第一步就看这里：Key、Base URL、模型分类、模型名称。'
+    title: '第一步：配置 API 和模型',
+    body: '点击这里打开 API 设置。先填写 Base URL 和 API Key，再分别在“文本模型 / 图片模型 / 视频模型”里添加供应商后台显示的模型名，最后保存。',
+    hint: '模型名要一字不差。比如后台叫 gpt-image-2-sp，软件里也必须填 gpt-image-2-sp。'
   },
   {
     target: '[data-tour="home-chat"]',
-    title: '首页可以直接对话',
-    body: '这里不是装饰卡片，可以直接调用文本模型聊天、拆创意、写提示词。需要生成图片或视频时，再把想法带到画布里变成节点。',
+    title: '首页：先和文本模型聊清楚',
+    body: '这里会直接调用你配置的文本模型。可以让它帮你拆创意、写提示词、整理分镜、判断一个需求应该走文生图还是图生视频。',
+    hint: '这里不会直接扣图片/视频费用，只有发送给文本模型时才会产生文本模型请求。',
     side: 'left'
   },
   {
     target: '[data-tour="chat-composer"]',
-    title: '输入、上传、发送都在这里',
-    body: '输入框支持文本对话，也可以上传图片或文本文件让模型参考。右侧按钮会发送给当前配置的文本模型。',
-    hint: '如果没有配置文本模型，点击发送会引导回 API 设置。'
+    title: '输入框、附件和发送',
+    body: '在这里输入问题，也可以上传图片、txt、md、json、csv 等参考资料。右侧发送按钮会把内容交给当前文本模型。',
+    hint: '如果文本模型没有配置，点击发送会提示你回到 API 设置。'
   },
   {
     target: '[data-tour="start-create"]',
-    title: '一键进入创作画布',
-    body: '点这里会把输入的创意创建成一个本地项目，并进入无限画布。画布里可以继续添加文生图、图生图、视频生成和结果节点。',
+    title: '开始创作：进入节点画布',
+    body: '点这里会创建一个本地项目，并把你的创意带到无限画布。画布里可以继续添加文生图、图生图、文生视频、图生视频和结果节点。',
+    hint: '如果你只是想先试一张图，可以先在左侧输入一句需求，再点开始创作。',
     side: 'right'
   },
   {
     target: '[data-tour="quick-actions"]',
-    title: '这些是快捷工作流入口',
-    body: '文生图、图生图、视频生成、节点工作流会直接创建对应方向的项目，不需要用户从零搭节点。',
+    title: '快捷入口：不用从零搭',
+    body: '文生图、图生图、视频生成、节点工作流会直接创建对应方向的项目。适合第一次使用时快速验证模型是否能跑通。',
     side: 'top'
   },
   {
     target: '[data-tour="showcase"]',
-    title: '常用场景从案例开始',
-    body: '这些卡片是可点击的案例入口，适合品牌主视觉、分镜故事、图生视频等常见需求。点击后会把提示词带进画布。',
+    title: '常用场景案例',
+    body: '这些卡片是可点击的案例入口，适合品牌主视觉、分镜故事、图生视频等常见需求。点击后会自动创建项目并把提示词带进画布。',
     side: 'top'
   },
   {
     target: '[data-tour="prompt-library"]',
     title: '提示词案例库',
-    body: '这里沉淀了从开源案例整理来的提示词。用户可以直接点选，再在画布中改成自己的产品、角色、场景。',
+    body: '这里沉淀了从开源案例整理来的提示词。用户可以直接点选，再把里面的产品、人物、镜头、比例、风格改成自己的需求。',
     side: 'top'
   },
   {
@@ -1127,9 +1129,11 @@ const dismissOnboarding = () => {
 const startHomeTour = () => {
   showOnboarding.value = false
   localStorage.setItem(onboardingStorageKey, 'done')
+  activeMode.value = 'chat'
+  document.querySelector('.home-shell')?.scrollTo({ top: 0, behavior: 'smooth' })
   window.setTimeout(() => {
     showHomeTour.value = true
-  }, 180)
+  }, 360)
 }
 
 const completeHomeTour = () => {
