@@ -141,14 +141,45 @@
                 </div>
               </div>
 
+              <div v-if="chatAttachments.length" class="chat-attachments">
+                <span
+                  v-for="attachment in chatAttachments"
+                  :key="attachment.id"
+                  class="attachment-chip"
+                >
+                  <n-icon :size="14">
+                    <ImageOutline v-if="attachment.kind === 'image'" />
+                    <DocumentOutline v-else />
+                  </n-icon>
+                  {{ attachment.name }}
+                  <button @click="removeChatAttachment(attachment.id)">×</button>
+                </span>
+              </div>
+
               <div class="chat-composer">
+                <input
+                  ref="chatFileInputRef"
+                  type="file"
+                  multiple
+                  accept="image/*,.txt,.md,.json,.csv"
+                  class="hidden-file-input"
+                  @change="handleChatFiles"
+                />
+                <button
+                  class="attach-button"
+                  :disabled="chatLoading"
+                  title="上传图片或文本资料"
+                  @click="chatFileInputRef?.click()"
+                >
+                  <n-icon :size="19"><ImageOutline /></n-icon>
+                </button>
                 <textarea
                   v-model="chatText"
                   placeholder="直接和模型对话，例如：帮我把这个产品想法拆成 3 个视觉方向..."
                   :disabled="chatLoading"
                   @keydown.enter.exact.prevent="sendHomeChat"
                 />
-                <button class="send-button" :disabled="chatLoading || !chatText.trim()" @click="sendHomeChat">
+                <button class="send-button" :disabled="chatLoading || (!chatText.trim() && !chatAttachments.length)" @click="sendHomeChat">
                   <n-spin v-if="chatLoading" :size="16" />
                   <n-icon v-else :size="20"><SendOutline /></n-icon>
                 </button>
@@ -392,6 +423,8 @@ const activeMode = ref('chat')
 const inputText = ref('')
 const chatText = ref('')
 const chatMessages = ref([])
+const chatAttachments = ref([])
+const chatFileInputRef = ref(null)
 const showRenameModal = ref(false)
 const renameValue = ref('')
 const renameTargetId = ref(null)
@@ -760,9 +793,73 @@ const createNewProject = () => {
   router.push(`/canvas/${id}`)
 }
 
+const readFileAsDataUrl = (file) => new Promise((resolve, reject) => {
+  const reader = new FileReader()
+  reader.onload = () => resolve(reader.result)
+  reader.onerror = () => reject(reader.error)
+  reader.readAsDataURL(file)
+})
+
+const handleChatFiles = async (event) => {
+  const files = Array.from(event.target.files || [])
+  event.target.value = ''
+  if (!files.length) return
+
+  const nextAttachments = []
+
+  for (const file of files.slice(0, 6)) {
+    if (file.size > 8 * 1024 * 1024) {
+      window.$message?.warning(`${file.name} 超过 8MB，已跳过`)
+      continue
+    }
+
+    try {
+      if (file.type.startsWith('image/')) {
+        nextAttachments.push({
+          id: `att_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+          kind: 'image',
+          name: file.name,
+          url: await readFileAsDataUrl(file)
+        })
+      } else {
+        nextAttachments.push({
+          id: `att_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+          kind: 'text',
+          name: file.name,
+          text: await file.text()
+        })
+      }
+    } catch (err) {
+      window.$message?.error(`${file.name} 读取失败：${err.message || '未知错误'}`)
+    }
+  }
+
+  chatAttachments.value = [...chatAttachments.value, ...nextAttachments].slice(0, 8)
+}
+
+const removeChatAttachment = (id) => {
+  chatAttachments.value = chatAttachments.value.filter((item) => item.id !== id)
+}
+
+const buildChatPayload = (content) => {
+  const textAttachments = chatAttachments.value.filter((item) => item.kind === 'text')
+  const imageAttachments = chatAttachments.value.filter((item) => item.kind === 'image')
+
+  const attachmentText = textAttachments.map((item, index) => {
+    const clipped = String(item.text || '').slice(0, 12000)
+    return `\n\n[附件 ${index + 1}: ${item.name}]\n${clipped}`
+  }).join('')
+
+  return {
+    content: content || '请分析我上传的素材，并给出创作建议。',
+    modelContent: `${content || '请分析我上传的素材，并给出创作建议。'}${attachmentText}`,
+    imageAttachments
+  }
+}
+
 const sendHomeChat = async () => {
   const content = chatText.value.trim()
-  if (!content || chatLoading.value) return
+  if ((!content && !chatAttachments.value.length) || chatLoading.value) return
 
   if (!isChatConfigured.value) {
     showApiSettings.value = true
@@ -770,17 +867,24 @@ const sendHomeChat = async () => {
     return
   }
 
+  const payload = buildChatPayload(content)
+  const attachmentNames = chatAttachments.value.map((item) => item.name)
+
   const userMessage = {
     id: `user_${Date.now()}`,
     role: 'user',
-    content
+    content: attachmentNames.length
+      ? `${payload.content}\n\n附件：${attachmentNames.join('、')}`
+      : payload.content
   }
   chatMessages.value.push(userMessage)
   chatText.value = ''
+  chatAttachments.value = []
 
   try {
-    const reply = await sendChat(content, true, {
-      model: modelStore.selectedChatModel
+    const reply = await sendChat(payload.modelContent, true, {
+      model: modelStore.selectedChatModel,
+      images: payload.imageAttachments
     })
     if (reply) {
       chatMessages.value.push({
@@ -1561,7 +1665,7 @@ onUnmounted(() => {
 
 .chat-composer {
   display: grid;
-  grid-template-columns: 1fr 44px;
+  grid-template-columns: 42px 1fr 44px;
   align-items: end;
   gap: 10px;
   border: 1px solid rgba(148, 163, 184, 0.26);
@@ -1569,6 +1673,81 @@ onUnmounted(() => {
   padding: 12px;
   background: rgba(255, 255, 255, 0.68);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72), 0 12px 30px rgba(15, 23, 42, 0.08);
+}
+
+.hidden-file-input {
+  display: none;
+}
+
+.attach-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 16px;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.54);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.66);
+  transition: transform 0.18s ease, color 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+}
+
+.attach-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  color: var(--accent-color);
+  border-color: rgba(34, 197, 94, 0.42);
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.attach-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.dark .attach-button {
+  background: rgba(15, 23, 42, 0.48);
+  border-color: rgba(148, 163, 184, 0.18);
+}
+
+.chat-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.attachment-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 240px;
+  border: 1px solid rgba(34, 197, 94, 0.24);
+  border-radius: 999px;
+  padding: 7px 9px;
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.62);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.attachment-chip button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: 0;
+  border-radius: 999px;
+  color: var(--text-secondary);
+  background: rgba(15, 23, 42, 0.08);
+  cursor: pointer;
+}
+
+.dark .attachment-chip {
+  background: rgba(15, 23, 42, 0.52);
+  border-color: rgba(74, 222, 128, 0.24);
 }
 
 .dark .chat-composer {

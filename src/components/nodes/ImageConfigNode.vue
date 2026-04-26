@@ -76,6 +76,17 @@
           </div>
         </div>
 
+        <!-- Count selector | 生成数量选择 -->
+        <div class="flex items-center justify-between">
+          <span class="text-xs text-[var(--text-secondary)]">数量</span>
+          <n-dropdown :options="countOptions" @select="handleCountSelect">
+            <button class="flex items-center gap-1 text-sm text-[var(--text-primary)] hover:text-[var(--accent-color)]">
+              {{ localCount }} 张
+              <n-icon :size="12"><ChevronForwardOutline /></n-icon>
+            </button>
+          </n-dropdown>
+        </div>
+
         <!-- Model tips | 模型提示 -->
         <div v-if="currentModelConfig?.tips" class="text-xs text-[var(--text-tertiary)] bg-[var(--bg-tertiary)] rounded px-2 py-1">
           💡 {{ currentModelConfig.tips }}
@@ -192,6 +203,7 @@ const showHandleMenu = ref(false)
 const localModel = ref(props.data?.model || modelStore.selectedImageModel || '')
 const localSize = ref(props.data?.size || '2048x2048')
 const localQuality = ref(props.data?.quality || 'standard')
+const localCount = ref(Number(props.data?.n || 1))
 
 // Label editing state | Label 编辑状态
 const isEditingLabel = ref(false)
@@ -261,6 +273,11 @@ const qualityOptions = computed(() => {
 const hasQualityOptions = computed(() => {
   return qualityOptions.value && qualityOptions.value.length > 0
 })
+
+const countOptions = computed(() => [1, 2, 3, 4].map((count) => ({
+  label: `${count} 张`,
+  key: count
+})))
 
 // Display quality | 显示画质
 const displayQuality = computed(() => {
@@ -544,6 +561,11 @@ const handleSizeSelect = (size) => {
   updateNode(props.id, { size })
 }
 
+const handleCountSelect = (count) => {
+  localCount.value = Number(count) || 1
+  updateNode(props.id, { n: localCount.value })
+}
+
 // Update size from manual input | 更新手动输入的尺寸
 const updateSize = () => {
   updateNode(props.id, { size: localSize.value })
@@ -691,7 +713,7 @@ const handleGenerate = async (mode = 'auto') => {
       model: localModel.value,
       prompt: prompt,
       size: localSize.value,
-      n: 1
+      n: localCount.value
     }
 
     // Add reference image if provided | 如果有参考图则添加

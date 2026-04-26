@@ -19,6 +19,9 @@ import { useModelStore } from '@/stores/pinia'
 import { getCapabilityLabel, getModelCapabilityConflict } from '@/utils/modelCapability'
 import { addRuntimeLog } from '@/stores/canvas'
 
+const nowMs = () => (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now())
+const elapsedMs = (startedAt) => Math.max(0, Math.round(nowMs() - startedAt))
+
 const isGeminiImageModel = (model = '') =>
   /gemini/i.test(model) && /image/i.test(model)
 
@@ -241,6 +244,7 @@ export const useChat = (options = {}) => {
   const send = async (content, stream = true, chatOptions = {}) => {
     setLoading(true)
     currentResponse.value = ''
+    const startedAt = nowMs()
 
     try {
       const chatModel = chatOptions.model || options.model || modelStore.selectedChatModel
@@ -312,13 +316,17 @@ export const useChat = (options = {}) => {
 
         messages.value.push({ role: 'user', content })
         messages.value.push({ role: 'assistant', content: fullResponse })
-        addRuntimeLog('success', `AI 文本完成：${chatModel}`)
+        addRuntimeLog('success', `AI 文本完成：${chatModel}`, {
+          durationMs: elapsedMs(startedAt)
+        })
         setSuccess()
         return fullResponse
       }
     } catch (err) {
       if (err.name !== 'AbortError') {
-        addRuntimeLog('error', `AI 文本失败：${err.message || '未知错误'}`)
+        addRuntimeLog('error', `AI 文本失败：${err.message || '未知错误'}`, {
+          durationMs: elapsedMs(startedAt)
+        })
         setError(err)
         throw err
       }
@@ -363,6 +371,7 @@ export const useImageGeneration = () => {
     setLoading(true)
     images.value = []
     currentImage.value = null
+    const startedAt = nowMs()
 
     try {
       if (!params.model) {
@@ -382,6 +391,8 @@ export const useImageGeneration = () => {
       const modelConfig = getModelByName(params.model)
       addRuntimeLog('info', `图片生成开始：${params.model}`, {
         size: params.size,
+        count: params.n || 1,
+        quality: params.quality,
         hasReference: !!params.image
       })
 
@@ -389,8 +400,15 @@ export const useImageGeneration = () => {
       const requestData = {
         model: params.model,
         prompt: params.prompt,
-        size: params.size || modelConfig?.defaultParams?.size || '2048x2048',
-        // n: params.n || 1
+        size: params.size || modelConfig?.defaultParams?.size || '2048x2048'
+      }
+
+      if (params.n && Number(params.n) > 1) {
+        requestData.n = Number(params.n)
+      }
+
+      if (params.quality) {
+        requestData.quality = params.quality
       }
 
       // Add reference image if provided | 添加参考图
@@ -468,13 +486,15 @@ export const useImageGeneration = () => {
       images.value = adaptedData
       currentImage.value = adaptedData[0] || null
       addRuntimeLog('success', `图片生成完成：${params.model}`, {
-        count: adaptedData.length
+        count: adaptedData.length,
+        durationMs: elapsedMs(startedAt)
       })
       setSuccess()
       return adaptedData
     } catch (err) {
       addRuntimeLog('error', `图片生成失败：${err.message || '未知错误'}`, {
-        model: params.model
+        model: params.model,
+        durationMs: elapsedMs(startedAt)
       })
       setError(err)
       throw err
@@ -506,6 +526,8 @@ export const useVideoGeneration = () => {
    * Create video task only (no polling) | 仅创建视频任务（不轮询）
    */
   const createVideoTaskOnly = async (params) => {
+    const startedAt = nowMs()
+
     if (!params.model) {
       throw new Error('请先在模型配置里添加视频模型')
     }
@@ -560,7 +582,9 @@ export const useVideoGeneration = () => {
 
     // If has video URL directly, return | 如果直接有视频 URL，返回
     if (directVideoUrl) {
-      addRuntimeLog('success', `视频直接返回完成：${params.model}`)
+      addRuntimeLog('success', `视频直接返回完成：${params.model}`, {
+        durationMs: elapsedMs(startedAt)
+      })
       return {
         taskId: null,
         url: directVideoUrl
@@ -587,7 +611,8 @@ export const useVideoGeneration = () => {
     }
 
     addRuntimeLog('success', `视频任务已创建：${newTaskId}`, {
-      model: params.model
+      model: params.model,
+      durationMs: elapsedMs(startedAt)
     })
     return { taskId: newTaskId }
   }

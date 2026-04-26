@@ -20,9 +20,20 @@
           </div>
           <p class="panel-subtitle">选择一个配置好的模板，直接放到画布继续创作。</p>
         </div>
-        <button class="expand-btn" @click="visible = false">
-          <n-icon :size="16"><CloseOutline /></n-icon>
-        </button>
+        <div class="panel-actions">
+          <input
+            ref="importInputRef"
+            type="file"
+            accept="application/json,.json"
+            class="hidden-input"
+            @change="handleImportFile"
+          />
+          <button class="panel-action-btn" @click.stop="triggerImport">导入工作流</button>
+          <button class="panel-action-btn" @click.stop="exportCurrentWorkflow">导出当前画布</button>
+          <button class="expand-btn" @click="visible = false">
+            <n-icon :size="16"><CloseOutline /></n-icon>
+          </button>
+        </div>
       </div>
       
       <!-- Content | 内容 -->
@@ -106,6 +117,7 @@ import {
   ChatbubbleOutline
 } from '@vicons/ionicons5'
 import { WORKFLOW_TEMPLATES } from '../config/workflows'
+import { nodes, edges } from '../stores/canvas'
 
 const props = defineProps({
   show: Boolean
@@ -116,6 +128,7 @@ const emit = defineEmits(['update:show', 'add-workflow'])
 // Active tab | 当前标签
 const activeTab = ref('public')
 const selectedCategory = ref('all')
+const importInputRef = ref(null)
 
 // Visible state | 显示状态
 const visible = computed({
@@ -182,6 +195,125 @@ const handleAddWorkflow = (workflow) => {
   // 直接添加工作流，节点内容由用户自己填写
   emit('add-workflow', { workflow, options: {} })
   visible.value = false
+}
+
+const createDownload = (filename, content) => {
+  const blob = new Blob([content], { type: 'application/json;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
+}
+
+const exportCurrentWorkflow = () => {
+  if (!nodes.value.length) {
+    window.$message?.warning('当前画布还没有节点，先创建一个工作流再导出')
+    return
+  }
+
+  const payload = {
+    schema: 'yufeng-canvas-workflow@1',
+    name: `YUFENG Workflow ${new Date().toLocaleString()}`,
+    exportedAt: new Date().toISOString(),
+    nodes: nodes.value,
+    edges: edges.value
+  }
+
+  createDownload(`yufeng-workflow-${Date.now()}.json`, JSON.stringify(payload, null, 2))
+  window.$message?.success('已导出当前画布工作流')
+}
+
+const triggerImport = () => {
+  importInputRef.value?.click()
+}
+
+const normalizeImportedWorkflow = (payload) => {
+  const source = payload?.workflow || payload?.canvas || payload
+  const importedNodes = Array.isArray(source?.nodes) ? source.nodes : []
+  const importedEdges = Array.isArray(source?.edges) ? source.edges : []
+
+  if (!importedNodes.length) {
+    throw new Error('工作流文件里没有可导入的节点')
+  }
+
+  return {
+    name: source.name || payload?.name || '导入工作流',
+    description: source.description || payload?.description || '从本地 JSON 文件导入的工作流',
+    nodes: importedNodes,
+    edges: importedEdges
+  }
+}
+
+const createImportedTemplate = (payload, fileName) => {
+  const workflow = normalizeImportedWorkflow(payload)
+
+  return {
+    id: `imported_${Date.now()}`,
+    name: workflow.name || fileName.replace(/\.json$/i, ''),
+    description: workflow.description,
+    category: 'custom',
+    createNodes(startPosition = { x: 180, y: 160 }) {
+      const minX = Math.min(...workflow.nodes.map((node) => node.position?.x || 0))
+      const minY = Math.min(...workflow.nodes.map((node) => node.position?.y || 0))
+      const suffix = `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
+      const idMap = new Map()
+
+      const importedNodes = workflow.nodes.map((node, index) => {
+        const newId = `import_${suffix}_${index}`
+        idMap.set(node.id, newId)
+        return {
+          ...node,
+          id: newId,
+          selected: false,
+          position: {
+            x: startPosition.x + ((node.position?.x || 0) - minX),
+            y: startPosition.y + ((node.position?.y || 0) - minY)
+          },
+          data: {
+            ...(node.data || {}),
+            selected: false,
+            loading: false,
+            autoExecute: false
+          }
+        }
+      })
+
+      const importedEdges = workflow.edges
+        .filter((edge) => idMap.has(edge.source) && idMap.has(edge.target))
+        .map((edge, index) => ({
+          ...edge,
+          id: `import_edge_${suffix}_${index}`,
+          source: idMap.get(edge.source),
+          target: idMap.get(edge.target)
+        }))
+
+      return {
+        nodes: importedNodes,
+        edges: importedEdges
+      }
+    }
+  }
+}
+
+const handleImportFile = async (event) => {
+  const file = event.target.files?.[0]
+  event.target.value = ''
+  if (!file) return
+
+  try {
+    const text = await file.text()
+    const payload = JSON.parse(text)
+    const workflow = createImportedTemplate(payload, file.name)
+    emit('add-workflow', { workflow, options: {} })
+    visible.value = false
+    window.$message?.success('工作流已导入画布')
+  } catch (err) {
+    window.$message?.error(err.message || '工作流导入失败，请确认是 YUFENG Canvas JSON 文件')
+  }
 }
 
 // Handle click outside | 点击外部关闭
@@ -274,10 +406,48 @@ const vClickOutside = {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 18px;
   position: relative;
   z-index: 1;
   padding: 24px 28px 18px;
   border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.panel-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.hidden-input {
+  display: none;
+}
+
+.panel-action-btn {
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 14px;
+  padding: 9px 12px;
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.52);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.64), 0 10px 26px rgba(15, 23, 42, 0.08);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+}
+
+.panel-action-btn:hover {
+  transform: translateY(-1px);
+  border-color: rgba(34, 197, 94, 0.42);
+  background: rgba(255, 255, 255, 0.72);
+}
+
+:global(.dark) .panel-action-btn {
+  color: rgba(236, 253, 245, 0.92);
+  background: rgba(15, 23, 42, 0.46);
+  border-color: rgba(148, 163, 184, 0.18);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 12px 32px rgba(0, 0, 0, 0.24);
 }
 
 .panel-tabs {

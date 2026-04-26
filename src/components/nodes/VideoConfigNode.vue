@@ -74,6 +74,19 @@
           </n-dropdown>
         </div>
 
+        <!-- Resolution selector | 清晰度选择 -->
+        <div v-if="hasResolutionOptions" class="flex items-center justify-between">
+          <span class="text-xs text-[var(--text-secondary)]">清晰度</span>
+          <n-dropdown :options="resolutionOptions" @select="handleResolutionSelect">
+            <button class="flex items-center gap-1 text-sm text-[var(--text-primary)] hover:text-[var(--accent-color)]">
+              {{ displayResolution }}
+              <n-icon :size="12">
+                <ChevronForwardOutline />
+              </n-icon>
+            </button>
+          </n-dropdown>
+        </div>
+
         <!-- Connected inputs indicator | 连接输入指示 -->
         <div
           class="flex items-center gap-2 text-xs text-[var(--text-secondary)] py-1 border-t border-[var(--border-color)]">
