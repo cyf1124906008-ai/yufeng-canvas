@@ -3,7 +3,12 @@
     <Transition name="tour-fade">
       <div v-if="show" class="guided-tour-layer" @keydown.esc="skipTour">
         <div class="tour-dim"></div>
-        <div v-if="targetRect" class="tour-spotlight" :style="spotlightStyle"></div>
+        <div v-if="targetRect" class="tour-spotlight" :style="spotlightStyle">
+          <span class="tour-border-runner is-top"></span>
+          <span class="tour-border-runner is-right"></span>
+          <span class="tour-border-runner is-bottom"></span>
+          <span class="tour-border-runner is-left"></span>
+        </div>
         <section class="tour-card" :class="{ 'is-center': !targetRect }" :style="cardStyle">
           <div class="tour-card-head">
             <span>{{ currentStepNumber }}</span>
@@ -242,36 +247,60 @@ onBeforeUnmount(() => {
     0 0 0 9999px rgba(2, 8, 16, 0.24),
     0 0 38px rgba(45, 255, 211, 0.6),
     inset 0 0 34px rgba(255, 255, 255, 0.18);
-  background: rgba(98, 255, 219, 0.08);
+  background: rgba(98, 255, 219, 0.035);
   pointer-events: none;
   transition: all 0.28s ease;
-  overflow: hidden;
+  overflow: visible;
 }
 
-.tour-spotlight::before {
-  content: "";
+.tour-border-runner {
   position: absolute;
-  inset: -3px;
-  border-radius: inherit;
-  padding: 3px;
-  background: conic-gradient(from 0deg, transparent 0 16%, #6dffd9 26%, #2cbcff 34%, transparent 46% 100%);
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  animation: tour-ring-spin 4.8s linear infinite;
+  pointer-events: none;
+  opacity: 0;
+  filter:
+    drop-shadow(0 0 10px rgba(151, 231, 255, 0.95))
+    drop-shadow(0 0 18px rgba(99, 255, 219, 0.65));
 }
 
-.tour-spotlight::after {
-  content: "";
-  position: absolute;
-  top: 8px;
-  left: 14px;
-  width: 8px;
-  height: 8px;
-  border-radius: 999px;
-  background: #74ffe1;
-  box-shadow: 0 0 18px #74ffe1;
-  animation: tour-orbit 3.6s ease-in-out infinite;
+.tour-border-runner.is-top,
+.tour-border-runner.is-bottom {
+  width: min(42%, 260px);
+  height: 3px;
+  background: linear-gradient(90deg, transparent, #eaf7ff 18%, #7bd3ff 52%, #6dffd9 82%, transparent);
+}
+
+.tour-border-runner.is-right,
+.tour-border-runner.is-left {
+  width: 3px;
+  height: min(42%, 220px);
+  background: linear-gradient(180deg, transparent, #eaf7ff 18%, #7bd3ff 52%, #6dffd9 82%, transparent);
+}
+
+.tour-border-runner.is-top {
+  top: -2px;
+  left: -46%;
+  animation: tour-border-top 4.8s linear infinite;
+}
+
+.tour-border-runner.is-right {
+  top: -46%;
+  right: -2px;
+  animation: tour-border-right 4.8s linear infinite;
+  animation-delay: 1.2s;
+}
+
+.tour-border-runner.is-bottom {
+  right: -46%;
+  bottom: -2px;
+  animation: tour-border-bottom 4.8s linear infinite;
+  animation-delay: 2.4s;
+}
+
+.tour-border-runner.is-left {
+  bottom: -46%;
+  left: -2px;
+  animation: tour-border-left 4.8s linear infinite;
+  animation-delay: 3.6s;
 }
 
 .tour-card {
@@ -471,24 +500,59 @@ onBeforeUnmount(() => {
   }
 }
 
-@keyframes tour-ring-spin {
-  to {
-    transform: rotate(1turn);
+@keyframes tour-border-top {
+  0% {
+    opacity: 0;
+    left: -46%;
+  }
+  8%, 22% {
+    opacity: 1;
+  }
+  30%, 100% {
+    opacity: 0;
+    left: 104%;
   }
 }
 
-@keyframes tour-orbit {
-  0%, 100% {
-    transform: translate(0, 0);
+@keyframes tour-border-right {
+  0% {
+    opacity: 0;
+    top: -46%;
   }
-  25% {
-    transform: translate(calc(100% + 22px), 0);
+  8%, 22% {
+    opacity: 1;
   }
-  50% {
-    transform: translate(calc(100% + 22px), calc(100% + 22px));
+  30%, 100% {
+    opacity: 0;
+    top: 104%;
   }
-  75% {
-    transform: translate(0, calc(100% + 22px));
+}
+
+@keyframes tour-border-bottom {
+  0% {
+    opacity: 0;
+    right: -46%;
+  }
+  8%, 22% {
+    opacity: 1;
+  }
+  30%, 100% {
+    opacity: 0;
+    right: 104%;
+  }
+}
+
+@keyframes tour-border-left {
+  0% {
+    opacity: 0;
+    bottom: -46%;
+  }
+  8%, 22% {
+    opacity: 1;
+  }
+  30%, 100% {
+    opacity: 0;
+    bottom: 104%;
   }
 }
 </style>
