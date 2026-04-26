@@ -477,7 +477,7 @@ const initParticleField = () => {
     canvas.style.height = `${height}px`
     ctx.setTransform(ratio, 0, 0, ratio, 0, 0)
 
-    const density = Math.min(2600, Math.max(1000, Math.floor((width * height) / 720)))
+    const density = Math.min(3800, Math.max(1500, Math.floor((width * height) / 520)))
     particles = Array.from({ length: density }, () => {
       const x = Math.random() * width
       const y = Math.random() * height
@@ -490,8 +490,8 @@ const initParticleField = () => {
         by: y,
         vx: 0,
         vy: 0,
-        size: Math.random() * 0.55 + 0.25,
-        alpha: Math.random() * 0.42 + 0.32,
+        size: Math.random() * 0.72 + 0.34,
+        alpha: Math.random() * 0.5 + 0.42,
         hue: Math.random(),
         phase: Math.random() * Math.PI * 2,
         drift: Math.random() * 18 + 8,
@@ -505,6 +505,8 @@ const initParticleField = () => {
     const height = window.innerHeight
     ctx.clearRect(0, 0, width, height)
     const t = (now - particleStartedAt) / 1000
+    const isDark = document.documentElement.classList.contains('dark')
+      || document.body.classList.contains('dark')
 
     for (const dot of particles) {
       dot.px = dot.x
@@ -543,15 +545,21 @@ const initParticleField = () => {
       const glow = particleMouse.active
         ? Math.max(0, 1 - Math.hypot(dot.x - particleMouse.x, dot.y - particleMouse.y) / 230)
         : 0
-      const alpha = Math.min(0.95, dot.alpha + glow * 0.48)
+      const alpha = Math.min(0.98, dot.alpha + glow * 0.56)
 
       if (Math.abs(dot.x - dot.px) + Math.abs(dot.y - dot.py) > 0.12) {
         ctx.beginPath()
-        ctx.strokeStyle = dot.hue > 0.72
-          ? `rgba(96, 255, 211, ${alpha * 0.16})`
-          : dot.hue > 0.42
-            ? `rgba(126, 205, 255, ${alpha * 0.13})`
-            : `rgba(255, 255, 255, ${alpha * 0.11})`
+        ctx.strokeStyle = isDark
+          ? dot.hue > 0.72
+            ? `rgba(96, 255, 211, ${alpha * 0.2})`
+            : dot.hue > 0.42
+              ? `rgba(126, 205, 255, ${alpha * 0.17})`
+              : `rgba(255, 255, 255, ${alpha * 0.13})`
+          : dot.hue > 0.66
+            ? `rgba(0, 168, 153, ${alpha * 0.3})`
+            : dot.hue > 0.34
+              ? `rgba(0, 132, 255, ${alpha * 0.26})`
+              : `rgba(32, 75, 132, ${alpha * 0.18})`
         ctx.lineWidth = 0.6 + glow * 0.45
         ctx.moveTo(dot.px, dot.py)
         ctx.lineTo(dot.x, dot.y)
@@ -559,11 +567,17 @@ const initParticleField = () => {
       }
 
       ctx.beginPath()
-      ctx.fillStyle = dot.hue > 0.72
-        ? `rgba(96, 255, 211, ${alpha})`
-        : dot.hue > 0.42
-          ? `rgba(126, 205, 255, ${alpha})`
-          : `rgba(255, 255, 255, ${alpha})`
+      ctx.fillStyle = isDark
+        ? dot.hue > 0.72
+          ? `rgba(96, 255, 211, ${alpha})`
+          : dot.hue > 0.42
+            ? `rgba(126, 205, 255, ${alpha})`
+            : `rgba(255, 255, 255, ${alpha})`
+        : dot.hue > 0.66
+          ? `rgba(0, 168, 153, ${alpha * 0.86})`
+          : dot.hue > 0.34
+            ? `rgba(0, 132, 255, ${alpha * 0.78})`
+            : `rgba(32, 75, 132, ${alpha * 0.62})`
       ctx.arc(dot.x, dot.y, dot.size + glow * 0.65, 0, Math.PI * 2)
       ctx.fill()
     }
@@ -909,10 +923,15 @@ onUnmounted(() => {
   inset: 0;
   width: 100%;
   height: 100%;
-  opacity: 0.92;
+  opacity: 1;
   mask-image:
-    radial-gradient(ellipse at 50% 28%, #000 0 36%, transparent 72%),
-    radial-gradient(ellipse at 52% 82%, #000 0 24%, transparent 54%);
+    radial-gradient(ellipse at 50% 32%, #000 0 48%, transparent 84%),
+    radial-gradient(ellipse at 52% 84%, #000 0 36%, transparent 68%);
+  mix-blend-mode: multiply;
+}
+
+.dark .particle-field {
+  mix-blend-mode: screen;
 }
 
 .liquid-orb {
@@ -1203,9 +1222,9 @@ onUnmounted(() => {
   position: absolute;
   inset: -60% auto -60% -40%;
   width: 42%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.5), transparent);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.42), transparent);
   transform: skewX(-18deg);
-  transition: left 0.55s ease;
+  transition: left 1.25s cubic-bezier(.18, .86, .22, 1);
 }
 
 .primary-action:hover::after,
@@ -1358,11 +1377,12 @@ onUnmounted(() => {
   z-index: 2;
   border-radius: 34px;
   background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.82), rgba(255, 255, 255, 0.52)),
-    radial-gradient(circle at 20% 0%, rgba(255, 255, 255, 0.95), transparent 32%);
-  border: 1px solid rgba(255, 255, 255, 0.56);
-  box-shadow: 0 40px 100px rgba(15, 23, 42, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.8);
-  backdrop-filter: blur(30px) saturate(1.4);
+    linear-gradient(135deg, rgba(255, 255, 255, 0.74), rgba(232, 251, 255, 0.46)),
+    radial-gradient(circle at 20% 0%, rgba(255, 255, 255, 0.82), transparent 28%);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow: 0 34px 86px rgba(15, 23, 42, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(20px) saturate(1.28);
+  -webkit-backdrop-filter: blur(20px) saturate(1.28);
 }
 
 .dark .mode-card {
@@ -1536,7 +1556,8 @@ onUnmounted(() => {
   border: 1px solid rgba(148, 163, 184, 0.26);
   border-radius: 22px;
   padding: 12px;
-  background: rgba(255, 255, 255, 0.56);
+  background: rgba(255, 255, 255, 0.68);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72), 0 12px 30px rgba(15, 23, 42, 0.08);
 }
 
 .dark .chat-composer {
@@ -1598,6 +1619,7 @@ onUnmounted(() => {
   padding: 7px 11px;
   background: rgba(255, 255, 255, 0.68);
   font-size: 13px;
+  font-weight: 650;
   transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
 }
 
@@ -1608,7 +1630,7 @@ onUnmounted(() => {
 }
 
 .dark .suggestion-cloud button {
-  background: rgba(15, 23, 42, 0.68);
+  background: rgba(15, 23, 42, 0.48);
 }
 
 .refresh-chip {
