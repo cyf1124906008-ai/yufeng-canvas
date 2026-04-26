@@ -117,6 +117,7 @@
           </div>
 
           <span class="text-sm text-white font-medium relative z-10">创作中</span>
+          <span class="text-xs text-white/85 relative z-10">已用时 {{ elapsedText }}</span>
         </div>
 
         <!-- Error state | 错误状态 -->
@@ -322,7 +323,7 @@
  * Image node component | 图片节点组件
  * Displays and manages image content with loading state
  */
-import { ref, nextTick, computed } from 'vue'
+import { ref, nextTick, computed, onMounted, onUnmounted, watch } from 'vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { NIcon, NTooltip, NSwitch, NImagePreview, NModal, NButton } from 'naive-ui'
 import { TrashOutline, ExpandOutline, ImageOutline, CloseCircleOutline, CopyOutline, VideocamOutline, DownloadOutline, EyeOutline, BrushOutline, RefreshOutline, ColorWandOutline, SwapHorizontalOutline } from '@vicons/ionicons5'
@@ -364,6 +365,61 @@ const imageContainerRef = ref(null)
 const interactionLayerRef = ref(null)
 const brushCursor = ref({ x: 0, y: 0, visible: false })
 const maskData = ref(null)
+const elapsedSeconds = ref(0)
+let elapsedTimer = null
+
+const formatElapsed = (seconds) => {
+  const safeSeconds = Math.max(0, Number(seconds) || 0)
+  const minutes = Math.floor(safeSeconds / 60)
+  const restSeconds = safeSeconds % 60
+  if (minutes <= 0) return `${restSeconds}s`
+  return `${minutes}m ${String(restSeconds).padStart(2, '0')}s`
+}
+
+const updateElapsed = () => {
+  if (!props.data?.loading) {
+    elapsedSeconds.value = 0
+    return
+  }
+
+  const startedAt = props.data?.startedAt || Date.now()
+  elapsedSeconds.value = Math.max(0, Math.floor((Date.now() - startedAt) / 1000))
+}
+
+const elapsedText = computed(() => formatElapsed(elapsedSeconds.value))
+
+const startElapsedTimer = () => {
+  if (elapsedTimer) return
+  updateElapsed()
+  elapsedTimer = window.setInterval(updateElapsed, 1000)
+}
+
+const stopElapsedTimer = () => {
+  if (!elapsedTimer) return
+  window.clearInterval(elapsedTimer)
+  elapsedTimer = null
+}
+
+watch(
+  () => props.data?.loading,
+  (loading) => {
+    if (loading) {
+      startElapsedTimer()
+    } else {
+      stopElapsedTimer()
+      updateElapsed()
+    }
+  },
+  { immediate: true }
+)
+
+onMounted(() => {
+  if (props.data?.loading) startElapsedTimer()
+})
+
+onUnmounted(() => {
+  stopElapsedTimer()
+})
 
 
 // Computed public props status | 计算是否公开

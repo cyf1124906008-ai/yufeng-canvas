@@ -76,6 +76,10 @@
           position="bottom-right"
           :pannable="true"
           :zoomable="true"
+          class="canvas-minimap"
+          node-color="#14b8a6"
+          node-stroke-color="#0f766e"
+          mask-color="rgba(15, 118, 110, 0.14)"
         />
       </VueFlow>
 
@@ -933,16 +937,51 @@ onUnmounted(() => {
   width: 100%;
   height: 100%;
   background:
-    linear-gradient(rgba(15, 23, 42, 0.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(15, 23, 42, 0.035) 1px, transparent 1px);
-  background-size: 28px 28px;
+    radial-gradient(circle at 18% 16%, rgba(45, 212, 191, 0.18), transparent 28%),
+    radial-gradient(circle at 78% 18%, rgba(56, 189, 248, 0.14), transparent 30%),
+    radial-gradient(circle at 72% 82%, rgba(132, 204, 22, 0.1), transparent 26%),
+    linear-gradient(rgba(15, 23, 42, 0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(15, 23, 42, 0.055) 1px, transparent 1px),
+    linear-gradient(rgba(20, 184, 166, 0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(20, 184, 166, 0.055) 1px, transparent 1px),
+    linear-gradient(135deg, rgba(247, 252, 255, 0.96), rgba(238, 250, 246, 0.9) 52%, rgba(248, 250, 252, 0.96));
+  background-size: auto, auto, auto, 80px 80px, 80px 80px, 20px 20px, 20px 20px, auto;
+  background-position: center, center, center, -1px -1px, -1px -1px, -1px -1px, -1px -1px, center;
 }
 
 .dark .canvas-flow {
   background:
-    linear-gradient(rgba(148, 163, 184, 0.08) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(148, 163, 184, 0.08) 1px, transparent 1px);
-  background-size: 28px 28px;
+    radial-gradient(circle at 18% 16%, rgba(45, 212, 191, 0.16), transparent 28%),
+    radial-gradient(circle at 78% 18%, rgba(56, 189, 248, 0.14), transparent 30%),
+    radial-gradient(circle at 72% 82%, rgba(34, 197, 94, 0.1), transparent 26%),
+    linear-gradient(rgba(148, 163, 184, 0.1) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.1) 1px, transparent 1px),
+    linear-gradient(rgba(45, 212, 191, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(45, 212, 191, 0.06) 1px, transparent 1px),
+    linear-gradient(135deg, #07111f 0%, #0b1d1d 52%, #101827 100%);
+  background-size: auto, auto, auto, 80px 80px, 80px 80px, 20px 20px, 20px 20px, auto;
+  background-position: center, center, center, -1px -1px, -1px -1px, -1px -1px, -1px -1px, center;
+}
+
+.canvas-flow::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.6;
+  background-image:
+    radial-gradient(circle, rgba(15, 118, 110, 0.22) 0 0.8px, transparent 1.2px),
+    radial-gradient(circle, rgba(14, 165, 233, 0.18) 0 0.8px, transparent 1.2px);
+  background-size: 34px 34px, 58px 58px;
+  mask-image: radial-gradient(ellipse at 54% 45%, #000 0 58%, transparent 88%);
+}
+
+.dark .canvas-flow::before {
+  opacity: 0.72;
+  background-image:
+    radial-gradient(circle, rgba(94, 234, 212, 0.34) 0 0.8px, transparent 1.2px),
+    radial-gradient(circle, rgba(125, 211, 252, 0.2) 0 0.8px, transparent 1.2px);
 }
 
 .canvas-shell {
@@ -975,6 +1014,58 @@ onUnmounted(() => {
   background-size: 96px 96px, 156px 156px;
   mask-image: radial-gradient(ellipse at 56% 42%, #000 0 45%, transparent 76%);
   z-index: 0;
+}
+
+.vue-flow__minimap.canvas-minimap {
+  right: 16px;
+  bottom: 26px;
+  width: 210px;
+  height: 140px;
+  overflow: hidden;
+  border: 1px solid rgba(14, 116, 144, 0.22);
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(20, 184, 166, 0.2), transparent 38%),
+    radial-gradient(circle at 86% 18%, rgba(56, 189, 248, 0.18), transparent 34%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.82), rgba(236, 253, 245, 0.58));
+  box-shadow:
+    0 24px 70px rgba(15, 23, 42, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(22px) saturate(1.3);
+}
+
+.dark .vue-flow__minimap.canvas-minimap {
+  border-color: rgba(94, 234, 212, 0.18);
+  background:
+    radial-gradient(circle at 12% 0%, rgba(45, 212, 191, 0.18), transparent 38%),
+    radial-gradient(circle at 86% 18%, rgba(56, 189, 248, 0.14), transparent 34%),
+    linear-gradient(135deg, rgba(15, 23, 42, 0.78), rgba(6, 78, 59, 0.36));
+  box-shadow:
+    0 24px 74px rgba(0, 0, 0, 0.42),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.vue-flow__minimap.canvas-minimap svg {
+  border-radius: 22px;
+}
+
+.vue-flow__minimap.canvas-minimap .vue-flow__minimap-mask {
+  fill: rgba(15, 118, 110, 0.14);
+  stroke: rgba(13, 148, 136, 0.62);
+  stroke-width: 2;
+}
+
+.dark .vue-flow__minimap.canvas-minimap .vue-flow__minimap-mask {
+  fill: rgba(94, 234, 212, 0.1);
+  stroke: rgba(94, 234, 212, 0.54);
+}
+
+.vue-flow__minimap.canvas-minimap .vue-flow__minimap-node {
+  fill: rgba(20, 184, 166, 0.8);
+  stroke: rgba(15, 118, 110, 0.9);
+  stroke-width: 1.5;
+  rx: 8;
+  ry: 8;
 }
 
 .canvas-header {

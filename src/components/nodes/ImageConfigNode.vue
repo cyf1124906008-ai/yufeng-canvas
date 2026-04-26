@@ -657,7 +657,7 @@ const handleGenerate = async (mode = 'auto') => {
     // Replace mode: find any connected image node | 替换模式：查找任意连接的图片节点
     imageNodeId = findConnectedOutputImageNode(false)
     if (imageNodeId) {
-      updateNode(imageNodeId, { loading: true, url: '', error: '' })
+      updateNode(imageNodeId, { loading: true, url: '', error: '', startedAt: Date.now() })
     }
   } else if (mode === 'new') {
     // New mode: always create new node | 新建模式：始终创建新节点
@@ -666,7 +666,7 @@ const handleGenerate = async (mode = 'auto') => {
     // Auto mode: check for empty connected node first | 自动模式：先检查空白连接节点
     imageNodeId = findConnectedOutputImageNode(true)
     if (imageNodeId) {
-      updateNode(imageNodeId, { loading: true, error: '' })
+      updateNode(imageNodeId, { loading: true, error: '', startedAt: Date.now() })
     }
   }
   
@@ -688,6 +688,7 @@ const handleGenerate = async (mode = 'auto') => {
       url: '',
       loading: true,
       error: '',
+      startedAt: Date.now(),
       label: '图像生成结果'
     })
 
@@ -735,6 +736,7 @@ const handleGenerate = async (mode = 'auto') => {
         error: '',
         label: '文生图',
         model: localModel.value,
+        finishedAt: Date.now(),
         updatedAt: Date.now()
       })
       
@@ -747,6 +749,7 @@ const handleGenerate = async (mode = 'auto') => {
     updateNode(imageNodeId, {
       loading: false,
       error: err.message || '生成失败',
+      finishedAt: Date.now(),
       updatedAt: Date.now()
     })
     window.$message?.error(err.message || '图片生成失败')

@@ -64,6 +64,7 @@
         </div>
 
         <span class="text-sm text-white font-medium relative z-10">{{ loadingText }}</span>
+        <span class="text-xs text-white/80 relative z-10">已用时：{{ elapsedText }}</span>
         <span v-if="data.taskId" class="text-xs text-white/80 relative z-10">任务 ID：{{ data.taskId }}</span>
         <span v-if="data.progress" class="text-xs text-white/80 relative z-10">进度：{{ data.progress }}%</span>
       </div>
@@ -150,7 +151,7 @@
  * Video node component | 视频节点组件
  * Displays and manages video content
  */
-import { ref, computed, nextTick, watch, onMounted } from 'vue'
+import { ref, computed, nextTick, watch, onMounted, onUnmounted } from 'vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { NIcon, NSpin } from 'naive-ui'
 import { TrashOutline, ExpandOutline, VideocamOutline, CopyOutline, CloseCircleOutline, DownloadOutline, EyeOutline, CreateOutline } from '@vicons/ionicons5'
@@ -186,6 +187,40 @@ const operations = [
 // Polling state | 轮询状态
 const isPolling = ref(false)
 const isActiveGeneration = computed(() => Boolean(isPolling.value || props.data?.loading))
+const elapsedSeconds = ref(0)
+let elapsedTimer = null
+
+const formatElapsed = (seconds) => {
+  const safeSeconds = Math.max(0, Number(seconds) || 0)
+  const minutes = Math.floor(safeSeconds / 60)
+  const restSeconds = safeSeconds % 60
+  if (minutes <= 0) return `${restSeconds}s`
+  return `${minutes}m ${String(restSeconds).padStart(2, '0')}s`
+}
+
+const updateElapsed = () => {
+  if (!isActiveGeneration.value) {
+    elapsedSeconds.value = 0
+    return
+  }
+
+  const startedAt = props.data?.startedAt || Date.now()
+  elapsedSeconds.value = Math.max(0, Math.floor((Date.now() - startedAt) / 1000))
+}
+
+const elapsedText = computed(() => formatElapsed(elapsedSeconds.value))
+
+const startElapsedTimer = () => {
+  if (elapsedTimer) return
+  updateElapsed()
+  elapsedTimer = window.setInterval(updateElapsed, 1000)
+}
+
+const stopElapsedTimer = () => {
+  if (!elapsedTimer) return
+  window.clearInterval(elapsedTimer)
+  elapsedTimer = null
+}
 
 const loadingText = computed(() => {
   if (props.data?.taskId) {
@@ -200,6 +235,13 @@ watch(() => [props.data?.taskId, props.data?.loading], ([taskId, loading]) => {
   if (taskId && loading && !props.data?.url && !isPolling.value) {
     startPolling(taskId)
   }
+
+  if (loading || isPolling.value) {
+    startElapsedTimer()
+  } else {
+    stopElapsedTimer()
+    updateElapsed()
+  }
 })
 
 // 页面刷新后恢复轮询 | Resume polling after page refresh
@@ -208,6 +250,11 @@ onMounted(() => {
   if (taskId && loading && !url && !isPolling.value) {
     startPolling(taskId)
   }
+  if (loading || isPolling.value) startElapsedTimer()
+})
+
+onUnmounted(() => {
+  stopElapsedTimer()
 })
 
 // Start polling for video result | 开始轮询获取视频结果
