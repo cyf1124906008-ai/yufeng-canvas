@@ -5,12 +5,55 @@ const packageJson = require('../package.json')
 
 const rendererUrl = process.env.ELECTRON_RENDERER_URL
 const repo = 'cyf1124906008-ai/yufeng-canvas'
-let updateState = {
-  status: 'idle',
-  currentVersion: packageJson.version
+const githubUpdateSource = {
+  type: 'github',
+  label: 'GitHub Release',
+  feed: {
+    provider: 'github',
+    owner: 'cyf1124906008-ai',
+    repo: 'yufeng-canvas'
+  }
 }
 
+const normalizeMirrorUrl = (url) => String(url || '').trim().replace(/\/+$/, '')
+const configuredMirrorUrls = [
+  ...String(process.env.YUFENG_UPDATE_MIRROR_URL || '')
+    .split(',')
+    .map(normalizeMirrorUrl)
+    .filter(Boolean),
+  ...(Array.isArray(packageJson.yufeng?.updateMirrors)
+    ? packageJson.yufeng.updateMirrors.map(normalizeMirrorUrl).filter(Boolean)
+    : [])
+]
+
+const updateSources = [
+  ...configuredMirrorUrls.map((url, index) => ({
+    type: 'generic',
+    label: `国内镜像 ${index + 1}`,
+    feed: {
+      provider: 'generic',
+      url
+    }
+  })),
+  githubUpdateSource
+]
+
+let updateState = {
+  status: 'idle',
+  currentVersion: packageJson.version,
+  updateSource: updateSources[0]?.label || githubUpdateSource.label
+}
+let updateCheckMode = 'auto'
+let updateSourceIndex = 0
+
 const isPackagedRuntime = () => app.isPackaged && !rendererUrl
+
+const getCurrentUpdateSource = () => updateSources[updateSourceIndex] || githubUpdateSource
+
+const setUpdaterSource = (source = getCurrentUpdateSource()) => {
+  autoUpdater.setFeedURL(source.feed)
+  return source
+}
 
 const compareVersions = (a = '0.0.0', b = '0.0.0') => {
   const left = String(a).replace(/^v/i, '').split('.').map((part) => Number.parseInt(part, 10) || 0)
@@ -53,6 +96,7 @@ const setUpdateState = (nextState) => {
     ...updateState,
     ...nextState,
     currentVersion: packageJson.version,
+    updateSource: nextState.updateSource || getCurrentUpdateSource().label,
     updatedAt: Date.now()
   }
 
@@ -82,23 +126,29 @@ const checkLatestReleaseManually = async () => {
 }
 
 const setupAutoUpdater = () => {
-  autoUpdater.autoDownload = false
+  autoUpdater.autoDownload = true
   autoUpdater.autoInstallOnAppQuit = true
   autoUpdater.allowPrerelease = false
-  autoUpdater.setFeedURL({
-    provider: 'github',
-    owner: 'cyf1124906008-ai',
-    repo: 'yufeng-canvas'
-  })
+  setUpdaterSource()
 
   autoUpdater.on('checking-for-update', () => {
-    setUpdateState({ status: 'checking', manual: false, error: '' })
+    setUpdateState({
+      status: 'checking',
+      manual: false,
+      initiatedBy: updateCheckMode,
+      silent: updateCheckMode === 'auto',
+      updateSource: getCurrentUpdateSource().label,
+      error: ''
+    })
   })
 
   autoUpdater.on('update-available', (info) => {
     setUpdateState({
       status: 'available',
       manual: false,
+      initiatedBy: updateCheckMode,
+      silent: updateCheckMode === 'auto',
+      updateSource: getCurrentUpdateSource().label,
       latestVersion: info?.version,
       releaseName: info?.releaseName || '',
       releaseNotes: info?.releaseNotes || '',
@@ -111,6 +161,9 @@ const setupAutoUpdater = () => {
     setUpdateState({
       status: 'not-available',
       manual: false,
+      initiatedBy: updateCheckMode,
+      silent: updateCheckMode === 'auto',
+      updateSource: getCurrentUpdateSource().label,
       latestVersion: info?.version || packageJson.version,
       error: ''
     })
@@ -120,6 +173,9 @@ const setupAutoUpdater = () => {
     setUpdateState({
       status: 'downloading',
       manual: false,
+      initiatedBy: updateCheckMode,
+      silent: updateCheckMode === 'auto',
+      updateSource: getCurrentUpdateSource().label,
       progress: {
         percent: Math.round(progress.percent || 0),
         transferred: progress.transferred || 0,
@@ -134,6 +190,9 @@ const setupAutoUpdater = () => {
     setUpdateState({
       status: 'downloaded',
       manual: false,
+      initiatedBy: updateCheckMode,
+      silent: updateCheckMode === 'auto',
+      updateSource: getCurrentUpdateSource().label,
       latestVersion: info?.version || updateState.latestVersion,
       progress: { percent: 100 },
       error: ''
@@ -141,10 +200,68 @@ const setupAutoUpdater = () => {
   })
 
   autoUpdater.on('error', (error) => {
+    if (tryNextUpdateSource(error)) return
+
     setUpdateState({
       status: 'error',
       manual: false,
+      initiatedBy: updateCheckMode,
+      silent: updateCheckMode === 'auto',
+      updateSource: getCurrentUpdateSource().label,
       error: error?.message || '更新失败'
+    })
+  })
+}
+
+const tryNextUpdateSource = (error) => {
+  if (!isPackagedRuntime()) return false
+  if (updateSourceIndex >= updateSources.length - 1) return false
+
+  const failedSource = getCurrentUpdateSource()
+  updateSourceIndex += 1
+  const nextSource = setUpdaterSource(getCurrentUpdateSource())
+
+  setUpdateState({
+    status: 'checking',
+    manual: false,
+    initiatedBy: updateCheckMode,
+    silent: updateCheckMode === 'auto',
+    updateSource: nextSource.label,
+    previousUpdateSource: failedSource.label,
+    previousError: error?.message || '更新源不可用',
+    error: ''
+  })
+
+  autoUpdater.checkForUpdates().catch((nextError) => {
+    if (tryNextUpdateSource(nextError)) return
+    setUpdateState({
+      status: 'error',
+      manual: false,
+      initiatedBy: updateCheckMode,
+      silent: updateCheckMode === 'auto',
+      updateSource: getCurrentUpdateSource().label,
+      error: nextError?.message || '所有更新源都不可用'
+    })
+  })
+
+  return true
+}
+
+const checkForUpdatesInBackground = () => {
+  if (!isPackagedRuntime()) return
+
+  updateCheckMode = 'auto'
+  updateSourceIndex = 0
+  setUpdaterSource()
+  autoUpdater.checkForUpdates().catch((error) => {
+    if (tryNextUpdateSource(error)) return
+    setUpdateState({
+      status: 'error',
+      manual: false,
+      initiatedBy: 'auto',
+      silent: true,
+      updateSource: getCurrentUpdateSource().label,
+      error: error?.message || '后台检查更新失败'
     })
   })
 }
@@ -202,6 +319,9 @@ app.whenReady().then(() => {
       return checkLatestReleaseManually()
     }
 
+    updateCheckMode = 'manual'
+    updateSourceIndex = 0
+    setUpdaterSource()
     await autoUpdater.checkForUpdates()
     return updateState
   })
@@ -211,6 +331,7 @@ app.whenReady().then(() => {
       return checkLatestReleaseManually()
     }
 
+    updateCheckMode = 'manual'
     setUpdateState({ status: 'downloading', manual: false, error: '' })
     await autoUpdater.downloadUpdate()
     return updateState
@@ -232,6 +353,7 @@ app.whenReady().then(() => {
   })
 
   createWindow()
+  setTimeout(checkForUpdatesInBackground, 8000)
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

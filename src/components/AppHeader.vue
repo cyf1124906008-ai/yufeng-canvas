@@ -67,6 +67,8 @@ defineProps({
 const dialog = useDialog()
 const updateStatus = ref({ status: 'idle' })
 const userInitiatedCheck = ref(false)
+const downloadedPromptedVersion = ref('')
+let lastProgressToastAt = 0
 let stopUpdateListener = null
 
 const isBusy = computed(() =>
@@ -100,13 +102,18 @@ const handleUpdateStatus = (status) => {
 
   if (status?.status === 'downloading') {
     const percent = status.progress?.percent
-    if (percent) {
+    const now = Date.now()
+    if (percent && (userInitiatedCheck.value || status.initiatedBy === 'manual') && now - lastProgressToastAt > 5000) {
+      lastProgressToastAt = now
       window.$message?.loading(`正在下载更新 ${percent}%`, { duration: 1200 })
     }
     return
   }
 
   if (status?.status === 'available') {
+    if (status.silent && status.initiatedBy === 'auto') {
+      return
+    }
     showAvailableDialog(status)
     return
   }
@@ -154,8 +161,8 @@ const showAvailableDialog = (status) => {
 
   dialog.info({
     title: `发现新版本 ${status.latestVersion}`,
-    content: `当前版本 ${status.currentVersion}。可以直接在客户端内下载更新，下载完成后重启安装。`,
-    positiveText: '下载更新',
+    content: `当前版本 ${status.currentVersion}。客户端会在后台下载更新，下载完成后提示重启安装。`,
+    positiveText: '后台下载',
     negativeText: '稍后',
     onPositiveClick: () => downloadUpdate()
   })
@@ -163,9 +170,13 @@ const showAvailableDialog = (status) => {
 
 const showDownloadedDialog = (status) => {
   userInitiatedCheck.value = false
+  const version = status.latestVersion || 'unknown'
+  if (downloadedPromptedVersion.value === version) return
+  downloadedPromptedVersion.value = version
+
   dialog.success({
     title: '更新已下载完成',
-    content: `新版本 ${status.latestVersion || ''} 已准备好。点击重启安装后，应用会自动关闭并完成更新。`,
+    content: `新版本 ${status.latestVersion || ''} 已准备好。点击重启安装后，应用会自动关闭并完成更新；如果选择稍后，退出应用时也会自动安装。`,
     positiveText: '重启安装',
     negativeText: '稍后',
     onPositiveClick: () => installUpdate()
@@ -255,7 +266,10 @@ onMounted(async () => {
 
   try {
     const status = await desktopApp?.getUpdateStatus?.()
-    if (status?.status) updateStatus.value = status
+    if (status?.status) {
+      updateStatus.value = status
+      if (status.status === 'downloaded') handleUpdateStatus(status)
+    }
   } catch {
     // Ignore status bootstrap failures. The button can still retry manually.
   }
