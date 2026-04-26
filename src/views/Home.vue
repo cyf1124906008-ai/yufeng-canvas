@@ -30,10 +30,19 @@
       </template>
       <template #right>
         <button
+          @click="startHomeTour"
+          class="header-pill"
+          title="重新查看使用指引"
+        >
+          <n-icon :size="18"><HelpCircleOutline /></n-icon>
+          <span>使用指引</span>
+        </button>
+        <button
           @click="showApiSettings = true"
           class="header-pill"
           :class="{ 'is-ready': isApiConfigured }"
           title="API 设置"
+          data-tour="api-settings"
         >
           <n-icon :size="18"><SettingsOutline /></n-icon>
           <span>{{ isApiConfigured ? '已连接' : '配置 API' }}</span>
@@ -53,7 +62,7 @@
           </transition>
 
           <div class="hero-actions">
-            <button class="primary-action" @click="handleCreateWithInput">
+            <button class="primary-action" data-tour="start-create" @click="handleCreateWithInput">
               <n-icon :size="20"><SendOutline /></n-icon>
               开始创作
             </button>
@@ -67,7 +76,7 @@
             </button>
           </div>
 
-          <div class="feature-strip">
+          <div class="feature-strip" data-tour="quick-actions">
             <button
               v-for="item in featureCards"
               :key="item.title"
@@ -95,7 +104,7 @@
           </div>
         </div>
 
-        <div class="prompt-panel">
+        <div class="prompt-panel" data-tour="home-chat">
           <div class="prompt-panel-glow"></div>
           <div class="hero-prism" aria-hidden="true">
             <div class="prism-core">Y</div>
@@ -156,7 +165,7 @@
                 </span>
               </div>
 
-              <div class="chat-composer">
+              <div class="chat-composer" data-tour="chat-composer">
                 <input
                   ref="chatFileInputRef"
                   type="file"
@@ -231,7 +240,7 @@
         </div>
       </section>
 
-      <section class="showcase-section">
+      <section class="showcase-section" data-tour="showcase">
         <div class="section-title">
           <div>
             <p class="eyebrow">READY TO BUILD</p>
@@ -262,7 +271,7 @@
         </div>
       </section>
 
-      <section ref="inspirationSection" class="inspiration-section">
+      <section ref="inspirationSection" class="inspiration-section" data-tour="prompt-library">
         <div class="section-title">
           <div>
             <p class="eyebrow">GPT IMAGE 2 PROMPT LIBRARY</p>
@@ -295,7 +304,7 @@
         </div>
       </section>
 
-      <section ref="projectsSection" class="projects-section">
+      <section ref="projectsSection" class="projects-section" data-tour="projects">
         <div class="section-title">
           <div>
             <p class="eyebrow">LOCAL WORKSPACE</p>
@@ -414,11 +423,20 @@
           <p>建议第一次不要跳过：先用文本模型测试一句话，再进入画布生成，排查会快很多。</p>
           <div class="onboarding-actions">
             <button class="secondary-action" @click="dismissOnboarding">稍后再说</button>
+            <button class="secondary-action" @click="startHomeTour">开始界面导览</button>
             <button class="primary-action" @click="completeOnboarding">完成并进入</button>
           </div>
         </div>
       </div>
     </n-modal>
+
+    <GuidedTour
+      v-model:show="showHomeTour"
+      :steps="homeTourSteps"
+      :storage-key="homeTourStorageKey"
+      @finish="completeHomeTour"
+      @skip="completeHomeTour"
+    />
 
     <n-modal v-model:show="showRenameModal" preset="dialog" title="重命名项目">
       <n-input v-model:value="renameValue" placeholder="请输入项目名称" />
@@ -447,6 +465,7 @@ import {
   SettingsOutline,
   SparklesOutline,
   ChatbubbleOutline,
+  HelpCircleOutline,
   TrashOutline,
   VideocamOutline,
   CreateOutline
@@ -463,6 +482,7 @@ import { useModelStore } from '../stores/pinia'
 import { useChat } from '../hooks'
 import ApiSettings from '../components/ApiSettings.vue'
 import AppHeader from '../components/AppHeader.vue'
+import GuidedTour from '../components/GuidedTour.vue'
 import showcaseBrand from '../assets/showcase-brand.png'
 import showcaseStoryboard from '../assets/showcase-storyboard.png'
 import showcaseVideo from '../assets/showcase-video.png'
@@ -479,6 +499,7 @@ const modelStore = useModelStore()
 
 const showApiSettings = ref(false)
 const showOnboarding = ref(false)
+const showHomeTour = ref(false)
 const activeMode = ref('chat')
 const inputText = ref('')
 const chatText = ref('')
@@ -519,6 +540,7 @@ let particleFrame = null
 let particleCleanup = null
 let particleStartedAt = 0
 const onboardingStorageKey = 'yufeng-canvas-onboarding-v2'
+const homeTourStorageKey = 'yufeng-canvas-home-tour-v1'
 
 const stageStyle = computed(() => {
   const x = pointer.value.x
@@ -782,6 +804,57 @@ const onboardingChecks = computed(() => [
 const onboardingReadyCount = computed(() => onboardingChecks.value.filter((item) => item.ready).length)
 const onboardingProgress = computed(() => Math.round((onboardingReadyCount.value / onboardingChecks.value.length) * 100))
 
+const homeTourSteps = [
+  {
+    target: '[data-tour="api-settings"]',
+    title: '先把模型接通',
+    body: '这里进入 API 设置。用户可以填写自己的 Base URL、API Key，并分别添加文本、图片、视频模型名称。模型名称必须和供应商后台一致。',
+    hint: '如果别人电脑连不上，第一步就看这里：Key、Base URL、模型分类、模型名称。'
+  },
+  {
+    target: '[data-tour="home-chat"]',
+    title: '首页可以直接对话',
+    body: '这里不是装饰卡片，可以直接调用文本模型聊天、拆创意、写提示词。需要生成图片或视频时，再把想法带到画布里变成节点。',
+    side: 'left'
+  },
+  {
+    target: '[data-tour="chat-composer"]',
+    title: '输入、上传、发送都在这里',
+    body: '输入框支持文本对话，也可以上传图片或文本文件让模型参考。右侧按钮会发送给当前配置的文本模型。',
+    hint: '如果没有配置文本模型，点击发送会引导回 API 设置。'
+  },
+  {
+    target: '[data-tour="start-create"]',
+    title: '一键进入创作画布',
+    body: '点这里会把输入的创意创建成一个本地项目，并进入无限画布。画布里可以继续添加文生图、图生图、视频生成和结果节点。',
+    side: 'right'
+  },
+  {
+    target: '[data-tour="quick-actions"]',
+    title: '这些是快捷工作流入口',
+    body: '文生图、图生图、视频生成、节点工作流会直接创建对应方向的项目，不需要用户从零搭节点。',
+    side: 'top'
+  },
+  {
+    target: '[data-tour="showcase"]',
+    title: '常用场景从案例开始',
+    body: '这些卡片是可点击的案例入口，适合品牌主视觉、分镜故事、图生视频等常见需求。点击后会把提示词带进画布。',
+    side: 'top'
+  },
+  {
+    target: '[data-tour="prompt-library"]',
+    title: '提示词案例库',
+    body: '这里沉淀了从开源案例整理来的提示词。用户可以直接点选，再在画布中改成自己的产品、角色、场景。',
+    side: 'top'
+  },
+  {
+    target: '[data-tour="projects"]',
+    title: '本地项目都在这里',
+    body: '生成过的项目会保存在本机，之后可以继续打开、复制、重命名或删除。它不是云端空间，隐私和草稿都留在本地。',
+    side: 'top'
+  }
+]
+
 const featureCards = [
   {
     title: '文生图',
@@ -914,6 +987,9 @@ const ensureConfigured = () => {
 const createNewProject = () => {
   if (!ensureConfigured()) return
   const id = createProject('未命名项目')
+  if (!localStorage.getItem('yufeng-canvas-canvas-tour-v1')) {
+    sessionStorage.setItem('yufeng-canvas-start-canvas-tour', '1')
+  }
   router.push(`/canvas/${id}`)
 }
 
@@ -1048,6 +1124,18 @@ const dismissOnboarding = () => {
   showOnboarding.value = false
 }
 
+const startHomeTour = () => {
+  showOnboarding.value = false
+  localStorage.setItem(onboardingStorageKey, 'done')
+  window.setTimeout(() => {
+    showHomeTour.value = true
+  }, 180)
+}
+
+const completeHomeTour = () => {
+  localStorage.setItem(homeTourStorageKey, 'done')
+}
+
 const runOnboardingChatTest = async () => {
   if (!isChatConfigured.value) {
     showApiSettings.value = true
@@ -1104,6 +1192,9 @@ const handleCreateWithInput = () => {
   const prompt = inputText.value.trim()
   const id = createProject(prompt ? prompt.slice(0, 24) : '未命名项目')
   sessionStorage.setItem('ai-canvas-initial-prompt', prompt)
+  if (!localStorage.getItem('yufeng-canvas-canvas-tour-v1')) {
+    sessionStorage.setItem('yufeng-canvas-start-canvas-tour', '1')
+  }
   inputText.value = ''
   router.push(`/canvas/${id}`)
 }

@@ -18,11 +18,19 @@
         </n-dropdown>
       </template>
       <template #right>
+        <button
+          @click="startCanvasTour"
+          class="p-2 hover:bg-[var(--bg-tertiary)] rounded-lg transition-colors"
+          title="使用指引"
+        >
+          <n-icon :size="20"><HelpCircleOutline /></n-icon>
+        </button>
         <button 
           @click="showRuntimeLogs = !showRuntimeLogs"
           class="relative p-2 hover:bg-[var(--bg-tertiary)] rounded-lg transition-colors"
           :class="{ 'text-[var(--accent-color)]': runtimeLogs.length > 0 }"
           title="运行日志"
+          data-tour="runtime-logs"
         >
           <n-icon :size="20"><ChatbubbleOutline /></n-icon>
           <span v-if="runtimeErrorCount" class="log-error-dot">{{ runtimeErrorCount }}</span>
@@ -32,6 +40,7 @@
           class="p-2 hover:bg-[var(--bg-tertiary)] rounded-lg transition-colors"
           :class="{ 'text-[var(--accent-color)]': hasDownloadableAssets }"
           title="批量下载素材"
+          data-tour="download-assets"
         >
           <n-icon :size="20"><DownloadOutline /></n-icon>
         </button>
@@ -40,6 +49,7 @@
           class="p-2 hover:bg-[var(--bg-tertiary)] rounded-lg transition-colors"
           :class="{ 'text-[var(--accent-color)]': hasAnyApiConfigured }"
           title="API 设置"
+          data-tour="canvas-settings"
         >
           <n-icon :size="20"><SettingsOutline /></n-icon>
         </button>
@@ -84,11 +94,12 @@
       </VueFlow>
 
       <!-- Left toolbar | 左侧工具栏 -->
-      <aside class="canvas-toolbar absolute left-4 top-1/2 -translate-y-1/2 flex flex-col gap-1 p-2 z-10">
+      <aside class="canvas-toolbar absolute left-4 top-1/2 -translate-y-1/2 flex flex-col gap-1 p-2 z-10" data-tour="canvas-toolbar">
         <button 
           @click="showNodeMenu = !showNodeMenu"
           class="w-10 h-10 flex items-center justify-center rounded-xl bg-[var(--accent-color)] text-white hover:bg-[var(--accent-hover)] transition-colors"
           title="添加节点"
+          data-tour="add-node"
         >
           <n-icon :size="20"><AddOutline /></n-icon>
         </button>
@@ -96,6 +107,7 @@
           @click="showWorkflowPanel = true"
           class="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-[var(--bg-tertiary)] transition-colors"
           title="工作流模板"
+          data-tour="workflow-panel"
         >
           <n-icon :size="20"><AppsOutline /></n-icon>
         </button>
@@ -129,7 +141,7 @@
       </div>
 
       <!-- Bottom controls | 底部控制 -->
-      <div class="zoom-dock absolute bottom-4 left-4 flex items-center gap-2 p-1">
+      <div class="zoom-dock absolute bottom-4 left-4 flex items-center gap-2 p-1" data-tour="zoom-dock">
         <!-- <button 
           @click="showGrid = !showGrid" 
           :class="showGrid ? 'bg-[var(--accent-color)] text-white' : 'hover:bg-[var(--bg-tertiary)]'"
@@ -192,7 +204,7 @@
       </aside>
 
       <!-- Bottom input panel (floating) | 底部输入面板（悬浮） -->
-      <div class="composer-dock absolute bottom-4 left-1/2 -translate-x-1/2 w-full max-w-3xl px-4 z-20">
+      <div class="composer-dock absolute bottom-4 left-1/2 -translate-x-1/2 w-full max-w-3xl px-4 z-20" data-tour="canvas-composer">
         <!-- Processing indicator | 处理中指示器 -->
         <div 
           v-if="isProcessing" 
@@ -289,6 +301,14 @@
 
     <!-- Workflow Panel | 工作流面板 -->
     <WorkflowPanel v-model:show="showWorkflowPanel" @add-workflow="handleAddWorkflow" />
+
+    <GuidedTour
+      v-model:show="showCanvasTour"
+      :steps="canvasTourSteps"
+      :storage-key="canvasTourStorageKey"
+      @finish="completeCanvasTour"
+      @skip="completeCanvasTour"
+    />
   </div>
 </template>
 
@@ -322,7 +342,8 @@ import {
   RemoveOutline,
   DownloadOutline,
   AppsOutline,
-  ChatbubbleOutline
+  ChatbubbleOutline,
+  HelpCircleOutline
 } from '@vicons/ionicons5'
 import { nodes, edges, runtimeLogs, clearRuntimeLogs, addNode, addNodes, addEdge, addEdges, updateNode, initSampleData, loadProject, saveProject, clearCanvas, canvasViewport, updateViewport, undo, redo, canUndo, canRedo, manualSaveHistory, startBatchOperation, endBatchOperation } from '../stores/canvas'
 import { loadAllModels } from '../stores/models'
@@ -335,6 +356,7 @@ import ApiSettings from '../components/ApiSettings.vue'
 import DownloadModal from '../components/DownloadModal.vue'
 import WorkflowPanel from '../components/WorkflowPanel.vue'
 import AppHeader from '../components/AppHeader.vue'
+import GuidedTour from '../components/GuidedTour.vue'
 import { CANVAS_PROMPT_SUGGESTIONS } from '../config/promptLibrary'
 
 // API Config state | API 配置状态
@@ -438,7 +460,60 @@ const showDeleteModal = ref(false)
 const showDownloadModal = ref(false)
 const showWorkflowPanel = ref(false)
 const showRuntimeLogs = ref(false)
+const showCanvasTour = ref(false)
 const renameValue = ref('')
+const canvasTourStorageKey = 'yufeng-canvas-canvas-tour-v1'
+
+const canvasTourSteps = [
+  {
+    target: '[data-tour="canvas-toolbar"]',
+    title: '画布左侧是工具栏',
+    body: '这里负责添加节点、打开公共工作流、插入文字、图片、文生图、视频生成等模块。新用户先从绿色加号或工作流按钮开始最稳。',
+    side: 'right'
+  },
+  {
+    target: '[data-tour="add-node"]',
+    title: '手动添加一个节点',
+    body: '点绿色加号会弹出节点菜单。适合你想自己搭流程，比如先放提示词，再连图片配置，再连结果节点。',
+    side: 'right'
+  },
+  {
+    target: '[data-tour="workflow-panel"]',
+    title: '公共工作流一键导入',
+    body: '这里是给普通用户最快上手的入口。点击模板会直接把配置好的节点放到画布上，再替换成自己的提示词或素材。',
+    side: 'right'
+  },
+  {
+    target: '[data-tour="canvas-composer"]',
+    title: '底部输入框会帮你搭流程',
+    body: '输入一句需求后，默认会创建提示词和生成配置节点；打开自动执行后，会尝试分析你的意图并直接启动对应工作流。',
+    side: 'top'
+  },
+  {
+    target: '[data-tour="runtime-logs"]',
+    title: '模型请求日志在右上角',
+    body: '生成失败、扣费但没返回、视频任务轮询等问题，都优先打开这里看。它会记录请求地址、模型、任务 ID、耗时和原始响应。',
+    side: 'left'
+  },
+  {
+    target: '[data-tour="download-assets"]',
+    title: '结果素材从这里下载',
+    body: '画布里有图片或视频结果后，这里会变成可用状态，用来批量导出生成素材。',
+    side: 'left'
+  },
+  {
+    target: '[data-tour="canvas-settings"]',
+    title: '模型不通就回到设置',
+    body: '图片、视频、文本模型可以分别配置 Key 和模型名。换供应商、换模型、排查 500 或 Network Error，都从这里开始。',
+    side: 'left'
+  },
+  {
+    target: '[data-tour="zoom-dock"]',
+    title: '左下角控制画布视图',
+    body: '节点多了以后，用这里缩放和适应视图。它只改变看画布的方式，不会影响你的节点和生成结果。',
+    side: 'right'
+  }
+]
 
 // Check if has downloadable assets | 检查是否有可下载素材
 const hasDownloadableAssets = computed(() => {
@@ -894,6 +969,14 @@ const goBack = () => {
   router.push('/')
 }
 
+const completeCanvasTour = () => {
+  localStorage.setItem(canvasTourStorageKey, 'done')
+}
+
+const startCanvasTour = () => {
+  showCanvasTour.value = true
+}
+
 // Check if mobile | 检测是否移动端
 const checkMobile = () => {
   isMobile.value = window.innerWidth < 768
@@ -948,6 +1031,13 @@ onMounted(() => {
     nextTick(() => {
       sendMessage()
     })
+  }
+
+  if (sessionStorage.getItem('yufeng-canvas-start-canvas-tour') && !localStorage.getItem(canvasTourStorageKey)) {
+    sessionStorage.removeItem('yufeng-canvas-start-canvas-tour')
+    window.setTimeout(() => {
+      showCanvasTour.value = true
+    }, 900)
   }
 })
 
