@@ -92,6 +92,23 @@
           💡 {{ currentModelConfig.tips }}
         </div>
 
+        <div class="advanced-params">
+          <button class="advanced-toggle" @click="showAdvancedParams = !showAdvancedParams">
+            高级参数
+            <span>{{ showAdvancedParams ? '收起' : '展开' }}</span>
+          </button>
+          <div v-if="showAdvancedParams" class="advanced-grid">
+            <label>
+              <span>Seed</span>
+              <input v-model="localSeed" placeholder="可选，固定随机种子" @change="updateAdvancedParams" />
+            </label>
+            <label>
+              <span>负面词</span>
+              <input v-model="localNegativePrompt" placeholder="可选，不想出现的内容" @change="updateAdvancedParams" />
+            </label>
+          </div>
+        </div>
+
         <!-- Connected inputs indicator | 连接输入指示 -->
         <div
           class="flex items-center gap-2 text-xs text-[var(--text-secondary)] py-1 border-t border-[var(--border-color)]">
@@ -204,6 +221,9 @@ const localModel = ref(props.data?.model || modelStore.selectedImageModel || '')
 const localSize = ref(props.data?.size || '2048x2048')
 const localQuality = ref(props.data?.quality || 'standard')
 const localCount = ref(Number(props.data?.n || 1))
+const localSeed = ref(props.data?.seed || '')
+const localNegativePrompt = ref(props.data?.negative_prompt || '')
+const showAdvancedParams = ref(false)
 
 // Label editing state | Label 编辑状态
 const isEditingLabel = ref(false)
@@ -566,6 +586,13 @@ const handleCountSelect = (count) => {
   updateNode(props.id, { n: localCount.value })
 }
 
+const updateAdvancedParams = () => {
+  updateNode(props.id, {
+    seed: String(localSeed.value || '').trim(),
+    negative_prompt: String(localNegativePrompt.value || '').trim()
+  })
+}
+
 // Update size from manual input | 更新手动输入的尺寸
 const updateSize = () => {
   updateNode(props.id, { size: localSize.value })
@@ -722,6 +749,14 @@ const handleGenerate = async (mode = 'auto') => {
       params.quality = localQuality.value
     }
 
+    if (String(localSeed.value || '').trim()) {
+      params.seed = String(localSeed.value).trim()
+    }
+
+    if (String(localNegativePrompt.value || '').trim()) {
+      params.negative_prompt = String(localNegativePrompt.value).trim()
+    }
+
     if (refImages.length > 0) {
       params.image = refImages
     }
@@ -815,6 +850,18 @@ watch(() => props.data?.model, (newModel) => {
   }
 })
 
+watch(() => props.data?.seed, (value) => {
+  if ((value || '') !== localSeed.value) {
+    localSeed.value = value || ''
+  }
+})
+
+watch(() => props.data?.negative_prompt, (value) => {
+  if ((value || '') !== localNegativePrompt.value) {
+    localNegativePrompt.value = value || ''
+  }
+})
+
 // 修复 Vue Flow visibility: hidden 问题
 watch(() => props.data, () => {
   nextTick(() => {
@@ -848,5 +895,56 @@ watch(
 .image-config-node {
   cursor: default;
   position: relative;
+}
+
+.advanced-params {
+  border-top: 1px solid var(--border-color);
+  padding-top: 8px;
+}
+
+.advanced-toggle {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  border-radius: 9px;
+  padding: 6px 8px;
+  color: var(--text-secondary);
+  background: var(--bg-tertiary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.advanced-toggle span {
+  color: var(--accent-color);
+  font-size: 11px;
+}
+
+.advanced-grid {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.advanced-grid label {
+  display: grid;
+  gap: 4px;
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.advanced-grid input {
+  min-width: 0;
+  border: 1px solid var(--border-color);
+  border-radius: 9px;
+  padding: 6px 8px;
+  outline: none;
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+  font-size: 12px;
+}
+
+.advanced-grid input:focus {
+  border-color: var(--accent-color);
 }
 </style>

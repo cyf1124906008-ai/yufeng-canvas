@@ -37,7 +37,19 @@
       </div>
       
       <!-- Content | 内容 -->
-      <div class="panel-content">
+      <div
+        class="panel-content"
+        :class="{ 'is-dragging-file': isDraggingWorkflowFile }"
+        @dragenter.prevent="isDraggingWorkflowFile = true"
+        @dragover.prevent="isDraggingWorkflowFile = true"
+        @dragleave.prevent="handleDragLeave"
+        @drop.prevent="handleWorkflowDrop"
+      >
+        <div v-if="isDraggingWorkflowFile" class="import-drop-overlay">
+          <div class="drop-orb">JSON</div>
+          <h3>松开即可导入工作流</h3>
+          <p>支持从 YUFENG Canvas 导出的 .json 工作流文件。</p>
+        </div>
         <!-- Public workflows | 公共工作流 -->
         <div v-if="activeTab === 'public'" class="public-workflows">
           <div class="category-row">
@@ -129,6 +141,7 @@ const emit = defineEmits(['update:show', 'add-workflow'])
 const activeTab = ref('public')
 const selectedCategory = ref('all')
 const importInputRef = ref(null)
+const isDraggingWorkflowFile = ref(false)
 
 // Visible state | 显示状态
 const visible = computed({
@@ -231,6 +244,21 @@ const triggerImport = () => {
   importInputRef.value?.click()
 }
 
+const importWorkflowFile = async (file) => {
+  if (!file) return
+
+  try {
+    const text = await file.text()
+    const payload = JSON.parse(text)
+    const workflow = createImportedTemplate(payload, file.name)
+    emit('add-workflow', { workflow, options: {} })
+    visible.value = false
+    window.$message?.success('工作流已导入画布')
+  } catch (err) {
+    window.$message?.error(err.message || '工作流导入失败，请确认是 YUFENG Canvas JSON 文件')
+  }
+}
+
 const normalizeImportedWorkflow = (payload) => {
   const source = payload?.workflow || payload?.canvas || payload
   const importedNodes = Array.isArray(source?.nodes) ? source.nodes : []
@@ -304,15 +332,25 @@ const handleImportFile = async (event) => {
   event.target.value = ''
   if (!file) return
 
-  try {
-    const text = await file.text()
-    const payload = JSON.parse(text)
-    const workflow = createImportedTemplate(payload, file.name)
-    emit('add-workflow', { workflow, options: {} })
-    visible.value = false
-    window.$message?.success('工作流已导入画布')
-  } catch (err) {
-    window.$message?.error(err.message || '工作流导入失败，请确认是 YUFENG Canvas JSON 文件')
+  importWorkflowFile(file)
+}
+
+const handleWorkflowDrop = (event) => {
+  isDraggingWorkflowFile.value = false
+  const file = Array.from(event.dataTransfer?.files || [])
+    .find((item) => item.name?.toLowerCase().endsWith('.json'))
+
+  if (!file) {
+    window.$message?.warning('请拖入 .json 工作流文件')
+    return
+  }
+
+  importWorkflowFile(file)
+}
+
+const handleDragLeave = (event) => {
+  if (!event.currentTarget?.contains(event.relatedTarget)) {
+    isDraggingWorkflowFile.value = false
   }
 }
 
@@ -517,6 +555,60 @@ const vClickOutside = {
   position: relative;
   z-index: 1;
   padding: 22px 28px 28px;
+}
+
+.panel-content.is-dragging-file {
+  outline: 1px solid rgba(85, 245, 182, 0.68);
+  outline-offset: -14px;
+}
+
+.import-drop-overlay {
+  position: absolute;
+  inset: 14px;
+  z-index: 5;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 10px;
+  border: 1px solid rgba(85, 245, 182, 0.74);
+  border-radius: 28px;
+  background:
+    radial-gradient(circle at 50% 24%, rgba(85, 245, 182, 0.22), transparent 36%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.84), rgba(236, 253, 245, 0.76));
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.58), 0 28px 80px rgba(4, 120, 87, 0.2);
+  backdrop-filter: blur(22px) saturate(1.35);
+  text-align: center;
+}
+
+:global(.dark) .import-drop-overlay {
+  background:
+    radial-gradient(circle at 50% 24%, rgba(85, 245, 182, 0.16), transparent 36%),
+    linear-gradient(135deg, rgba(15, 23, 42, 0.9), rgba(6, 78, 59, 0.72));
+}
+
+.drop-orb {
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  border-radius: 24px;
+  color: #052e2b;
+  background: linear-gradient(135deg, #dffef7, #55f5b6 52%, #38bdf8);
+  box-shadow: 0 22px 56px rgba(17, 216, 197, 0.3);
+  font-size: 13px;
+  font-weight: 950;
+  letter-spacing: 0.1em;
+}
+
+.import-drop-overlay h3 {
+  color: var(--text-primary);
+  font-size: 22px;
+  font-weight: 950;
+}
+
+.import-drop-overlay p {
+  color: var(--text-secondary);
+  font-size: 13px;
 }
 
 .public-workflows {

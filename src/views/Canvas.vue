@@ -18,6 +18,10 @@
         </n-dropdown>
       </template>
       <template #right>
+        <span v-if="activeRunLabel" class="live-run-chip" title="当前运行耗时">
+          <i></i>
+          运行中 {{ activeRunLabel }}
+        </span>
         <button
           @click="startCanvasTour"
           class="p-2 hover:bg-[var(--bg-tertiary)] rounded-lg transition-colors"
@@ -174,6 +178,9 @@
           <div>
             <p class="runtime-log-kicker">RUN LOG</p>
             <h3>运行日志</h3>
+            <p v-if="activeRunLabel" class="runtime-live-line">
+              {{ activeRunCount }} 个任务运行中 · 已用 {{ activeRunLabel }}
+            </p>
           </div>
           <div class="flex items-center gap-2">
             <button class="runtime-log-clear" @click="clearRuntimeLogs">清空</button>
@@ -465,6 +472,9 @@ const showRuntimeLogs = ref(false)
 const showCanvasTour = ref(false)
 const renameValue = ref('')
 const canvasTourStorageKey = 'yufeng-canvas-canvas-tour-v1'
+const runtimeNow = ref(Date.now())
+const processingStartedAt = ref(0)
+let runtimeTicker = null
 
 const canvasTourSteps = [
   {
@@ -565,6 +575,44 @@ const formatDuration = (durationMs) => {
   if (value < 60_000) return `${(value / 1000).toFixed(value < 10_000 ? 1 : 0)}s`
   return `${Math.floor(value / 60_000)}m ${Math.round((value % 60_000) / 1000)}s`
 }
+
+const activeRunningNodes = computed(() =>
+  nodes.value.filter((node) => (node.type === 'image' || node.type === 'video') && node.data?.loading)
+)
+
+const activeRunCount = computed(() => {
+  const transientTaskCount = isProcessing.value || workflowExecuting.value || workflowAnalyzing.value ? 1 : 0
+  return activeRunningNodes.value.length + transientTaskCount
+})
+
+const activeRunStartedAt = computed(() => {
+  const nodeStarts = activeRunningNodes.value
+    .map((node) => Number(node.data?.startedAt || node.data?.createdAt || 0))
+    .filter(Boolean)
+
+  if ((isProcessing.value || workflowExecuting.value || workflowAnalyzing.value) && processingStartedAt.value) {
+    nodeStarts.push(processingStartedAt.value)
+  }
+
+  return nodeStarts.length ? Math.min(...nodeStarts) : 0
+})
+
+const activeRunLabel = computed(() => {
+  if (!activeRunStartedAt.value) return ''
+  return formatDuration(runtimeNow.value - activeRunStartedAt.value)
+})
+
+watch(
+  [isProcessing, workflowExecuting, workflowAnalyzing],
+  ([processing, executing, analyzing]) => {
+    const active = processing || executing || analyzing
+    if (active && !processingStartedAt.value) {
+      processingStartedAt.value = Date.now()
+    } else if (!active) {
+      processingStartedAt.value = 0
+    }
+  }
+)
 
 const getLogDuration = (log) => {
   const duration = log?.meta?.durationMs ?? log?.meta?.elapsedMs ?? log?.durationMs
@@ -1052,6 +1100,9 @@ watch(
 onMounted(() => {
   checkMobile()
   refreshSuggestions()
+  runtimeTicker = window.setInterval(() => {
+    runtimeNow.value = Date.now()
+  }, 1000)
   window.addEventListener('resize', checkMobile)
   
   // Initialize projects store | 初始化项目存储
@@ -1083,6 +1134,10 @@ onMounted(() => {
 
 // Cleanup on unmount | 卸载时清理
 onUnmounted(() => {
+  if (runtimeTicker) {
+    window.clearInterval(runtimeTicker)
+    runtimeTicker = null
+  }
   window.removeEventListener('resize', checkMobile)
   // Save project before leaving | 离开前保存项目
   saveProject()
@@ -1362,6 +1417,41 @@ onUnmounted(() => {
   text-align: center;
 }
 
+.live-run-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid rgba(34, 197, 94, 0.34);
+  border-radius: 999px;
+  color: #047857;
+  background:
+    radial-gradient(circle at 16% 0%, rgba(255, 255, 255, 0.9), transparent 42%),
+    linear-gradient(135deg, rgba(220, 252, 231, 0.78), rgba(186, 230, 253, 0.56));
+  box-shadow: 0 14px 36px rgba(20, 184, 166, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.68);
+  backdrop-filter: blur(16px) saturate(1.35);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.live-run-chip i {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #22c55e;
+  box-shadow: 0 0 0 5px rgba(34, 197, 94, 0.14), 0 0 18px rgba(34, 197, 94, 0.8);
+  animation: live-run-pulse 1.35s ease-in-out infinite;
+}
+
+.dark .live-run-chip {
+  color: #99f6e4;
+  border-color: rgba(94, 234, 212, 0.2);
+  background:
+    radial-gradient(circle at 16% 0%, rgba(255, 255, 255, 0.09), transparent 42%),
+    linear-gradient(135deg, rgba(20, 184, 166, 0.2), rgba(56, 189, 248, 0.12));
+}
+
 .runtime-log-panel {
   width: min(390px, calc(100vw - 32px));
   max-height: calc(100vh - 140px);
@@ -1401,6 +1491,13 @@ onUnmounted(() => {
 
 .runtime-log-head h3 {
   font-size: 18px;
+  font-weight: 800;
+}
+
+.runtime-live-line {
+  margin-top: 4px;
+  color: var(--accent-color);
+  font-size: 12px;
   font-weight: 800;
 }
 
@@ -1522,5 +1619,16 @@ onUnmounted(() => {
   word-break: break-word;
   color: var(--text-secondary);
   font-size: 11px;
+}
+
+@keyframes live-run-pulse {
+  0%, 100% {
+    transform: scale(0.9);
+    opacity: 0.78;
+  }
+  50% {
+    transform: scale(1.15);
+    opacity: 1;
+  }
 }
 </style>

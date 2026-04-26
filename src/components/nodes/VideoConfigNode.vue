@@ -87,6 +87,27 @@
           </n-dropdown>
         </div>
 
+        <div class="advanced-params">
+          <button class="advanced-toggle" @click="showAdvancedParams = !showAdvancedParams">
+            高级参数
+            <span>{{ showAdvancedParams ? '收起' : '展开' }}</span>
+          </button>
+          <div v-if="showAdvancedParams" class="advanced-grid">
+            <label>
+              <span>Seed</span>
+              <input v-model="localSeed" placeholder="可选，固定随机种子" @change="updateAdvancedParams" />
+            </label>
+            <label>
+              <span>负面词</span>
+              <input v-model="localNegativePrompt" placeholder="可选，不想出现的内容" @change="updateAdvancedParams" />
+            </label>
+            <label>
+              <span>镜头运动</span>
+              <input v-model="localCameraMotion" placeholder="可选，如 dolly in / pan left" @change="updateAdvancedParams" />
+            </label>
+          </div>
+        </div>
+
         <!-- Connected inputs indicator | 连接输入指示 -->
         <div
           class="flex items-center gap-2 text-xs text-[var(--text-secondary)] py-1 border-t border-[var(--border-color)]">
@@ -196,6 +217,10 @@ const localModel = ref(props.data?.model || modelStore.selectedVideoModel || '')
 const localRatio = ref(props.data?.ratio || '16:9')
 const localDuration = ref(props.data?.dur || 5)
 const localResolution = ref(props.data?.resolution || '720p')
+const localSeed = ref(props.data?.seed || '')
+const localNegativePrompt = ref(props.data?.negative_prompt || '')
+const localCameraMotion = ref(props.data?.camera_motion || '')
+const showAdvancedParams = ref(false)
 
 // Label editing state | Label 编辑状态
 const isEditingLabel = ref(false)
@@ -340,6 +365,14 @@ const handleDurationSelect = (key) => {
 const handleResolutionSelect = (key) => {
   localResolution.value = key
   updateNode(props.id, { resolution: key })
+}
+
+const updateAdvancedParams = () => {
+  updateNode(props.id, {
+    seed: String(localSeed.value || '').trim(),
+    negative_prompt: String(localNegativePrompt.value || '').trim(),
+    camera_motion: String(localCameraMotion.value || '').trim()
+  })
 }
 
 // Get connected inputs by role | 根据角色获取连接的输入
@@ -495,6 +528,18 @@ const handleGenerate = async () => {
       params.resolution = localResolution.value
     }
 
+    if (String(localSeed.value || '').trim()) {
+      params.seed = String(localSeed.value).trim()
+    }
+
+    if (String(localNegativePrompt.value || '').trim()) {
+      params.negative_prompt = String(localNegativePrompt.value).trim()
+    }
+
+    if (String(localCameraMotion.value || '').trim()) {
+      params.camera_motion = String(localCameraMotion.value).trim()
+    }
+
     // 只创建任务，获取 taskId，不在这里轮询
     const { taskId: newTaskId, url } = await createVideoTaskOnly(params)
 
@@ -607,6 +652,24 @@ watch(() => props.data?.resolution, (newResolution) => {
   }
 })
 
+watch(() => props.data?.seed, (value) => {
+  if ((value || '') !== localSeed.value) {
+    localSeed.value = value || ''
+  }
+})
+
+watch(() => props.data?.negative_prompt, (value) => {
+  if ((value || '') !== localNegativePrompt.value) {
+    localNegativePrompt.value = value || ''
+  }
+})
+
+watch(() => props.data?.camera_motion, (value) => {
+  if ((value || '') !== localCameraMotion.value) {
+    localCameraMotion.value = value || ''
+  }
+})
+
 // 修复 Vue Flow visibility: hidden 问题
 // 当节点数据变化时，强制更新内部状态
 watch(() => props.data, () => {
@@ -641,5 +704,56 @@ watch(
 .video-config-node {
   cursor: default;
   position: relative;
+}
+
+.advanced-params {
+  border-top: 1px solid var(--border-color);
+  padding-top: 8px;
+}
+
+.advanced-toggle {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  border-radius: 9px;
+  padding: 6px 8px;
+  color: var(--text-secondary);
+  background: var(--bg-tertiary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.advanced-toggle span {
+  color: var(--accent-color);
+  font-size: 11px;
+}
+
+.advanced-grid {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.advanced-grid label {
+  display: grid;
+  gap: 4px;
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.advanced-grid input {
+  min-width: 0;
+  border: 1px solid var(--border-color);
+  border-radius: 9px;
+  padding: 6px 8px;
+  outline: none;
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+  font-size: 12px;
+}
+
+.advanced-grid input:focus {
+  border-color: var(--accent-color);
 }
 </style>

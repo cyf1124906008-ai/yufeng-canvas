@@ -182,13 +182,23 @@
                 >
                   <n-icon :size="19"><ImageOutline /></n-icon>
                 </button>
+                <button
+                  class="attach-button"
+                  :class="{ active: chatReadingUrls }"
+                  :disabled="chatLoading || chatReadingUrls || !extractUrls(chatText).length"
+                  title="读取输入框里的网页链接"
+                  @click="readLinksIntoChat"
+                >
+                  <n-spin v-if="chatReadingUrls" :size="15" />
+                  <n-icon v-else :size="18"><SearchOutline /></n-icon>
+                </button>
                 <textarea
                   v-model="chatText"
-                  placeholder="直接和模型对话，例如：帮我把这个产品想法拆成 3 个视觉方向..."
-                  :disabled="chatLoading"
+                  placeholder="直接和模型对话；粘贴网页链接后，可点放大镜读取页面内容..."
+                  :disabled="chatLoading || chatReadingUrls"
                   @keydown.enter.exact.prevent="sendHomeChat"
                 />
-                <button class="send-button" :disabled="chatLoading || (!chatText.trim() && !chatAttachments.length)" @click="sendHomeChat">
+                <button class="send-button" :disabled="chatLoading || chatReadingUrls || (!chatText.trim() && !chatAttachments.length)" @click="sendHomeChat">
                   <n-spin v-if="chatLoading" :size="16" />
                   <n-icon v-else :size="20"><SendOutline /></n-icon>
                 </button>
@@ -461,6 +471,7 @@ import {
   FolderOutline,
   ImageOutline,
   RefreshOutline,
+  SearchOutline,
   SendOutline,
   SettingsOutline,
   SparklesOutline,
@@ -506,6 +517,7 @@ const chatText = ref('')
 const chatMessages = ref([])
 const chatAttachments = ref([])
 const chatFileInputRef = ref(null)
+const chatReadingUrls = ref(false)
 const showRenameModal = ref(false)
 const renameValue = ref('')
 const renameTargetId = ref(null)
@@ -1043,7 +1055,63 @@ const removeChatAttachment = (id) => {
   chatAttachments.value = chatAttachments.value.filter((item) => item.id !== id)
 }
 
-const buildChatPayload = (content) => {
+const extractUrls = (value = '') => {
+  const matches = String(value).match(/https?:\/\/[^\s，。！？、)）\]}>"']+/gi) || []
+  return [...new Set(matches.map((url) => url.replace(/[.,;:!?，。；：！？]+$/, '')))].slice(0, 3)
+}
+
+const fetchReadableLinks = async (content, { silent = false } = {}) => {
+  const urls = extractUrls(content).filter((url) =>
+    !chatAttachments.value.some((item) => item.kind === 'text' && item.sourceUrl === url)
+  )
+
+  if (!urls.length || !window.desktopApp?.fetchUrlText) return []
+
+  const readablePages = []
+  for (const url of urls) {
+    try {
+      const page = await window.desktopApp.fetchUrlText(url)
+      if (page?.text) {
+        readablePages.push(page)
+      }
+    } catch (err) {
+      if (!silent) {
+        window.$message?.warning(`${url} 读取失败：${err.message || '未知错误'}`)
+      }
+    }
+  }
+
+  return readablePages
+}
+
+const readLinksIntoChat = async () => {
+  const content = chatText.value.trim()
+  if (!content || chatReadingUrls.value) return
+
+  chatReadingUrls.value = true
+  try {
+    const pages = await fetchReadableLinks(content)
+    if (!pages.length) {
+      window.$message?.info('没有读取到新的网页内容')
+      return
+    }
+
+    const attachments = pages.map((page) => ({
+      id: `url_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      kind: 'text',
+      name: page.title ? `网页：${page.title}` : `网页：${page.url}`,
+      text: `[网页资料]\n来源：${page.url}\n标题：${page.title || '无标题'}\n\n${page.text}`,
+      sourceUrl: page.url
+    }))
+
+    chatAttachments.value = [...chatAttachments.value, ...attachments].slice(0, 8)
+    window.$message?.success(`已读取 ${attachments.length} 个链接`)
+  } finally {
+    chatReadingUrls.value = false
+  }
+}
+
+const buildChatPayload = (content, webContexts = []) => {
   const textAttachments = chatAttachments.value.filter((item) => item.kind === 'text')
   const imageAttachments = chatAttachments.value.filter((item) => item.kind === 'image')
 
@@ -1052,9 +1120,14 @@ const buildChatPayload = (content) => {
     return `\n\n[附件 ${index + 1}: ${item.name}]\n${clipped}`
   }).join('')
 
+  const webText = webContexts.map((page, index) => {
+    const clipped = String(page.text || '').slice(0, 16000)
+    return `\n\n[网页资料 ${index + 1}]\n来源：${page.url}\n标题：${page.title || '无标题'}\n${clipped}`
+  }).join('')
+
   return {
     content: content || '请分析我上传的素材，并给出创作建议。',
-    modelContent: `${content || '请分析我上传的素材，并给出创作建议。'}${attachmentText}`,
+    modelContent: `${content || '请分析我上传的素材，并给出创作建议。'}${webText}${attachmentText}`,
     imageAttachments
   }
 }
@@ -1069,14 +1142,21 @@ const sendHomeChat = async () => {
     return
   }
 
-  const payload = buildChatPayload(content)
+  chatReadingUrls.value = true
+  const webContexts = await fetchReadableLinks(content, { silent: true })
+  chatReadingUrls.value = false
+
+  const payload = buildChatPayload(content, webContexts)
   const attachmentNames = chatAttachments.value.map((item) => item.name)
+  const webNames = webContexts.map((item) => item.title || item.url)
 
   const userMessage = {
     id: `user_${Date.now()}`,
     role: 'user',
     content: attachmentNames.length
-      ? `${payload.content}\n\n附件：${attachmentNames.join('、')}`
+      ? `${payload.content}\n\n附件：${attachmentNames.join('、')}${webNames.length ? `\n网页：${webNames.join('、')}` : ''}`
+      : webNames.length
+        ? `${payload.content}\n\n网页：${webNames.join('、')}`
       : payload.content
   }
   chatMessages.value.push(userMessage)
@@ -1949,7 +2029,7 @@ onUnmounted(() => {
 
 .chat-composer {
   display: grid;
-  grid-template-columns: 42px 1fr 44px;
+  grid-template-columns: 42px 42px 1fr 44px;
   align-items: end;
   gap: 10px;
   border: 1px solid rgba(148, 163, 184, 0.26);
@@ -1982,6 +2062,12 @@ onUnmounted(() => {
   color: var(--accent-color);
   border-color: rgba(34, 197, 94, 0.42);
   background: rgba(255, 255, 255, 0.78);
+}
+
+.attach-button.active {
+  color: var(--accent-color);
+  border-color: rgba(34, 197, 94, 0.44);
+  background: rgba(220, 252, 231, 0.72);
 }
 
 .attach-button:disabled {

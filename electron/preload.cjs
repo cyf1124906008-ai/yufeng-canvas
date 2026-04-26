@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld('desktopApp', {
   getVersion: () => ipcRenderer.invoke('app:get-version'),
   getUpdateStatus: () => ipcRenderer.invoke('app:get-update-status'),
   getLocalApiStatus: () => ipcRenderer.invoke('app:get-local-api-status'),
+  fetchUrlText: (url) => ipcRenderer.invoke('app:fetch-url-text', url),
   checkUpdate: () => ipcRenderer.invoke('app:check-update'),
   downloadUpdate: () => ipcRenderer.invoke('app:download-update'),
   installUpdate: () => ipcRenderer.invoke('app:install-update'),

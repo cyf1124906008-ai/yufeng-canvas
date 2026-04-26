@@ -101,6 +101,78 @@ const getInstallerAsset = (release) => {
   ) || assets.find((asset) => /\.exe$/i.test(asset.name || ''))
 }
 
+const decodeHtmlEntities = (value = '') => String(value)
+  .replace(/&nbsp;/gi, ' ')
+  .replace(/&amp;/gi, '&')
+  .replace(/&lt;/gi, '<')
+  .replace(/&gt;/gi, '>')
+  .replace(/&quot;/gi, '"')
+  .replace(/&#39;/gi, "'")
+  .replace(/&#(\d+);/g, (_match, code) => String.fromCharCode(Number(code)))
+
+const htmlToReadableText = (html = '') => {
+  const title = decodeHtmlEntities(html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] || '').trim()
+  const text = decodeHtmlEntities(
+    String(html)
+      .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+      .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+      .replace(/<noscript[\s\S]*?<\/noscript>/gi, ' ')
+      .replace(/<!--[\s\S]*?-->/g, ' ')
+      .replace(/<\/(p|div|section|article|header|footer|h[1-6]|li|br|tr)>/gi, '\n')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/[ \t]+\n/g, '\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .replace(/[ \t]{2,}/g, ' ')
+  ).trim()
+
+  return { title, text }
+}
+
+const fetchUrlText = async (rawUrl) => {
+  const target = String(rawUrl || '').trim()
+  if (!/^https?:\/\//i.test(target)) {
+    throw new Error('只支持读取 http/https 链接')
+  }
+
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 15_000)
+
+  try {
+    const response = await fetch(target, {
+      headers: {
+        Accept: 'text/html, text/plain;q=0.9, application/json;q=0.7, */*;q=0.5',
+        'User-Agent': `${packageJson.productName || packageJson.name}/${packageJson.version}`
+      },
+      redirect: 'follow',
+      signal: controller.signal
+    })
+
+    if (!response.ok) {
+      throw new Error(`读取链接失败：HTTP ${response.status}`)
+    }
+
+    const contentType = response.headers.get('content-type') || ''
+    const rawText = (await response.text()).slice(0, 1_500_000)
+    const readable = /html/i.test(contentType)
+      ? htmlToReadableText(rawText)
+      : { title: '', text: rawText.trim() }
+
+    if (!readable.text) {
+      throw new Error('链接里没有读取到可用正文')
+    }
+
+    return {
+      ok: true,
+      url: response.url || target,
+      title: readable.title || response.url || target,
+      contentType,
+      text: readable.text.slice(0, 60_000)
+    }
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
 const setUpdateState = (nextState) => {
   updateState = {
     ...updateState,
@@ -320,6 +392,22 @@ const mcpTools = [
       type: 'object',
       properties: {}
     }
+  },
+  {
+    name: 'yufeng.support',
+    description: 'Return support contacts and project links.',
+    inputSchema: {
+      type: 'object',
+      properties: {}
+    }
+  },
+  {
+    name: 'yufeng.prompt_suggestions',
+    description: 'Return starter prompt ideas for image, video and workflow creation.',
+    inputSchema: {
+      type: 'object',
+      properties: {}
+    }
   }
 ]
 
@@ -390,6 +478,48 @@ const handleMcpRequest = async (body = {}) => {
         }
       }
     }
+
+    if (name === 'yufeng.support') {
+      return {
+        jsonrpc: '2.0',
+        id,
+        result: {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                app: packageJson.productName || packageJson.name,
+                email: '16689675868@163.com',
+                github: `https://github.com/${repo}`,
+                issues: `https://github.com/${repo}/issues`,
+                apiKey: 'https://dataeyes.ai/?promoter_code=nqg9bv83'
+              }, null, 2)
+            }
+          ]
+        }
+      }
+    }
+
+    if (name === 'yufeng.prompt_suggestions') {
+      return {
+        jsonrpc: '2.0',
+        id,
+        result: {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify([
+                '把这个中文提示词优化得更适合生图，但不要翻译成英文',
+                '生成一个 6 镜头短视频分镜，包含首尾帧建议',
+                '根据产品照片设计一套电商主图和详情页画面',
+                '帮我把角色设定扩展成可直接图生图的提示词',
+                '我想做一个公共工作流模板，请帮我拆成输入节点、生成节点和结果节点'
+              ], null, 2)
+            }
+          ]
+        }
+      }
+    }
   }
 
   return {
@@ -419,7 +549,8 @@ const startLocalApiServer = () => {
           ok: true,
           app: packageJson.productName || packageJson.name,
           version: packageJson.version,
-          mcp: `${localApiState.origin}/mcp`
+          mcp: `${localApiState.origin}/mcp`,
+          support: `${localApiState.origin}/support`
         })
         return
       }
@@ -435,6 +566,17 @@ const startLocalApiServer = () => {
         return
       }
 
+      if (request.method === 'GET' && url.pathname === '/support') {
+        sendJson(response, 200, {
+          ok: true,
+          email: '16689675868@163.com',
+          github: `https://github.com/${repo}`,
+          issues: `https://github.com/${repo}/issues`,
+          apiKey: 'https://dataeyes.ai/?promoter_code=nqg9bv83'
+        })
+        return
+      }
+
       if (request.method === 'POST' && url.pathname === '/mcp') {
         const body = await readJsonBody(request)
         sendJson(response, 200, await handleMcpRequest(body))
@@ -444,7 +586,7 @@ const startLocalApiServer = () => {
       sendJson(response, 404, {
         ok: false,
         error: 'Not found',
-        endpoints: ['/health', '/mcp']
+        endpoints: ['/health', '/mcp', '/support']
       })
     } catch (error) {
       sendJson(response, 500, {
@@ -519,6 +661,7 @@ app.whenReady().then(() => {
   ipcMain.handle('app:get-version', () => packageJson.version)
   ipcMain.handle('app:get-update-status', () => updateState)
   ipcMain.handle('app:get-local-api-status', () => localApiState)
+  ipcMain.handle('app:fetch-url-text', (_event, url) => fetchUrlText(url))
 
   ipcMain.handle('app:check-update', async () => {
     if (!isPackagedRuntime()) {

@@ -31,6 +31,18 @@
         </article>
 
         <article class="support-card">
+          <div class="qr-card qr-group">
+            <img :src="wechatQr" alt="官方社群二维码" />
+          </div>
+          <div>
+            <n-icon :size="20"><PeopleOutline /></n-icon>
+            <h3>官方社群 / 售后指导</h3>
+            <p>扫码添加微信后备注“YUFENG”，用于进群、安装指导、模型配置、售后建议和案例共创。</p>
+          </div>
+          <button @click="copyGroupContact">复制进群备注</button>
+        </article>
+
+        <article class="support-card">
           <div class="support-api-icon support-mail-icon">
             <n-icon :size="28"><MailOutline /></n-icon>
           </div>
@@ -86,7 +98,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { NIcon, NModal } from 'naive-ui'
-import { ChatbubbleOutline, LogoGithub, MailOutline, SettingsOutline, SparklesOutline } from '@vicons/ionicons5'
+import { ChatbubbleOutline, LogoGithub, MailOutline, PeopleOutline, SettingsOutline, SparklesOutline } from '@vicons/ionicons5'
 import { getApiKeyHelpUrl, getGithubUrl } from '../config/distribution'
 import wechatQr from '../assets/wechat-qr.jpg'
 
@@ -142,6 +154,16 @@ const copyEmail = async () => {
     window.$message?.success('已复制邮箱')
   } catch {
     window.$message?.info(authorEmail)
+  }
+}
+
+const copyGroupContact = async () => {
+  const text = `微信扫码添加作者，备注：YUFENG 进群\n邮箱：${authorEmail}`
+  try {
+    await navigator.clipboard?.writeText(text)
+    window.$message?.success('已复制进群备注')
+  } catch {
+    window.$message?.info(text)
   }
 }
 
@@ -256,11 +278,6 @@ onMounted(async () => {
   border-radius: 26px;
   background: rgba(255, 255, 255, 0.52);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72), 0 18px 44px rgba(15, 23, 42, 0.08);
-}
-
-.support-card:nth-child(3) {
-  grid-column: 1 / -1;
-  grid-template-columns: 68px 1fr auto;
 }
 
 .dark .support-card {
