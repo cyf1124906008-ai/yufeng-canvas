@@ -4,10 +4,17 @@
       <div v-if="show" class="guided-tour-layer" @keydown.esc="skipTour">
         <div class="tour-dim"></div>
         <div v-if="targetRect" class="tour-spotlight" :style="spotlightStyle">
-          <span class="tour-border-runner is-top"></span>
-          <span class="tour-border-runner is-right"></span>
-          <span class="tour-border-runner is-bottom"></span>
-          <span class="tour-border-runner is-left"></span>
+          <svg class="tour-border-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+            <defs>
+              <linearGradient id="tour-border-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="#eaf7ff" />
+                <stop offset="44%" stop-color="#74c7ff" />
+                <stop offset="100%" stop-color="#6dffd9" />
+              </linearGradient>
+            </defs>
+            <rect class="tour-border-track" x="2" y="2" width="96" height="96" rx="6" pathLength="100" />
+            <rect class="tour-border-run" x="2" y="2" width="96" height="96" rx="6" pathLength="100" />
+          </svg>
         </div>
         <section class="tour-card" :class="{ 'is-center': !targetRect }" :style="cardStyle">
           <div class="tour-card-head">
@@ -66,6 +73,17 @@ const currentStepNumber = computed(() => `${currentIndex.value + 1}/${Math.max(p
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value))
 
+const isElementComfortablyVisible = (element) => {
+  const rect = element.getBoundingClientRect()
+  const margin = 96
+  return (
+    rect.top >= margin &&
+    rect.left >= margin &&
+    rect.bottom <= window.innerHeight - margin &&
+    rect.right <= window.innerWidth - margin
+  )
+}
+
 const measureTarget = () => {
   const selector = currentStep.value?.target
   if (!selector) {
@@ -104,9 +122,9 @@ const updateTarget = async ({ scroll = false } = {}) => {
     return
   }
 
-  if (scroll) {
-    element.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' })
-    window.setTimeout(measureTarget, 260)
+  if (scroll && !isElementComfortablyVisible(element)) {
+    element.scrollIntoView({ behavior: 'auto', block: 'center', inline: 'center' })
+    window.requestAnimationFrame(measureTarget)
     return
   }
 
@@ -196,8 +214,8 @@ const handleKeydown = (event) => {
 watch(
   () => props.show,
   (visible) => {
-  if (visible) {
-    currentIndex.value = 0
+    if (visible) {
+      currentIndex.value = 0
       emit('step-change', currentStep.value, currentIndex.value)
       updateTarget({ scroll: true })
       window.addEventListener('keydown', handleKeydown)
@@ -242,65 +260,47 @@ onBeforeUnmount(() => {
 .tour-spotlight {
   position: fixed;
   border-radius: 24px;
-  border: 2px solid rgba(111, 255, 221, 0.95);
+  border: 1px solid rgba(111, 255, 221, 0.72);
   box-shadow:
-    0 0 0 9999px rgba(2, 8, 16, 0.24),
-    0 0 38px rgba(45, 255, 211, 0.6),
-    inset 0 0 34px rgba(255, 255, 255, 0.18);
-  background: rgba(98, 255, 219, 0.035);
+    0 0 0 9999px rgba(2, 8, 16, 0.22),
+    0 0 34px rgba(45, 255, 211, 0.46),
+    inset 0 0 22px rgba(255, 255, 255, 0.12);
+  background: rgba(98, 255, 219, 0.025);
   pointer-events: none;
-  transition: all 0.28s ease;
+  transform: translateZ(0);
+  transition: transform 0.24s ease, opacity 0.24s ease;
   overflow: visible;
 }
 
-.tour-border-runner {
+.tour-border-svg {
   position: absolute;
+  inset: -7px;
+  width: calc(100% + 14px);
+  height: calc(100% + 14px);
+  overflow: visible;
   pointer-events: none;
-  opacity: 0;
   filter:
-    drop-shadow(0 0 10px rgba(151, 231, 255, 0.95))
-    drop-shadow(0 0 18px rgba(99, 255, 219, 0.65));
+    drop-shadow(0 0 7px rgba(234, 247, 255, 0.96))
+    drop-shadow(0 0 16px rgba(99, 255, 219, 0.7));
 }
 
-.tour-border-runner.is-top,
-.tour-border-runner.is-bottom {
-  width: min(42%, 260px);
-  height: 3px;
-  background: linear-gradient(90deg, transparent, #eaf7ff 18%, #7bd3ff 52%, #6dffd9 82%, transparent);
+.tour-border-track,
+.tour-border-run {
+  fill: none;
+  vector-effect: non-scaling-stroke;
 }
 
-.tour-border-runner.is-right,
-.tour-border-runner.is-left {
-  width: 3px;
-  height: min(42%, 220px);
-  background: linear-gradient(180deg, transparent, #eaf7ff 18%, #7bd3ff 52%, #6dffd9 82%, transparent);
+.tour-border-track {
+  stroke: rgba(129, 255, 224, 0.38);
+  stroke-width: 1.8;
 }
 
-.tour-border-runner.is-top {
-  top: -2px;
-  left: -46%;
-  animation: tour-border-top 4.8s linear infinite;
-}
-
-.tour-border-runner.is-right {
-  top: -46%;
-  right: -2px;
-  animation: tour-border-right 4.8s linear infinite;
-  animation-delay: 1.2s;
-}
-
-.tour-border-runner.is-bottom {
-  right: -46%;
-  bottom: -2px;
-  animation: tour-border-bottom 4.8s linear infinite;
-  animation-delay: 2.4s;
-}
-
-.tour-border-runner.is-left {
-  bottom: -46%;
-  left: -2px;
-  animation: tour-border-left 4.8s linear infinite;
-  animation-delay: 3.6s;
+.tour-border-run {
+  stroke: url(#tour-border-gradient);
+  stroke-width: 3.2;
+  stroke-linecap: round;
+  stroke-dasharray: 18 82;
+  animation: tour-border-flow 2.8s linear infinite;
 }
 
 .tour-card {
@@ -500,59 +500,9 @@ onBeforeUnmount(() => {
   }
 }
 
-@keyframes tour-border-top {
-  0% {
-    opacity: 0;
-    left: -46%;
-  }
-  8%, 22% {
-    opacity: 1;
-  }
-  30%, 100% {
-    opacity: 0;
-    left: 104%;
-  }
-}
-
-@keyframes tour-border-right {
-  0% {
-    opacity: 0;
-    top: -46%;
-  }
-  8%, 22% {
-    opacity: 1;
-  }
-  30%, 100% {
-    opacity: 0;
-    top: 104%;
-  }
-}
-
-@keyframes tour-border-bottom {
-  0% {
-    opacity: 0;
-    right: -46%;
-  }
-  8%, 22% {
-    opacity: 1;
-  }
-  30%, 100% {
-    opacity: 0;
-    right: 104%;
-  }
-}
-
-@keyframes tour-border-left {
-  0% {
-    opacity: 0;
-    bottom: -46%;
-  }
-  8%, 22% {
-    opacity: 1;
-  }
-  30%, 100% {
-    opacity: 0;
-    bottom: 104%;
+@keyframes tour-border-flow {
+  to {
+    stroke-dashoffset: -100;
   }
 }
 </style>

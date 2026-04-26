@@ -240,8 +240,8 @@
         </div>
       </section>
 
-      <section class="showcase-section" data-tour="showcase">
-        <div class="section-title">
+      <section class="showcase-section">
+        <div class="section-title" data-tour="showcase">
           <div>
             <p class="eyebrow">READY TO BUILD</p>
             <h2>常用创作场景</h2>
@@ -271,8 +271,8 @@
         </div>
       </section>
 
-      <section ref="inspirationSection" class="inspiration-section" data-tour="prompt-library">
-        <div class="section-title">
+      <section ref="inspirationSection" class="inspiration-section">
+        <div class="section-title" data-tour="prompt-library">
           <div>
             <p class="eyebrow">GPT IMAGE 2 PROMPT LIBRARY</p>
             <h2>灵感案例库</h2>
@@ -304,8 +304,8 @@
         </div>
       </section>
 
-      <section ref="projectsSection" class="projects-section" data-tour="projects">
-        <div class="section-title">
+      <section ref="projectsSection" class="projects-section">
+        <div class="section-title" data-tour="projects">
           <div>
             <p class="eyebrow">LOCAL WORKSPACE</p>
             <h2>我的项目</h2>
