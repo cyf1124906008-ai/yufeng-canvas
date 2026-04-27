@@ -114,17 +114,37 @@
           </div>
           <div class="mode-card">
             <div class="mode-tabs">
-              <button :class="{ active: activeMode === 'chat' }" @click="focusChatEntry">
-                <n-icon :size="16"><ChatbubbleOutline /></n-icon>
-                直接对话
+              <button
+                class="mode-tab"
+                :class="{ active: activeMode === 'chat' }"
+                @click="focusChatEntry"
+              >
+                <n-icon :size="21"><ChatbubbleOutline /></n-icon>
+                <span>
+                  <strong>直接对话</strong>
+                  <small>和模型聊想法、拆方向</small>
+                </span>
               </button>
-              <button :class="{ active: activeMode === 'create' }" @click="focusCreateEntry">
-                <n-icon :size="16"><ColorPaletteOutline /></n-icon>
-                生成工作流
+              <button
+                class="mode-tab"
+                :class="{ active: activeMode === 'create' }"
+                @click="focusCreateEntry"
+              >
+                <n-icon :size="21"><SparklesOutline /></n-icon>
+                <span>
+                  <strong>生成工作流</strong>
+                  <small>一句话生成节点画布</small>
+                </span>
               </button>
             </div>
 
             <div v-if="activeMode === 'chat'" class="chat-home">
+              <div class="entry-copy">
+                <p>DIRECT CHAT</p>
+                <h3>先把创意聊清楚。</h3>
+                <span>让文本模型帮你拆方向、写提示词、整理分镜；需要图片或视频时，再一键进入节点画布。</span>
+              </div>
+
               <div class="chat-thread">
                 <div v-if="chatMessages.length === 0" class="chat-empty">
                   <div class="chat-orb">
@@ -221,6 +241,12 @@
             </div>
 
             <div v-else class="create-home">
+              <div class="entry-copy">
+                <p>WORKFLOW LAUNCHER</p>
+                <h3>一句话生成工作流</h3>
+                <span>描述你的目标，AI 会帮你拆成创意方向、提示词、模型配置和节点流程。</span>
+              </div>
+
               <div
                 class="create-composer selection-flow"
                 :class="{ 'is-selected': focusedEntry === 'create' }"
@@ -239,6 +265,7 @@
                   @keydown.enter.ctrl="handleCreateWithInput"
                 />
                 <div class="prompt-footer">
+                  <span class="prompt-count">{{ inputText.length }} / 1000</span>
                   <button class="ghost-chip" @click="randomFillAndFocus">
                     <n-icon :size="15"><RefreshOutline /></n-icon>
                     随机灵感
@@ -260,6 +287,36 @@
                 </button>
                 <button class="refresh-chip" @click="refreshSuggestions" title="换一批">
                   <n-icon :size="15"><RefreshOutline /></n-icon>
+                </button>
+              </div>
+            </div>
+
+            <div v-if="recentHomeProjects.length" class="panel-recent">
+              <div class="panel-section-head">
+                <h3>最近项目</h3>
+                <button @click="scrollToProjects">查看全部</button>
+              </div>
+              <div class="panel-recent-grid">
+                <button
+                  v-for="project in recentHomeProjects"
+                  :key="project.id"
+                  class="panel-project-card"
+                  @click="openProject(project)"
+                >
+                  <div class="panel-project-thumb">
+                    <template v-if="project.thumbnail">
+                      <video
+                        v-if="isVideoUrl(project.thumbnail)"
+                        :src="project.thumbnail"
+                        muted
+                        playsinline
+                      />
+                      <img v-else :src="project.thumbnail" :alt="project.name" />
+                    </template>
+                    <n-icon v-else :size="26"><DocumentOutline /></n-icon>
+                  </div>
+                  <strong>{{ project.name }}</strong>
+                  <span>{{ formatDate(project.updatedAt) }}</span>
                 </button>
               </div>
             </div>
@@ -387,11 +444,25 @@
     </main>
 
     <aside class="side-rail hidden md:flex">
-      <button @click="createNewProject" title="新建项目">
-        <n-icon :size="20"><DocumentOutline /></n-icon>
+      <button class="active" @click="scrollToTop" title="首页">
+        <n-icon :size="19"><SparklesOutline /></n-icon>
+        <span>首页</span>
       </button>
       <button @click="scrollToProjects" title="我的项目">
+        <n-icon :size="20"><DocumentOutline /></n-icon>
+        <span>项目</span>
+      </button>
+      <button @click="scrollToInspiration" title="模板案例">
         <n-icon :size="20"><FolderOutline /></n-icon>
+        <span>模板</span>
+      </button>
+      <button @click="showApiSettings = true" title="模型配置">
+        <n-icon :size="20"><ColorPaletteOutline /></n-icon>
+        <span>模型</span>
+      </button>
+      <button @click="showApiSettings = true" title="设置">
+        <n-icon :size="20"><SettingsOutline /></n-icon>
+        <span>设置</span>
       </button>
     </aside>
 
@@ -528,7 +599,7 @@ const modelStore = useModelStore()
 const showApiSettings = ref(false)
 const showOnboarding = ref(false)
 const showHomeTour = ref(false)
-const activeMode = ref('chat')
+const activeMode = ref('create')
 const inputText = ref('')
 const chatText = ref('')
 const chatMessages = ref([])
@@ -537,7 +608,7 @@ const chatFileInputRef = ref(null)
 const chatReadingUrls = ref(false)
 const createTextareaRef = ref(null)
 const chatTextareaRef = ref(null)
-const focusedEntry = ref(null)
+const focusedEntry = ref('create')
 const showRenameModal = ref(false)
 const renameValue = ref('')
 const renameTargetId = ref(null)
@@ -573,6 +644,7 @@ let particleCleanup = null
 let particleStartedAt = 0
 const onboardingStorageKey = 'yufeng-canvas-onboarding-v2'
 const homeTourStorageKey = 'yufeng-canvas-home-tour-v1'
+const recentHomeProjects = computed(() => projects.value.slice(0, 4))
 
 const stageStyle = computed(() => {
   const x = pointer.value.x
@@ -752,14 +824,14 @@ const initParticleField = () => {
 
 const heroSlides = [
   {
+    id: 'model',
+    title: '图片、视频、模型，像搭积木一样编排。',
+    desc: '用一句话生成提示词、参考图、模型配置和节点流程，让图片、视频和模型任务在同一个画布里协作。'
+  },
+  {
     id: 'flow',
     title: '让灵感自己长成作品。',
     desc: '一个给创作者用的本地 AI 视觉工作台。填入自己的 Key 和模型名后，就能把图片、视频和提示词编排成可复用的创作流程。'
-  },
-  {
-    id: 'model',
-    title: '图片、视频、模型，像积木一样编排。',
-    desc: '文本、图片、视频模型可以分别配置，提示词、参考图、首尾帧和结果节点也能继续复用，不再散落在不同网页里。'
   },
   {
     id: 'case',
@@ -1285,7 +1357,7 @@ const dismissOnboarding = () => {
 const startHomeTour = () => {
   showOnboarding.value = false
   localStorage.setItem(onboardingStorageKey, 'done')
-  activeMode.value = 'chat'
+  activeMode.value = 'create'
   document.querySelector('.home-shell')?.scrollTo({ top: 0, behavior: 'smooth' })
   window.setTimeout(() => {
     showHomeTour.value = true
@@ -1572,7 +1644,7 @@ onUnmounted(() => {
 .home-header {
   position: sticky;
   top: 14px;
-  width: min(1180px, calc(100vw - 32px));
+  width: min(1430px, calc(100vw - 32px));
   margin: 0 auto;
   z-index: 20;
   border: 1px solid rgba(255, 255, 255, 0.54);
@@ -1656,15 +1728,16 @@ onUnmounted(() => {
 }
 
 .home-main {
-  width: min(1180px, calc(100vw - 40px));
+  width: min(1430px, calc(100vw - 40px));
   margin: 0 auto;
-  padding: 86px 0 96px;
+  box-sizing: border-box;
+  padding: 74px 0 96px 104px;
 }
 
 .hero-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(360px, 520px);
-  gap: 52px;
+  grid-template-columns: minmax(360px, 0.82fr) minmax(640px, 1.18fr);
+  gap: 34px;
   align-items: center;
   min-height: calc(100vh - 170px);
 }
@@ -1680,7 +1753,7 @@ onUnmounted(() => {
 
 .hero-copy h1 {
   max-width: 720px;
-  font-size: clamp(42px, 6.2vw, 82px);
+  font-size: clamp(48px, 4.7vw, 78px);
   line-height: 0.98;
   letter-spacing: -0.07em;
   font-weight: 900;
@@ -1702,7 +1775,7 @@ onUnmounted(() => {
 }
 
 .hero-line {
-  min-height: 310px;
+  min-height: 260px;
 }
 
 .hero-copy-enter-active,
@@ -1853,6 +1926,7 @@ onUnmounted(() => {
   position: relative;
   transform-style: preserve-3d;
   transform: none;
+  min-width: 0;
 }
 
 .prompt-panel-glow {
@@ -1928,23 +2002,34 @@ onUnmounted(() => {
 
 .mode-card {
   position: relative;
-  padding: 18px;
+  min-height: 660px;
+  padding: 26px;
   z-index: 2;
+  overflow: hidden;
   border-radius: 34px;
   background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.74), rgba(232, 251, 255, 0.46)),
-    radial-gradient(circle at 20% 0%, rgba(255, 255, 255, 0.82), transparent 28%);
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  box-shadow: 0 34px 86px rgba(15, 23, 42, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.72);
-  backdrop-filter: blur(20px) saturate(1.28);
-  -webkit-backdrop-filter: blur(20px) saturate(1.28);
+    radial-gradient(circle at 78% 10%, rgba(84, 235, 255, 0.2), transparent 34%),
+    radial-gradient(circle at 14% 88%, rgba(28, 242, 183, 0.2), transparent 34%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.78), rgba(226, 249, 255, 0.48));
+  border: 1px solid rgba(255, 255, 255, 0.62);
+  box-shadow:
+    0 34px 86px rgba(15, 23, 42, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+  backdrop-filter: blur(26px) saturate(1.35);
+  -webkit-backdrop-filter: blur(26px) saturate(1.35);
 }
 
 .dark .mode-card {
   background:
-    linear-gradient(135deg, rgba(12, 22, 36, 0.86), rgba(10, 45, 43, 0.58)),
-    radial-gradient(circle at 20% 0%, rgba(103, 232, 249, 0.14), transparent 32%);
-  border-color: rgba(203, 255, 239, 0.14);
+    radial-gradient(circle at 82% 8%, rgba(81, 232, 255, 0.2), transparent 30%),
+    radial-gradient(circle at 20% 72%, rgba(20, 230, 176, 0.18), transparent 36%),
+    linear-gradient(135deg, rgba(5, 16, 28, 0.92), rgba(4, 36, 38, 0.72));
+  border-color: rgba(202, 255, 244, 0.24);
+  box-shadow:
+    0 40px 112px rgba(0, 0, 0, 0.42),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    inset 0 0 0 1px rgba(112, 255, 231, 0.06);
 }
 
 .hero-metrics {
@@ -1991,37 +2076,109 @@ onUnmounted(() => {
 .mode-tabs {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  margin-bottom: 14px;
-  padding: 5px;
-  border-radius: 18px;
-  background: rgba(15, 23, 42, 0.05);
+  gap: 12px;
+  margin-bottom: 26px;
+  padding: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.46);
+  border-radius: 28px;
+  background: rgba(255, 255, 255, 0.38);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.62);
 }
 
 .dark .mode-tabs {
-  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(203, 255, 239, 0.12);
+  background: rgba(255, 255, 255, 0.045);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 .mode-tabs button {
-  display: inline-flex;
+  position: relative;
+  display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 7px;
-  border-radius: 14px;
-  padding: 10px 12px;
+  justify-content: flex-start;
+  gap: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 22px;
+  padding: 18px 20px;
   color: var(--text-secondary);
   font-weight: 800;
-  transition: all 0.2s ease;
+  text-align: left;
+  background: rgba(255, 255, 255, 0.22);
+  transition: transform 0.2s ease, color 0.2s ease, background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.mode-tabs button > span,
+.mode-tabs button strong,
+.mode-tabs button small {
+  display: block;
+}
+
+.mode-tabs button strong {
+  color: var(--text-primary);
+  font-size: 16px;
+  letter-spacing: -0.02em;
+}
+
+.mode-tabs button small {
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-weight: 650;
+}
+
+.mode-tabs button:hover {
+  transform: translateY(-1px);
+  border-color: rgba(86, 240, 220, 0.36);
 }
 
 .mode-tabs button.active {
   color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.88);
-  box-shadow: 0 12px 34px rgba(15, 23, 42, 0.09);
+  border-color: rgba(238, 252, 255, 0.88);
+  background:
+    radial-gradient(circle at 88% 12%, rgba(139, 245, 255, 0.28), transparent 34%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.92), rgba(236, 252, 255, 0.58));
+  box-shadow:
+    0 18px 44px rgba(14, 165, 233, 0.14),
+    0 0 0 1px rgba(124, 246, 255, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
 }
 
 .dark .mode-tabs button.active {
-  background: rgba(15, 23, 42, 0.95);
+  background:
+    radial-gradient(circle at 88% 10%, rgba(116, 255, 236, 0.18), transparent 32%),
+    linear-gradient(135deg, rgba(14, 27, 44, 0.96), rgba(9, 54, 55, 0.62));
+  box-shadow:
+    0 18px 50px rgba(0, 255, 234, 0.12),
+    0 0 0 1px rgba(190, 255, 255, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.mode-tabs button.active::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  padding: 1.2px;
+  border-radius: inherit;
+  pointer-events: none;
+  background:
+    conic-gradient(
+      from var(--flow-angle, 0deg),
+      transparent 0deg,
+      transparent 34deg,
+      rgba(255, 255, 255, 0.96) 54deg,
+      rgba(197, 243, 255, 0.98) 73deg,
+      rgba(62, 245, 232, 0.88) 94deg,
+      transparent 126deg,
+      transparent 360deg
+    );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  filter: drop-shadow(0 0 9px rgba(235, 251, 255, 0.92)) drop-shadow(0 0 20px rgba(76, 232, 255, 0.45));
+  animation: flow-border-spin 3.6s linear infinite;
 }
 
 .chat-home,
@@ -2029,9 +2186,37 @@ onUnmounted(() => {
   position: relative;
 }
 
+.entry-copy {
+  margin: 2px 8px 20px;
+}
+
+.entry-copy p {
+  margin-bottom: 8px;
+  color: #23e6b1;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.22em;
+}
+
+.entry-copy h3 {
+  color: color-mix(in srgb, var(--accent-color) 78%, var(--text-primary));
+  font-size: clamp(24px, 2.7vw, 34px);
+  font-weight: 950;
+  letter-spacing: -0.05em;
+}
+
+.entry-copy span {
+  display: block;
+  max-width: 620px;
+  margin-top: 8px;
+  color: var(--text-secondary);
+  font-size: 15px;
+  line-height: 1.75;
+}
+
 .chat-thread {
-  min-height: 310px;
-  max-height: 380px;
+  min-height: 250px;
+  max-height: 330px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -2042,12 +2227,13 @@ onUnmounted(() => {
 .chat-empty {
   display: grid;
   place-items: center;
-  min-height: 250px;
+  min-height: 190px;
   text-align: center;
   color: var(--text-secondary);
 }
 
 .chat-empty h3 {
+  display: none;
   margin-top: 14px;
   color: var(--text-primary);
   font-size: 22px;
@@ -2055,6 +2241,7 @@ onUnmounted(() => {
 }
 
 .chat-empty p {
+  display: none;
   max-width: 360px;
   margin-top: 8px;
   line-height: 1.7;
@@ -2108,22 +2295,28 @@ onUnmounted(() => {
   grid-template-columns: 42px 42px 1fr 44px;
   align-items: end;
   gap: 10px;
-  border: 1px solid rgba(148, 163, 184, 0.26);
+  border: 1px solid rgba(172, 205, 218, 0.34);
   border-radius: 22px;
   padding: 12px;
-  background: rgba(255, 255, 255, 0.68);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72), 0 12px 30px rgba(15, 23, 42, 0.08);
+  background:
+    radial-gradient(circle at 88% 50%, rgba(110, 247, 231, 0.12), transparent 28%),
+    rgba(255, 255, 255, 0.64);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72), 0 14px 38px rgba(15, 23, 42, 0.1);
 }
 
 .create-composer {
   position: relative;
   display: grid;
   gap: 12px;
-  border: 1px solid rgba(148, 163, 184, 0.26);
-  border-radius: 24px;
-  padding: 16px;
-  background: rgba(255, 255, 255, 0.62);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72), 0 12px 30px rgba(15, 23, 42, 0.08);
+  border: 1px solid rgba(172, 205, 218, 0.34);
+  border-radius: 28px;
+  padding: 22px;
+  background:
+    radial-gradient(circle at 90% 70%, rgba(96, 255, 218, 0.14), transparent 32%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.68), rgba(232, 248, 252, 0.46));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 20px 54px rgba(15, 23, 42, 0.12);
 }
 
 .selection-flow {
@@ -2137,12 +2330,26 @@ onUnmounted(() => {
   z-index: 4;
 }
 
+.selection-flow::before {
+  content: "";
+  position: absolute;
+  inset: -22px;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0;
+  background:
+    radial-gradient(circle at 18% 18%, rgba(255, 255, 255, 0.55), transparent 15%),
+    radial-gradient(circle at 84% 82%, rgba(80, 255, 224, 0.28), transparent 30%);
+  filter: blur(18px);
+  transition: opacity 0.2s ease;
+}
+
 .selection-flow::after {
   content: "";
   position: absolute;
   inset: 0;
   z-index: 3;
-  padding: 1.5px;
+  padding: 1.8px;
   border-radius: inherit;
   pointer-events: none;
   opacity: 0;
@@ -2151,10 +2358,10 @@ onUnmounted(() => {
       from var(--flow-angle, 0deg),
       rgba(255, 255, 255, 0) 0deg,
       rgba(255, 255, 255, 0) 38deg,
-      rgba(255, 255, 255, 0.96) 62deg,
-      rgba(220, 238, 246, 0.95) 78deg,
-      rgba(150, 244, 255, 0.82) 96deg,
-      rgba(255, 255, 255, 0) 128deg,
+      rgba(255, 255, 255, 1) 58deg,
+      rgba(226, 246, 255, 0.98) 78deg,
+      rgba(105, 246, 237, 0.92) 102deg,
+      rgba(255, 255, 255, 0) 136deg,
       rgba(255, 255, 255, 0) 360deg
     );
   -webkit-mask:
@@ -2163,22 +2370,27 @@ onUnmounted(() => {
   -webkit-mask-composite: xor;
   mask-composite: exclude;
   filter:
-    drop-shadow(0 0 7px rgba(235, 250, 255, 0.85))
-    drop-shadow(0 0 16px rgba(120, 235, 255, 0.28));
+    drop-shadow(0 0 9px rgba(245, 253, 255, 0.98))
+    drop-shadow(0 0 22px rgba(105, 235, 255, 0.46));
   transition: opacity 0.18s ease;
 }
 
 .selection-flow.is-selected {
-  border-color: rgba(235, 250, 255, 0.56);
+  border-color: rgba(235, 250, 255, 0.82);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.14),
-    0 0 0 1px rgba(160, 240, 255, 0.08),
-    0 0 28px rgba(180, 230, 255, 0.18);
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    0 0 0 1px rgba(201, 247, 255, 0.18),
+    0 0 34px rgba(130, 233, 255, 0.24),
+    0 24px 58px rgba(0, 0, 0, 0.12);
+}
+
+.selection-flow.is-selected::before,
+.selection-flow.is-selected::after {
+  opacity: 1;
 }
 
 .selection-flow.is-selected::after {
-  opacity: 1;
-  animation: flow-border-spin 2.8s linear infinite;
+  animation: flow-border-spin 3.6s linear infinite;
 }
 
 @property --flow-angle {
@@ -2194,7 +2406,8 @@ onUnmounted(() => {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .selection-flow.is-selected::after {
+  .selection-flow.is-selected::after,
+  .mode-tabs button.active::after {
     animation: none;
   }
 }
@@ -2282,7 +2495,13 @@ onUnmounted(() => {
 
 .dark .chat-composer,
 .dark .create-composer {
-  background: rgba(2, 6, 23, 0.28);
+  border-color: rgba(203, 255, 239, 0.16);
+  background:
+    radial-gradient(circle at 92% 72%, rgba(79, 255, 216, 0.12), transparent 32%),
+    linear-gradient(135deg, rgba(4, 15, 27, 0.68), rgba(7, 44, 48, 0.42));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 20px 54px rgba(0, 0, 0, 0.24);
 }
 
 .prompt-card-head {
@@ -2323,6 +2542,17 @@ onUnmounted(() => {
 
 .prompt-footer {
   justify-content: space-between;
+  gap: 10px;
+}
+
+.prompt-count {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.prompt-footer .ghost-chip {
+  margin-left: auto;
 }
 
 .suggestion-cloud {
@@ -2356,6 +2586,104 @@ onUnmounted(() => {
 .refresh-chip {
   display: inline-flex;
   align-items: center;
+}
+
+.panel-recent {
+  margin-top: 26px;
+}
+
+.panel-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.panel-section-head h3 {
+  color: var(--text-primary);
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.panel-section-head button {
+  color: var(--text-secondary);
+  font-size: 13px;
+  transition: color 0.18s ease;
+}
+
+.panel-section-head button:hover {
+  color: var(--accent-color);
+}
+
+.panel-recent-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.panel-project-card {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 18px;
+  padding: 9px;
+  text-align: left;
+  background:
+    radial-gradient(circle at 18% 0%, rgba(77, 255, 216, 0.12), transparent 35%),
+    rgba(255, 255, 255, 0.36);
+  transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+}
+
+.panel-project-card:hover {
+  transform: translateY(-3px);
+  border-color: rgba(82, 238, 225, 0.46);
+  background: rgba(255, 255, 255, 0.52);
+}
+
+.dark .panel-project-card {
+  background:
+    radial-gradient(circle at 18% 0%, rgba(77, 255, 216, 0.12), transparent 35%),
+    rgba(15, 23, 42, 0.42);
+  border-color: rgba(203, 255, 239, 0.12);
+}
+
+.panel-project-thumb {
+  display: grid;
+  aspect-ratio: 16 / 10;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 13px;
+  color: var(--text-secondary);
+  background:
+    linear-gradient(135deg, rgba(18, 33, 53, 0.18), rgba(19, 107, 91, 0.16)),
+    rgba(255, 255, 255, 0.2);
+}
+
+.panel-project-thumb img,
+.panel-project-thumb video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.panel-project-card strong,
+.panel-project-card span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.panel-project-card strong {
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.panel-project-card span {
+  color: var(--text-secondary);
+  font-size: 12px;
 }
 
 .showcase-section,
@@ -2825,8 +3153,9 @@ onUnmounted(() => {
 
 .project-menu,
 .side-rail button {
-  display: grid;
-  place-items: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border-radius: 14px;
   color: var(--text-secondary);
   transition: all 0.2s ease;
@@ -2849,21 +3178,50 @@ onUnmounted(() => {
   top: 50%;
   z-index: 15;
   flex-direction: column;
-  gap: 8px;
-  padding: 10px;
-  border: 1px solid rgba(148, 163, 184, 0.28);
-  border-radius: 22px;
-  background: rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(18px);
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 28px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.72), rgba(240, 253, 250, 0.42));
+  box-shadow: 0 22px 64px rgba(15, 23, 42, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(22px) saturate(1.3);
+  transform: translateY(-50%);
 }
 
 .dark .side-rail {
-  background: rgba(15, 23, 42, 0.68);
+  border-color: rgba(203, 255, 239, 0.12);
+  background:
+    linear-gradient(135deg, rgba(7, 17, 30, 0.78), rgba(6, 54, 50, 0.38));
+  box-shadow: 0 22px 68px rgba(0, 0, 0, 0.34), inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 .side-rail button {
-  width: 42px;
-  height: 42px;
+  position: relative;
+  width: 56px;
+  min-height: 58px;
+  flex-direction: column;
+  gap: 4px;
+  border: 1px solid transparent;
+  border-radius: 18px;
+}
+
+.side-rail button span {
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.side-rail button.active {
+  color: #063328;
+  border-color: rgba(175, 255, 245, 0.56);
+  background:
+    radial-gradient(circle at 30% 18%, rgba(255, 255, 255, 0.82), transparent 28%),
+    linear-gradient(135deg, rgba(38, 231, 168, 0.92), rgba(0, 183, 255, 0.72));
+  box-shadow: 0 16px 38px rgba(0, 183, 255, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.46);
+}
+
+.dark .side-rail button.active {
+  color: #f8fffd;
 }
 
 :global(.onboarding-modal.n-card) {
@@ -3137,7 +3495,7 @@ onUnmounted(() => {
 
   .home-main {
     width: min(100% - 24px, 720px);
-    padding-top: 32px;
+    padding: 32px 0 80px;
   }
 
   .hero-copy h1 {
