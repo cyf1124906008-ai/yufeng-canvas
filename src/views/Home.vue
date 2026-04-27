@@ -56,7 +56,10 @@
     <main class="home-main">
       <section class="hero-grid">
         <div class="hero-copy">
-          <div class="eyebrow">YUFENG CREATIVE CANVAS</div>
+          <div class="eyebrow hero-eyebrow">
+            <span class="eyebrow-dot" aria-hidden="true">●</span>
+            YUFENG CREATIVE CANVAS
+          </div>
           <div class="hero-line">
             <h1
               class="hero-title hero-title-rotator"
@@ -80,7 +83,17 @@
                   }"
                   :data-text="line"
                 >
-                  {{ line }}
+                  <span
+                    v-for="(char, charIndex) in splitHeroLine(line)"
+                    :key="`${line}-${charIndex}`"
+                    class="hero-tide-char"
+                    :style="{
+                      '--char-index': charIndex,
+                      '--char-count': splitHeroLine(line).length
+                    }"
+                  >
+                    {{ char }}
+                  </span>
                 </span>
               </span>
             </h1>
@@ -689,6 +702,8 @@ const onboardingStorageKey = 'yufeng-canvas-onboarding-v2'
 const homeTourStorageKey = 'yufeng-canvas-home-tour-v1'
 const recentHomeProjects = computed(() => projects.value.slice(0, 4))
 
+const splitHeroLine = (line) => Array.from(line)
+
 const stageStyle = computed(() => {
   if (performanceLite.value) {
     return {
@@ -1141,8 +1156,8 @@ const startHeroRotatorLoop = () => {
     window.clearTimeout(heroRotatingKickoffTimer)
   }
 
-  heroRotatingKickoffTimer = window.setTimeout(rotateHeroLine, 900)
-  heroRotatingTimer = window.setInterval(rotateHeroLine, 4200)
+  heroRotatingKickoffTimer = window.setTimeout(rotateHeroLine, 1800)
+  heroRotatingTimer = window.setInterval(rotateHeroLine, 5600)
 }
 
 const stopHeroRotatorLoop = () => {
@@ -2114,16 +2129,17 @@ onUnmounted(() => {
   width: min(1440px, calc(100vw - 28px));
   margin: 0 auto;
   box-sizing: border-box;
-  padding: clamp(46px, 6.6vh, 72px) clamp(18px, 3vw, 44px) 96px;
+  padding: clamp(6px, 1.4vh, 18px) clamp(18px, 3vw, 44px) 96px;
 }
 
 .hero-grid {
   display: grid;
   grid-template-columns: minmax(430px, 0.92fr) minmax(560px, 1.08fr);
   gap: clamp(28px, 3.1vw, 48px);
-  align-items: center;
-  min-height: calc(100vh - 170px);
+  align-items: start;
+  min-height: auto;
   max-width: 100%;
+  padding-top: clamp(6px, 1.2vh, 16px);
 }
 
 .eyebrow {
@@ -2133,6 +2149,22 @@ onUnmounted(() => {
   letter-spacing: 0.3em;
   color: #0fb981;
   text-shadow: 0 0 28px rgba(34, 197, 94, 0.26);
+}
+
+.hero-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.eyebrow-dot {
+  display: inline-block;
+  color: #68ffe2;
+  font-size: 11px;
+  line-height: 1;
+  text-shadow:
+    0 0 12px rgba(104, 255, 226, 0.82),
+    0 0 30px rgba(34, 211, 238, 0.34);
 }
 
 .hero-copy h1 {
@@ -2163,7 +2195,7 @@ onUnmounted(() => {
   width: 100%;
   min-width: 0;
   max-width: 620px;
-  margin-top: clamp(-64px, -4vh, -36px);
+  margin-top: -8px;
   justify-self: start;
   opacity: var(--scroll-hero-opacity);
   transform: translate3d(0, var(--scroll-hero-y), 0);
@@ -2257,21 +2289,33 @@ onUnmounted(() => {
     0 0 36px rgba(56, 189, 248, 0.18);
   transform-origin: left center;
   animation: heroDecodeRail 3.8s ease-in-out infinite;
+  display: none;
 }
 
 .hero-rotating-line {
   position: absolute;
   inset: 0 auto auto 0;
-  display: inline-block;
+  display: inline-flex;
   width: max-content;
   max-width: 100%;
-  color: transparent;
+  align-items: baseline;
+  color: inherit;
   white-space: nowrap;
   pointer-events: none;
   opacity: 0;
-  filter: blur(8px);
-  transform: translate3d(0, 0.42em, 0) rotateX(-8deg) scale(0.985);
+  filter: blur(7px);
+  transform: translate3d(0, 0.28em, 0) rotateX(-6deg) scale(0.99);
   transform-origin: left center;
+  transition:
+    opacity 0.72s cubic-bezier(0.16, 1, 0.3, 1),
+    filter 0.72s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.72s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform, filter, opacity;
+}
+
+.hero-tide-char {
+  display: inline-block;
+  color: transparent;
   background-image:
     linear-gradient(
       92deg,
@@ -2281,21 +2325,19 @@ onUnmounted(() => {
       #0f9f8e 70%,
       #113a46 100%
     );
-  background-size: 220% 100%;
+  background-size: 240% 100%;
   background-position: 0% 50%;
   -webkit-background-clip: text;
   background-clip: text;
   text-shadow:
-    0 0 12px rgba(111, 247, 232, 0.18),
-    0 0 28px rgba(32, 215, 199, 0.08);
-  transition:
-    opacity 0.72s cubic-bezier(0.16, 1, 0.3, 1),
-    filter 0.72s cubic-bezier(0.16, 1, 0.3, 1),
-    transform 0.72s cubic-bezier(0.16, 1, 0.3, 1);
-  will-change: transform, filter, opacity;
+    0 0 10px rgba(111, 247, 232, 0.16),
+    0 0 24px rgba(32, 215, 199, 0.08);
+  transform: translate3d(0, 0, 0);
+  transform-origin: center bottom;
+  will-change: transform, filter, opacity, background-position;
 }
 
-.dark .hero-rotating-line {
+.dark .hero-tide-char {
   background-image:
     linear-gradient(
       92deg,
@@ -2310,38 +2352,15 @@ onUnmounted(() => {
     0 0 28px rgba(32, 215, 199, 0.10);
 }
 
-.hero-rotating-line::after {
-  content: attr(data-text);
-  position: absolute;
-  inset: 0;
-  color: transparent;
-  pointer-events: none;
-  opacity: 0;
-  background:
-    linear-gradient(
-      105deg,
-      rgba(255, 255, 255, 0) 18%,
-      rgba(255, 255, 255, 0.08) 34%,
-      rgba(255, 255, 255, 0.62) 48%,
-      rgba(255, 255, 255, 0.12) 62%,
-      rgba(255, 255, 255, 0) 78%
-    );
-  background-size: 240% 100%;
-  background-position: 140% 0;
-  -webkit-background-clip: text;
-  background-clip: text;
-  mix-blend-mode: screen;
-}
-
 .hero-rotating-line.is-active {
   opacity: 1;
   filter: blur(0);
   transform: translate3d(0, 0, 0) rotateX(0) scale(1);
-  animation: heroTitleGradientDrift 8s ease-in-out infinite;
 }
 
-.hero-rotating-line.is-active::after {
-  animation: heroTitleSheen 4.2s ease-in-out infinite;
+.hero-rotating-line.is-active .hero-tide-char {
+  animation: heroTideChar 4.8s cubic-bezier(0.33, 0, 0.18, 1) infinite;
+  animation-delay: calc(var(--char-index) * 76ms);
 }
 
 .hero-rotating-line.is-prev {
@@ -2488,6 +2507,58 @@ onUnmounted(() => {
   100% {
     background-position: -45% 0;
     opacity: 0;
+  }
+}
+
+@keyframes heroTideChar {
+  0%,
+  12%,
+  100% {
+    opacity: 0.92;
+    filter: brightness(1);
+    background-position: 0% 50%;
+    transform: translate3d(0, 0, 0) scale(1);
+    text-shadow:
+      0 0 10px rgba(111, 247, 232, 0.16),
+      0 0 24px rgba(32, 215, 199, 0.08);
+  }
+
+  27% {
+    opacity: 1;
+    filter: brightness(1.28) saturate(1.12);
+    background-position: 56% 50%;
+    transform: translate3d(0.08em, -0.025em, 0) scale(1.018);
+    text-shadow:
+      0 0 13px rgba(210, 255, 250, 0.42),
+      0 0 30px rgba(64, 255, 230, 0.22);
+  }
+
+  42% {
+    opacity: 1;
+    filter: brightness(1.58) saturate(1.2);
+    background-position: 100% 50%;
+    transform: translate3d(0.19em, -0.055em, 0) scale(1.052);
+    text-shadow:
+      0 0 18px rgba(242, 255, 255, 0.62),
+      0 0 38px rgba(72, 255, 232, 0.38),
+      0 0 72px rgba(56, 189, 248, 0.18);
+  }
+
+  58% {
+    opacity: 0.98;
+    filter: brightness(1.24) saturate(1.08);
+    background-position: 54% 50%;
+    transform: translate3d(0.08em, 0.018em, 0) scale(1.014);
+    text-shadow:
+      0 0 12px rgba(210, 255, 250, 0.28),
+      0 0 28px rgba(64, 255, 230, 0.16);
+  }
+
+  74% {
+    opacity: 0.94;
+    filter: brightness(1.05);
+    background-position: 18% 50%;
+    transform: translate3d(-0.025em, 0, 0) scale(0.998);
   }
 }
 
@@ -3200,7 +3271,7 @@ onUnmounted(() => {
   .hero-title-rotator::before,
   .hero-title-line-rotating::before,
   .hero-rotating-line,
-  .hero-rotating-line::after,
+  .hero-tide-char,
   .hero-title-morph::before,
   .hero-title-line-dynamic::before,
   .hero-morph-text,
@@ -3222,7 +3293,7 @@ onUnmounted(() => {
 @media (max-width: 1100px) {
   .home-main {
     width: min(100% - 22px, 920px);
-    padding: 24px 18px 84px clamp(118px, 15vw, 136px);
+    padding: 8px 18px 84px clamp(132px, 17vw, 156px);
   }
 
   .hero-grid {
@@ -3234,7 +3305,7 @@ onUnmounted(() => {
 
   .hero-copy {
     max-width: 620px;
-    margin-top: 0;
+    margin-top: -6px;
   }
 
   .hero-title-line {
@@ -4357,7 +4428,7 @@ onUnmounted(() => {
 
   .home-main {
     width: min(100% - 24px, 720px);
-    padding: 22px 18px 80px clamp(112px, 15vw, 126px);
+    padding: 8px 18px 80px clamp(132px, 17vw, 150px);
   }
 
   .hero-title-line {
