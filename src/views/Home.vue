@@ -57,28 +57,34 @@
           <div class="eyebrow">YUFENG CREATIVE CANVAS</div>
           <div class="hero-line">
             <h1
-              class="hero-title hero-title-morph"
-              aria-label="图片、视频、模型，像搭积木一样编排。"
+              class="hero-title hero-title-rotator"
+              :aria-label="`和 AI 一起，${heroRotatingLines[heroRotatingIndex]}`"
             >
               <span class="hero-title-line hero-title-line-static" aria-hidden="true">
-                图片、视频、模型，
+                和 AI 一起，
               </span>
 
               <span
-                class="hero-title-line hero-title-line-dynamic"
+                class="hero-title-line hero-title-line-rotating"
                 aria-hidden="true"
               >
                 <span
-                  class="hero-morph-text"
-                  :class="{ 'is-morphing': heroMorphing }"
-                  :data-text="heroMorphText"
-                  :data-prev="heroMorphPreviousText"
+                  v-for="(line, index) in heroRotatingLines"
+                  :key="line"
+                  class="hero-rotating-line"
+                  :class="{
+                    'is-active': index === heroRotatingIndex,
+                    'is-prev': index === heroRotatingPrevIndex
+                  }"
+                  :data-text="line"
                 >
-                  {{ heroMorphText }}
+                  {{ line }}
                 </span>
               </span>
             </h1>
-            <p class="hero-desc">{{ currentHero.desc }}</p>
+            <p class="hero-desc">
+              用对话启动创作，把提示词、参考图、模型和节点流程，编排成可复用的视觉工作流。
+            </p>
           </div>
 
           <div class="hero-actions">
@@ -653,15 +659,14 @@ const suggestionPool = CANVAS_PROMPT_SUGGESTIONS
 const visibleSuggestions = ref([])
 const chatSuggestions = HOME_CHAT_SUGGESTIONS
 const inspirationCases = INSPIRATION_CASES
-const heroIndex = ref(0)
-const heroMorphPhrases = [
-  '像搭积木一样编排。',
-  '像工作流一样生成。',
-  '像节点图一样连接。'
+const heroRotatingLines = [
+  '聊出创意方向。',
+  '搭建视觉画布。',
+  '编排多模型流程。',
+  '协同智能体创作。'
 ]
-const heroMorphText = ref(heroMorphPhrases[0])
-const heroMorphPreviousText = ref(heroMorphPhrases[0])
-const heroMorphing = ref(false)
+const heroRotatingIndex = ref(0)
+const heroRotatingPrevIndex = ref(heroRotatingLines.length - 1)
 const performanceLite = ref(false)
 const pointer = ref({ x: 0.5, y: 0.5 })
 const particleCanvas = ref(null)
@@ -673,10 +678,8 @@ let particleStartedAt = 0
 let lastParticleDraw = 0
 let pointerFrame = null
 let pendingPointer = null
-let heroMorphIndex = 0
-let heroMorphTimer = null
-let heroMorphKickoffTimer = null
-let heroMorphRaf = null
+let heroRotatingTimer = null
+let heroRotatingKickoffTimer = null
 const onboardingStorageKey = 'yufeng-canvas-onboarding-v2'
 const homeTourStorageKey = 'yufeng-canvas-home-tour-v1'
 const recentHomeProjects = computed(() => projects.value.slice(0, 4))
@@ -1086,6 +1089,42 @@ const stopHeroMorphLoop = () => {
   if (heroMorphRaf) {
     window.cancelAnimationFrame(heroMorphRaf)
     heroMorphRaf = null
+  }
+}
+
+const rotateHeroLine = () => {
+  if (shouldReduceHeroMotion()) return
+
+  heroRotatingPrevIndex.value = heroRotatingIndex.value
+  heroRotatingIndex.value = (heroRotatingIndex.value + 1) % heroRotatingLines.length
+}
+
+const startHeroRotatorLoop = () => {
+  if (typeof window === 'undefined' || shouldReduceHeroMotion()) return
+
+  if (heroRotatingTimer) {
+    window.clearInterval(heroRotatingTimer)
+  }
+
+  if (heroRotatingKickoffTimer) {
+    window.clearTimeout(heroRotatingKickoffTimer)
+  }
+
+  heroRotatingKickoffTimer = window.setTimeout(rotateHeroLine, 900)
+  heroRotatingTimer = window.setInterval(rotateHeroLine, 4200)
+}
+
+const stopHeroRotatorLoop = () => {
+  if (typeof window === 'undefined') return
+
+  if (heroRotatingTimer) {
+    window.clearInterval(heroRotatingTimer)
+    heroRotatingTimer = null
+  }
+
+  if (heroRotatingKickoffTimer) {
+    window.clearTimeout(heroRotatingKickoffTimer)
+    heroRotatingKickoffTimer = null
   }
 }
 
@@ -1705,11 +1744,11 @@ onMounted(() => {
       showOnboarding.value = true
     }, 700)
   }
-  startHeroMorphLoop()
+  startHeroRotatorLoop()
 })
 
 onUnmounted(() => {
-  stopHeroMorphLoop()
+  stopHeroRotatorLoop()
   resetPointerField()
   particleCleanup?.()
 })
@@ -2080,7 +2119,11 @@ onUnmounted(() => {
   filter: drop-shadow(0 20px 40px rgba(0, 255, 202, 0.12));
 }
 
-.hero-title-morph {
+.hero-copy {
+  margin-top: clamp(-64px, -4vh, -36px);
+}
+
+.hero-title-rotator {
   position: relative;
   display: flex;
   flex-direction: column;
@@ -2095,7 +2138,7 @@ onUnmounted(() => {
   background-clip: initial;
 }
 
-.hero-title-morph::before {
+.hero-title-rotator::before {
   content: "";
   position: absolute;
   inset: -12px -18px;
@@ -2117,9 +2160,10 @@ onUnmounted(() => {
   display: inline-block;
   width: fit-content;
   max-width: 100%;
-  font-size: clamp(44px, 4.4vw, 80px);
+  font-size: clamp(46px, 4.4vw, 78px);
   font-weight: 850;
   line-height: 0.98;
+  white-space: nowrap;
 }
 
 .hero-title-line-static {
@@ -2136,13 +2180,15 @@ onUnmounted(() => {
     0 0 26px rgba(111, 247, 232, 0.06);
 }
 
-.hero-title-line-dynamic {
+.hero-title-line-rotating {
   min-height: 1em;
+  height: 1em;
+  overflow: visible;
   isolation: isolate;
   perspective: 900px;
 }
 
-.hero-title-line-dynamic::before {
+.hero-title-line-rotating::before {
   content: "";
   position: absolute;
   left: 0.02em;
@@ -2159,6 +2205,97 @@ onUnmounted(() => {
     0 0 36px rgba(56, 189, 248, 0.18);
   transform-origin: left center;
   animation: heroDecodeRail 3.8s ease-in-out infinite;
+}
+
+.hero-rotating-line {
+  position: absolute;
+  inset: 0 auto auto 0;
+  display: inline-block;
+  width: max-content;
+  max-width: min(100vw - 40px, 760px);
+  color: transparent;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  filter: blur(8px);
+  transform: translate3d(0, 0.42em, 0) rotateX(-8deg) scale(0.985);
+  transform-origin: left center;
+  background-image:
+    linear-gradient(
+      92deg,
+      #0d3440 0%,
+      #0f5962 18%,
+      #16b8ab 46%,
+      #0f9f8e 70%,
+      #113a46 100%
+    );
+  background-size: 220% 100%;
+  background-position: 0% 50%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  text-shadow:
+    0 0 12px rgba(111, 247, 232, 0.18),
+    0 0 28px rgba(32, 215, 199, 0.08);
+  transition:
+    opacity 0.72s cubic-bezier(0.16, 1, 0.3, 1),
+    filter 0.72s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.72s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform, filter, opacity;
+}
+
+.dark .hero-rotating-line {
+  background-image:
+    linear-gradient(
+      92deg,
+      #f7fdff 0%,
+      #dffcff 18%,
+      #8af7ef 46%,
+      #35e0cf 70%,
+      #dffcff 100%
+    );
+  text-shadow:
+    0 0 12px rgba(111, 247, 232, 0.22),
+    0 0 28px rgba(32, 215, 199, 0.10);
+}
+
+.hero-rotating-line::after {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  color: transparent;
+  pointer-events: none;
+  opacity: 0;
+  background:
+    linear-gradient(
+      105deg,
+      rgba(255, 255, 255, 0) 18%,
+      rgba(255, 255, 255, 0.08) 34%,
+      rgba(255, 255, 255, 0.62) 48%,
+      rgba(255, 255, 255, 0.12) 62%,
+      rgba(255, 255, 255, 0) 78%
+    );
+  background-size: 240% 100%;
+  background-position: 140% 0;
+  -webkit-background-clip: text;
+  background-clip: text;
+  mix-blend-mode: screen;
+}
+
+.hero-rotating-line.is-active {
+  opacity: 1;
+  filter: blur(0);
+  transform: translate3d(0, 0, 0) rotateX(0) scale(1);
+  animation: heroTitleGradientDrift 8s ease-in-out infinite;
+}
+
+.hero-rotating-line.is-active::after {
+  animation: heroTitleSheen 4.2s ease-in-out infinite;
+}
+
+.hero-rotating-line.is-prev {
+  opacity: 0;
+  filter: blur(8px);
+  transform: translate3d(0, -0.34em, 0) rotateX(8deg) scale(1.01);
 }
 
 .hero-morph-text {
@@ -3007,6 +3144,10 @@ onUnmounted(() => {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .hero-title-rotator::before,
+  .hero-title-line-rotating::before,
+  .hero-rotating-line,
+  .hero-rotating-line::after,
   .hero-title-morph::before,
   .hero-title-line-dynamic::before,
   .hero-morph-text,
@@ -3014,6 +3155,7 @@ onUnmounted(() => {
     animation: none;
   }
 
+  .hero-rotating-line,
   .hero-morph-text {
     transition: none;
   }
@@ -3032,6 +3174,10 @@ onUnmounted(() => {
 
   .hero-grid {
     grid-template-columns: 1fr;
+  }
+
+  .hero-copy {
+    margin-top: -24px;
   }
 
   .hero-title-line {
