@@ -1,10 +1,12 @@
 <template>
   <div
+    ref="homeShellRef"
     class="home-shell min-h-screen h-screen overflow-y-auto text-[var(--text-primary)]"
     :class="{ 'is-perf-lite': performanceLite }"
     :style="stageStyle"
     @pointermove="handlePointerMove"
     @pointerleave="resetPointerField"
+    @scroll="handleHomeScroll"
   >
     <div class="liquid-stage" aria-hidden="true">
       <canvas ref="particleCanvas" class="particle-field"></canvas>
@@ -640,6 +642,7 @@ const renameValue = ref('')
 const renameTargetId = ref(null)
 const projectsSection = ref(null)
 const inspirationSection = ref(null)
+const homeShellRef = ref(null)
 const videoRefs = new Map()
 
 const isApiConfigured = computed(() => modelStore.hasAnyApiKey)
@@ -669,6 +672,7 @@ const heroRotatingIndex = ref(0)
 const heroRotatingPrevIndex = ref(heroRotatingLines.length - 1)
 const performanceLite = ref(false)
 const pointer = ref({ x: 0.5, y: 0.5 })
+const scrollProgress = ref(0)
 const particleCanvas = ref(null)
 const particleMouse = { x: -9999, y: -9999, active: false }
 let particles = []
@@ -678,6 +682,7 @@ let particleStartedAt = 0
 let lastParticleDraw = 0
 let pointerFrame = null
 let pendingPointer = null
+let scrollFrame = null
 let heroRotatingTimer = null
 let heroRotatingKickoffTimer = null
 const onboardingStorageKey = 'yufeng-canvas-onboarding-v2'
@@ -692,7 +697,14 @@ const stageStyle = computed(() => {
       '--parallax-x': '0px',
       '--parallax-y': '0px',
       '--tilt-x': '0deg',
-      '--tilt-y': '0deg'
+      '--tilt-y': '0deg',
+      '--scroll-progress': '0',
+      '--scroll-bg-y': '0px',
+      '--scroll-hero-y': '0px',
+      '--scroll-panel-y': '0px',
+      '--scroll-mesh-y': '0px',
+      '--scroll-stage-scale': '1',
+      '--scroll-hero-opacity': '1'
     }
   }
 
@@ -700,6 +712,7 @@ const stageStyle = computed(() => {
   const y = pointer.value.y
   const dx = (x - 0.5) * 2
   const dy = (y - 0.5) * 2
+  const scroll = scrollProgress.value
 
   return {
     '--mx': `${(x * 100).toFixed(2)}%`,
@@ -707,7 +720,14 @@ const stageStyle = computed(() => {
     '--parallax-x': `${(dx * 26).toFixed(2)}px`,
     '--parallax-y': `${(dy * 22).toFixed(2)}px`,
     '--tilt-x': '0deg',
-    '--tilt-y': '0deg'
+    '--tilt-y': '0deg',
+    '--scroll-progress': scroll.toFixed(3),
+    '--scroll-bg-y': `${(-scroll * 72).toFixed(2)}px`,
+    '--scroll-hero-y': `${(-scroll * 52).toFixed(2)}px`,
+    '--scroll-panel-y': `${(-scroll * 24).toFixed(2)}px`,
+    '--scroll-mesh-y': `${(scroll * 92).toFixed(2)}px`,
+    '--scroll-stage-scale': (1 + scroll * 0.035).toFixed(4),
+    '--scroll-hero-opacity': (1 - scroll * 0.36).toFixed(3)
   }
 })
 
@@ -775,6 +795,17 @@ const handlePointerMove = (event) => {
     particleMouse.y = y * window.innerHeight
     particleMouse.active = true
     pendingPointer = null
+  })
+}
+
+const handleHomeScroll = (event) => {
+  if (scrollFrame) return
+
+  const target = event.currentTarget
+  scrollFrame = window.requestAnimationFrame(() => {
+    scrollFrame = null
+    const top = target?.scrollTop || 0
+    scrollProgress.value = Math.min(1, Math.max(0, top / 620))
   })
 }
 
@@ -1749,6 +1780,10 @@ onMounted(() => {
 
 onUnmounted(() => {
   stopHeroRotatorLoop()
+  if (scrollFrame) {
+    window.cancelAnimationFrame(scrollFrame)
+    scrollFrame = null
+  }
   resetPointerField()
   particleCleanup?.()
 })
@@ -1844,6 +1879,9 @@ onUnmounted(() => {
   z-index: -1;
   pointer-events: none;
   overflow: hidden;
+  transform: translate3d(0, var(--scroll-bg-y), 0) scale(var(--scroll-stage-scale));
+  transform-origin: center top;
+  will-change: transform;
 }
 
 .liquid-stage::before {
@@ -1982,7 +2020,7 @@ onUnmounted(() => {
     linear-gradient(rgba(14, 165, 233, 0.16) 1px, transparent 1px),
     linear-gradient(90deg, rgba(20, 184, 166, 0.16) 1px, transparent 1px);
   background-size: 58px 58px;
-  transform: perspective(700px) rotateX(62deg) translate3d(calc(var(--parallax-x) * -0.22), 120px, 0);
+  transform: perspective(700px) rotateX(62deg) translate3d(calc(var(--parallax-x) * -0.22), calc(120px + var(--scroll-mesh-y)), 0);
   transform-origin: bottom;
 }
 
@@ -2127,6 +2165,9 @@ onUnmounted(() => {
   max-width: 620px;
   margin-top: clamp(-64px, -4vh, -36px);
   justify-self: start;
+  opacity: var(--scroll-hero-opacity);
+  transform: translate3d(0, var(--scroll-hero-y), 0);
+  will-change: transform, opacity;
 }
 
 .hero-title-rotator {
@@ -2674,8 +2715,9 @@ onUnmounted(() => {
 .prompt-panel {
   position: relative;
   transform-style: preserve-3d;
-  transform: none;
+  transform: translate3d(0, var(--scroll-panel-y), 0);
   min-width: 0;
+  will-change: transform;
 }
 
 .prompt-panel-glow {
@@ -3179,20 +3221,39 @@ onUnmounted(() => {
 
 @media (max-width: 1100px) {
   .home-main {
-    width: min(100% - 24px, 760px);
-    padding-left: 0;
+    width: min(100% - 22px, 920px);
+    padding: 24px 18px 84px clamp(118px, 15vw, 136px);
   }
 
   .hero-grid {
     grid-template-columns: 1fr;
+    align-items: start;
+    min-height: auto;
+    gap: 24px;
   }
 
   .hero-copy {
-    margin-top: -24px;
+    max-width: 620px;
+    margin-top: 0;
   }
 
   .hero-title-line {
-    font-size: clamp(40px, 7vw, 64px);
+    font-size: clamp(42px, 7.6vw, 62px);
+  }
+
+  .hero-line {
+    min-height: 208px;
+  }
+
+  .hero-desc {
+    max-width: 560px;
+    margin-top: 16px;
+    font-size: 15px;
+    line-height: 1.75;
+  }
+
+  .hero-actions {
+    margin-top: 18px;
   }
 }
 
@@ -3958,26 +4019,42 @@ onUnmounted(() => {
 
 .side-rail {
   position: fixed;
-  left: 24px;
+  left: clamp(14px, 1.6vw, 24px);
   top: 50%;
   z-index: 15;
   flex-direction: column;
   gap: 10px;
-  padding: 12px;
-  border: 1px solid rgba(148, 163, 184, 0.3);
+  padding: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
   border-radius: 28px;
   background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.72), rgba(240, 253, 250, 0.42));
-  box-shadow: 0 22px 64px rgba(15, 23, 42, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(22px) saturate(1.3);
+    linear-gradient(135deg, rgba(255, 255, 255, 0.46), rgba(240, 253, 250, 0.18));
+  box-shadow: 0 18px 54px rgba(15, 23, 42, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.42);
+  backdrop-filter: blur(16px) saturate(1.16);
+  -webkit-backdrop-filter: blur(16px) saturate(1.16);
+  opacity: 0.72;
   transform: translateY(-50%);
+  transition: opacity 0.18s ease, background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.side-rail:hover {
+  opacity: 0.96;
+  border-color: rgba(148, 163, 184, 0.34);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.68), rgba(240, 253, 250, 0.34));
 }
 
 .dark .side-rail {
-  border-color: rgba(203, 255, 239, 0.12);
+  border-color: rgba(203, 255, 239, 0.1);
   background:
-    linear-gradient(135deg, rgba(7, 17, 30, 0.78), rgba(6, 54, 50, 0.38));
-  box-shadow: 0 22px 68px rgba(0, 0, 0, 0.34), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    linear-gradient(135deg, rgba(7, 17, 30, 0.5), rgba(6, 54, 50, 0.2));
+  box-shadow: 0 22px 68px rgba(0, 0, 0, 0.26), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.dark .side-rail:hover {
+  border-color: rgba(203, 255, 239, 0.2);
+  background:
+    linear-gradient(135deg, rgba(7, 17, 30, 0.74), rgba(6, 54, 50, 0.34));
 }
 
 .side-rail button {
@@ -3988,6 +4065,7 @@ onUnmounted(() => {
   gap: 4px;
   border: 1px solid transparent;
   border-radius: 18px;
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .side-rail button span {
@@ -3999,9 +4077,9 @@ onUnmounted(() => {
   color: #063328;
   border-color: rgba(175, 255, 245, 0.56);
   background:
-    radial-gradient(circle at 30% 18%, rgba(255, 255, 255, 0.82), transparent 28%),
-    linear-gradient(135deg, rgba(38, 231, 168, 0.92), rgba(0, 183, 255, 0.72));
-  box-shadow: 0 16px 38px rgba(0, 183, 255, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.46);
+    radial-gradient(circle at 30% 18%, rgba(255, 255, 255, 0.66), transparent 28%),
+    linear-gradient(135deg, rgba(38, 231, 168, 0.82), rgba(0, 183, 255, 0.6));
+  box-shadow: 0 14px 34px rgba(0, 183, 255, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.38);
 }
 
 .dark .side-rail button.active {
@@ -4279,16 +4357,16 @@ onUnmounted(() => {
 
   .home-main {
     width: min(100% - 24px, 720px);
-    padding: 32px 0 80px;
+    padding: 22px 18px 80px clamp(112px, 15vw, 126px);
   }
 
   .hero-title-line {
-    font-size: clamp(40px, 7vw, 64px);
-    line-height: 1.05;
+    font-size: clamp(38px, 7.4vw, 58px);
+    line-height: 1.02;
   }
 
   .hero-line {
-    min-height: 290px;
+    min-height: 206px;
   }
 
   .hero-metrics {
@@ -4309,6 +4387,17 @@ onUnmounted(() => {
   .onboarding-footer {
     align-items: flex-start;
     flex-direction: column;
+  }
+}
+
+@media (max-width: 767px) {
+  .home-main {
+    width: min(100% - 22px, 680px);
+    padding: 22px 14px 76px;
+  }
+
+  .hero-title-line {
+    font-size: clamp(34px, 10vw, 48px);
   }
 }
 
