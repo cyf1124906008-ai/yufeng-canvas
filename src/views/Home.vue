@@ -62,7 +62,7 @@
           </transition>
 
           <div class="hero-actions">
-            <button class="primary-action" data-tour="start-create" @click="handleCreateWithInput">
+            <button class="primary-action" data-tour="start-create" @click="handleStartCreateClick">
               <n-icon :size="20"><SendOutline /></n-icon>
               开始创作
             </button>
@@ -114,13 +114,13 @@
           </div>
           <div class="mode-card">
             <div class="mode-tabs">
-              <button :class="{ active: activeMode === 'chat' }" @click="activeMode = 'chat'">
+              <button :class="{ active: activeMode === 'chat' }" @click="focusChatEntry">
                 <n-icon :size="16"><ChatbubbleOutline /></n-icon>
                 直接对话
               </button>
-              <button :class="{ active: activeMode === 'create' }" @click="activeMode = 'create'">
+              <button :class="{ active: activeMode === 'create' }" @click="focusCreateEntry">
                 <n-icon :size="16"><ColorPaletteOutline /></n-icon>
-                创作画布
+                生成工作流
               </button>
             </div>
 
@@ -130,8 +130,8 @@
                   <div class="chat-orb">
                     <n-icon :size="28"><SparklesOutline /></n-icon>
                   </div>
-                  <h3>问点什么，或让模型帮你拆创意。</h3>
-                  <p>这里会直接调用你配置的文本模型；需要画图或视频时，再一键进入节点画布。</p>
+                  <h3>先把创意聊清楚。</h3>
+                  <p>让文本模型帮你拆方向、写提示词、整理分镜；需要生成图片或视频时，再进入节点画布。</p>
                 </div>
                 <div
                   v-for="message in chatMessages"
@@ -165,7 +165,13 @@
                 </span>
               </div>
 
-              <div class="chat-composer" data-tour="chat-composer">
+              <div
+                class="chat-composer selection-flow"
+                :class="{ 'is-selected': focusedEntry === 'chat' }"
+                data-tour="chat-composer"
+                @focusin="focusedEntry = 'chat'"
+                @focusout="handleComposerFocusOut('chat', $event)"
+              >
                 <input
                   ref="chatFileInputRef"
                   type="file"
@@ -193,8 +199,10 @@
                   <n-icon v-else :size="18"><SearchOutline /></n-icon>
                 </button>
                 <textarea
+                  ref="chatTextareaRef"
                   v-model="chatText"
-                  placeholder="直接和模型对话；粘贴网页链接后，可点放大镜读取页面内容..."
+                  aria-label="直接对话输入框"
+                  placeholder="直接和模型对话，例如：帮我把这个产品想法拆成 3 个视觉方向..."
                   :disabled="chatLoading || chatReadingUrls"
                   @keydown.enter.exact.prevent="sendHomeChat"
                 />
@@ -206,38 +214,47 @@
 
               <div class="suggestion-cloud">
                 <span>试试：</span>
-                <button v-for="tag in chatSuggestions" :key="tag" @click="chatText = tag">
+                <button v-for="tag in chatSuggestions" :key="tag" @click="fillChatPrompt(tag)">
                   {{ tag }}
                 </button>
               </div>
             </div>
 
             <div v-else class="create-home">
-              <div class="prompt-card-head">
-                <span>输入一个想法</span>
-                <span class="shortcut">Ctrl + Enter</span>
-              </div>
-              <textarea
-                v-model="inputText"
-                placeholder="例如：生成一组赛博东方茶馆的主视觉，包含人物、环境和短视频镜头..."
-                @keydown.enter.ctrl="handleCreateWithInput"
-              />
-              <div class="prompt-footer">
-                <button class="ghost-chip" @click="randomFill">
-                  <n-icon :size="15"><RefreshOutline /></n-icon>
-                  随机灵感
-                </button>
-                <button class="send-button" @click="handleCreateWithInput">
-                  <n-icon :size="20"><SendOutline /></n-icon>
-                </button>
+              <div
+                class="create-composer selection-flow"
+                :class="{ 'is-selected': focusedEntry === 'create' }"
+                @focusin="focusedEntry = 'create'"
+                @focusout="handleComposerFocusOut('create', $event)"
+              >
+                <div class="prompt-card-head">
+                  <span>一句话生成工作流</span>
+                  <span class="shortcut">Ctrl + Enter</span>
+                </div>
+                <textarea
+                  ref="createTextareaRef"
+                  v-model="inputText"
+                  aria-label="生成工作流输入框"
+                  placeholder="例如：帮我把这个新茶饮品牌拆成 3 个视觉方向，并生成图片 / 视频节点工作流..."
+                  @keydown.enter.ctrl="handleCreateWithInput"
+                />
+                <div class="prompt-footer">
+                  <button class="ghost-chip" @click="randomFillAndFocus">
+                    <n-icon :size="15"><RefreshOutline /></n-icon>
+                    随机灵感
+                  </button>
+                  <button class="send-button" @click="handleCreateWithInput" title="生成工作流">
+                    <n-icon :size="20"><SendOutline /></n-icon>
+                  </button>
+                </div>
               </div>
 
               <div class="suggestion-cloud">
-                <span>推荐：</span>
+                <span>模板：</span>
                 <button
                   v-for="tag in visibleSuggestions"
                   :key="tag"
-                  @click="inputText = tag"
+                  @click="fillCreatePrompt(tag)"
                 >
                   {{ tag }}
                 </button>
@@ -459,7 +476,7 @@
 </template>
 
 <script setup>
-import { computed, h, onMounted, onUnmounted, ref } from 'vue'
+import { computed, h, nextTick, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { NButton, NDropdown, NIcon, NInput, NModal, NSpin, useDialog } from 'naive-ui'
 import {
@@ -518,6 +535,9 @@ const chatMessages = ref([])
 const chatAttachments = ref([])
 const chatFileInputRef = ref(null)
 const chatReadingUrls = ref(false)
+const createTextareaRef = ref(null)
+const chatTextareaRef = ref(null)
+const focusedEntry = ref(null)
 const showRenameModal = ref(false)
 const renameValue = ref('')
 const renameTargetId = ref(null)
@@ -838,9 +858,9 @@ const homeTourSteps = [
   },
   {
     target: '[data-tour="start-create"]',
-    title: '开始创作：进入节点画布',
-    body: '点这里会创建一个本地项目，并把你的创意带到无限画布。画布里可以继续添加文生图、图生图、文生视频、图生视频和结果节点。',
-    hint: '如果你只是想先试一张图，可以先在左侧输入一句需求，再点开始创作。',
+    title: '开始创作：先输入你的想法',
+    body: '点击这里会把你引导到右侧的「生成工作流」输入框。输入一句需求后，再发送进入节点画布。',
+    hint: '如果已经输入了创意，再次点击开始创作会沿用原有流程创建项目。',
     side: 'right'
   },
   {
@@ -923,6 +943,62 @@ const refreshSuggestions = () => {
 
 const randomFill = () => {
   inputText.value = suggestionPool[Math.floor(Math.random() * suggestionPool.length)]
+}
+
+const scrollPromptPanelIntoView = () => {
+  document.querySelector('[data-tour="home-chat"]')?.scrollIntoView({
+    behavior: 'smooth',
+    block: 'center'
+  })
+}
+
+const focusCreateEntry = async () => {
+  activeMode.value = 'create'
+  focusedEntry.value = 'create'
+  scrollPromptPanelIntoView()
+  await nextTick()
+  createTextareaRef.value?.focus?.()
+}
+
+const focusChatEntry = async () => {
+  activeMode.value = 'chat'
+  focusedEntry.value = 'chat'
+  scrollPromptPanelIntoView()
+  await nextTick()
+  chatTextareaRef.value?.focus?.()
+}
+
+const handleStartCreateClick = async () => {
+  if (activeMode.value === 'create' && inputText.value.trim()) {
+    handleCreateWithInput()
+    return
+  }
+
+  await focusCreateEntry()
+}
+
+const fillCreatePrompt = async (prompt) => {
+  inputText.value = prompt
+  await focusCreateEntry()
+}
+
+const fillChatPrompt = async (prompt) => {
+  chatText.value = prompt
+  await focusChatEntry()
+}
+
+const randomFillAndFocus = async () => {
+  randomFill()
+  await focusCreateEntry()
+}
+
+const handleComposerFocusOut = (entry, event) => {
+  const relatedTarget = event.relatedTarget
+  if (relatedTarget && event.currentTarget.contains(relatedTarget)) return
+
+  if (focusedEntry.value === entry) {
+    focusedEntry.value = null
+  }
 }
 
 const refreshApiConfig = () => {}
@@ -2039,6 +2115,90 @@ onUnmounted(() => {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72), 0 12px 30px rgba(15, 23, 42, 0.08);
 }
 
+.create-composer {
+  position: relative;
+  display: grid;
+  gap: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.26);
+  border-radius: 24px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.62);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72), 0 12px 30px rgba(15, 23, 42, 0.08);
+}
+
+.selection-flow {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+
+.selection-flow > * {
+  position: relative;
+  z-index: 4;
+}
+
+.selection-flow::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  padding: 1.5px;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  background:
+    conic-gradient(
+      from var(--flow-angle, 0deg),
+      rgba(255, 255, 255, 0) 0deg,
+      rgba(255, 255, 255, 0) 38deg,
+      rgba(255, 255, 255, 0.96) 62deg,
+      rgba(220, 238, 246, 0.95) 78deg,
+      rgba(150, 244, 255, 0.82) 96deg,
+      rgba(255, 255, 255, 0) 128deg,
+      rgba(255, 255, 255, 0) 360deg
+    );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  filter:
+    drop-shadow(0 0 7px rgba(235, 250, 255, 0.85))
+    drop-shadow(0 0 16px rgba(120, 235, 255, 0.28));
+  transition: opacity 0.18s ease;
+}
+
+.selection-flow.is-selected {
+  border-color: rgba(235, 250, 255, 0.56);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    0 0 0 1px rgba(160, 240, 255, 0.08),
+    0 0 28px rgba(180, 230, 255, 0.18);
+}
+
+.selection-flow.is-selected::after {
+  opacity: 1;
+  animation: flow-border-spin 2.8s linear infinite;
+}
+
+@property --flow-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@keyframes flow-border-spin {
+  to {
+    --flow-angle: 360deg;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .selection-flow.is-selected::after {
+    animation: none;
+  }
+}
+
 .hidden-file-input {
   display: none;
 }
@@ -2120,7 +2280,8 @@ onUnmounted(() => {
   border-color: rgba(74, 222, 128, 0.24);
 }
 
-.dark .chat-composer {
+.dark .chat-composer,
+.dark .create-composer {
   background: rgba(2, 6, 23, 0.28);
 }
 
@@ -2137,7 +2298,7 @@ onUnmounted(() => {
   background: rgba(15, 23, 42, 0.06);
 }
 
-.create-home > textarea,
+.create-composer textarea,
 .chat-composer textarea {
   width: 100%;
   resize: none;
@@ -2147,9 +2308,8 @@ onUnmounted(() => {
   color: var(--text-primary);
 }
 
-.create-home > textarea {
+.create-composer textarea {
   min-height: 168px;
-  margin-top: 12px;
   font-size: 16px;
   line-height: 1.7;
 }
