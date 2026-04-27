@@ -1,6 +1,7 @@
 <template>
   <div
     class="home-shell min-h-screen h-screen overflow-y-auto text-[var(--text-primary)]"
+    :class="{ 'is-perf-lite': performanceLite }"
     :style="stageStyle"
     @pointermove="handlePointerMove"
     @pointerleave="resetPointerField"
@@ -661,6 +662,7 @@ const heroMorphPhrases = [
 const heroMorphText = ref(heroMorphPhrases[0])
 const heroMorphPreviousText = ref(heroMorphPhrases[0])
 const heroMorphing = ref(false)
+const performanceLite = ref(false)
 const pointer = ref({ x: 0.5, y: 0.5 })
 const particleCanvas = ref(null)
 const particleMouse = { x: -9999, y: -9999, active: false }
@@ -668,6 +670,9 @@ let particles = []
 let particleFrame = null
 let particleCleanup = null
 let particleStartedAt = 0
+let lastParticleDraw = 0
+let pointerFrame = null
+let pendingPointer = null
 let heroMorphIndex = 0
 let heroMorphTimer = null
 let heroMorphRaf = null
@@ -676,6 +681,17 @@ const homeTourStorageKey = 'yufeng-canvas-home-tour-v1'
 const recentHomeProjects = computed(() => projects.value.slice(0, 4))
 
 const stageStyle = computed(() => {
+  if (performanceLite.value) {
+    return {
+      '--mx': '50%',
+      '--my': '50%',
+      '--parallax-x': '0px',
+      '--parallax-y': '0px',
+      '--tilt-x': '0deg',
+      '--tilt-y': '0deg'
+    }
+  }
+
   const x = pointer.value.x
   const y = pointer.value.y
   const dx = (x - 0.5) * 2
@@ -691,22 +707,73 @@ const stageStyle = computed(() => {
   }
 })
 
+const hasWebGLSupport = () => {
+  if (typeof document === 'undefined') return false
+
+  try {
+    const canvas = document.createElement('canvas')
+    return !!(canvas.getContext('webgl') || canvas.getContext('experimental-webgl'))
+  } catch {
+    return false
+  }
+}
+
+const detectPerformanceLite = () => {
+  if (typeof window === 'undefined') return true
+
+  const savedMode = localStorage.getItem('yufeng-canvas-performance-mode')
+  if (savedMode === 'lite') return true
+  if (savedMode === 'full') return false
+
+  const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+  const lowCore = navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4
+  const lowMemory = navigator.deviceMemory && navigator.deviceMemory <= 4
+  const largeScreen = window.innerWidth * window.innerHeight > 2_600_000
+  const weakGraphics = !hasWebGLSupport()
+
+  return Boolean(reduceMotion || weakGraphics || lowCore || lowMemory || largeScreen)
+}
+
 const handlePointerMove = (event) => {
+  if (performanceLite.value) return
   if (window.getSelection?.()?.type === 'Range') return
 
   const rect = event.currentTarget.getBoundingClientRect()
-  const x = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width))
-  const y = Math.min(1, Math.max(0, (event.clientY - rect.top) / rect.height))
-  pointer.value = {
-    x,
-    y
+  pendingPointer = {
+    clientX: event.clientX,
+    clientY: event.clientY,
+    rect: {
+      left: rect.left,
+      top: rect.top,
+      width: rect.width,
+      height: rect.height
+    }
   }
-  particleMouse.x = x * window.innerWidth
-  particleMouse.y = y * window.innerHeight
-  particleMouse.active = true
+
+  if (pointerFrame) return
+
+  pointerFrame = window.requestAnimationFrame(() => {
+    pointerFrame = null
+    if (!pendingPointer) return
+
+    const { clientX, clientY, rect: pendingRect } = pendingPointer
+    const x = Math.min(1, Math.max(0, (clientX - pendingRect.left) / pendingRect.width))
+    const y = Math.min(1, Math.max(0, (clientY - pendingRect.top) / pendingRect.height))
+
+    pointer.value = { x, y }
+    particleMouse.x = x * window.innerWidth
+    particleMouse.y = y * window.innerHeight
+    particleMouse.active = true
+    pendingPointer = null
+  })
 }
 
 const resetPointerField = () => {
+  if (pointerFrame) {
+    window.cancelAnimationFrame(pointerFrame)
+    pointerFrame = null
+  }
+  pendingPointer = null
   pointer.value = { x: 0.5, y: 0.5 }
   particleMouse.active = false
   particleMouse.x = -9999
@@ -714,6 +781,8 @@ const resetPointerField = () => {
 }
 
 const initParticleField = () => {
+  if (performanceLite.value || shouldReduceHeroMotion()) return
+
   const canvas = particleCanvas.value
   if (!canvas) return
 
@@ -721,7 +790,7 @@ const initParticleField = () => {
   if (!ctx) return
 
   const createParticles = () => {
-    const ratio = Math.min(window.devicePixelRatio || 1, 2)
+    const ratio = Math.min(window.devicePixelRatio || 1, 1.5)
     const width = window.innerWidth
     const height = window.innerHeight
     canvas.width = Math.floor(width * ratio)
@@ -730,7 +799,7 @@ const initParticleField = () => {
     canvas.style.height = `${height}px`
     ctx.setTransform(ratio, 0, 0, ratio, 0, 0)
 
-    const density = Math.min(3800, Math.max(1500, Math.floor((width * height) / 520)))
+    const density = Math.min(1600, Math.max(520, Math.floor((width * height) / 1350)))
     particles = Array.from({ length: density }, () => {
       const x = Math.random() * width
       const y = Math.random() * height
@@ -754,6 +823,14 @@ const initParticleField = () => {
   }
 
   const draw = (now = performance.now()) => {
+    particleFrame = window.requestAnimationFrame(draw)
+
+    if (document.hidden) return
+
+    const frameInterval = 1000 / 30
+    if (now - lastParticleDraw < frameInterval) return
+    lastParticleDraw = now
+
     const width = window.innerWidth
     const height = window.innerHeight
     ctx.clearRect(0, 0, width, height)
@@ -835,7 +912,6 @@ const initParticleField = () => {
       ctx.fill()
     }
 
-    particleFrame = window.requestAnimationFrame(draw)
   }
 
   createParticles()
@@ -914,7 +990,7 @@ const shouldReduceHeroMotion = () => {
     return true
   }
 
-  return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+  return performanceLite.value || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 }
 
 const runHeroMorphOnce = () => {
@@ -1594,6 +1670,7 @@ const scrollToTop = () => {
 }
 
 onMounted(() => {
+  performanceLite.value = detectPerformanceLite()
   initProjectsStore()
   refreshSuggestions()
   initParticleField()
@@ -1607,6 +1684,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   stopHeroMorphLoop()
+  resetPointerField()
   particleCleanup?.()
 })
 </script>
@@ -1627,6 +1705,56 @@ onUnmounted(() => {
     radial-gradient(circle at 14% 8%, rgba(43, 255, 195, 0.18), transparent 30%),
     radial-gradient(circle at 86% 14%, rgba(0, 163, 255, 0.18), transparent 28%),
     linear-gradient(135deg, #030a12 0%, #041e1f 42%, #06101d 100%);
+}
+
+.home-shell.is-perf-lite {
+  background:
+    radial-gradient(circle at 18% 10%, rgba(36, 240, 181, 0.14), transparent 28%),
+    radial-gradient(circle at 82% 18%, rgba(0, 161, 255, 0.12), transparent 26%),
+    linear-gradient(135deg, #f4fbf8 0%, #f8fbff 48%, #eef6ff 100%);
+}
+
+.dark .home-shell.is-perf-lite {
+  background:
+    radial-gradient(circle at 18% 10%, rgba(43, 255, 195, 0.1), transparent 28%),
+    radial-gradient(circle at 82% 18%, rgba(0, 163, 255, 0.1), transparent 26%),
+    linear-gradient(135deg, #030a12 0%, #061a1b 48%, #07111f 100%);
+}
+
+.home-shell.is-perf-lite .particle-field,
+.home-shell.is-perf-lite .y-signal,
+.home-shell.is-perf-lite .hero-prism {
+  display: none;
+}
+
+.home-shell.is-perf-lite .liquid-stage::before,
+.home-shell.is-perf-lite .liquid-stage::after,
+.home-shell.is-perf-lite .liquid-orb,
+.home-shell.is-perf-lite .mesh-grid,
+.home-shell.is-perf-lite .prompt-panel-glow {
+  animation: none;
+  filter: none;
+  opacity: 0.16;
+  transform: none;
+}
+
+.home-shell.is-perf-lite .home-header,
+.home-shell.is-perf-lite .mode-card,
+.home-shell.is-perf-lite .canvas-toolbar,
+.home-shell.is-perf-lite .side-rail,
+.home-shell.is-perf-lite .composer-card,
+.home-shell.is-perf-lite .showcase-card,
+.home-shell.is-perf-lite .project-card {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.home-shell.is-perf-lite .hero-title-morph::before,
+.home-shell.is-perf-lite .hero-morph-text,
+.home-shell.is-perf-lite .hero-morph-text::after,
+.home-shell.is-perf-lite .mode-tabs button.active::after,
+.home-shell.is-perf-lite .selection-flow.is-selected::after {
+  animation: none;
 }
 
 .liquid-stage {

@@ -1,6 +1,9 @@
 <template>
   <!-- Canvas page | 画布页面 -->
-  <div class="canvas-shell h-screen w-screen flex flex-col bg-[var(--bg-primary)]">
+  <div
+    class="canvas-shell h-screen w-screen flex flex-col bg-[var(--bg-primary)]"
+    :class="{ 'is-perf-lite': canvasPerfLite }"
+  >
     <!-- Header | 顶部导航 -->
     <AppHeader class="canvas-header">
       <template #left>
@@ -77,6 +80,7 @@
         :max-zoom="2"
         :snap-to-grid="true"
         :snap-grid="[20, 20]"
+        :only-render-visible-elements="true"
         @connect="onConnect"
         @node-click="onNodeClick"
         @pane-click="onPaneClick"
@@ -84,9 +88,9 @@
         @edges-change="onEdgesChange"
         class="canvas-flow"
       >
-        <Background v-if="showGrid" :gap="20" :size="1" />
+        <Background v-if="showCanvasBackground" :gap="20" :size="1" />
         <MiniMap 
-          v-if="!isMobile"
+          v-if="showMiniMap"
           position="bottom-right"
           :pannable="true"
           :zoomable="true"
@@ -457,6 +461,7 @@ const chatInput = ref('')
 const autoExecute = ref(false)
 const isMobile = ref(false)
 const showGrid = ref(true)
+const canvasPerfLite = ref(false)
 const showApiSettings = ref(false)
 const isProcessing = ref(false)
 
@@ -475,6 +480,33 @@ const canvasTourStorageKey = 'yufeng-canvas-canvas-tour-v1'
 const runtimeNow = ref(Date.now())
 const processingStartedAt = ref(0)
 let runtimeTicker = null
+
+const hasWebGLSupport = () => {
+  if (typeof document === 'undefined') return false
+
+  try {
+    const canvas = document.createElement('canvas')
+    return !!(canvas.getContext('webgl') || canvas.getContext('experimental-webgl'))
+  } catch {
+    return false
+  }
+}
+
+const detectCanvasPerfLite = () => {
+  if (typeof window === 'undefined') return true
+
+  const savedMode = localStorage.getItem('yufeng-canvas-performance-mode')
+  if (savedMode === 'lite') return true
+  if (savedMode === 'full') return false
+
+  const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+  const lowCore = navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4
+  const lowMemory = navigator.deviceMemory && navigator.deviceMemory <= 4
+  const largeCanvas = window.innerWidth * window.innerHeight > 2_600_000
+  const weakGraphics = !hasWebGLSupport()
+
+  return Boolean(reduceMotion || weakGraphics || lowCore || lowMemory || largeCanvas)
+}
 
 const canvasTourSteps = [
   {
@@ -561,6 +593,13 @@ const hasDownloadableAssets = computed(() => {
   )
 })
 
+const showCanvasBackground = computed(() => showGrid.value && !canvasPerfLite.value)
+
+const showMiniMap = computed(() => {
+  if (isMobile.value || canvasPerfLite.value) return false
+  return nodes.value.length <= 24
+})
+
 const runtimeErrorCount = computed(() => runtimeLogs.value.filter((log) => log.level === 'error').length)
 
 const formatLogTime = (timestamp) => {
@@ -602,6 +641,22 @@ const activeRunLabel = computed(() => {
   return formatDuration(runtimeNow.value - activeRunStartedAt.value)
 })
 
+const startRuntimeTicker = () => {
+  if (runtimeTicker || typeof window === 'undefined') return
+
+  runtimeNow.value = Date.now()
+  runtimeTicker = window.setInterval(() => {
+    runtimeNow.value = Date.now()
+  }, 1000)
+}
+
+const stopRuntimeTicker = () => {
+  if (!runtimeTicker || typeof window === 'undefined') return
+
+  window.clearInterval(runtimeTicker)
+  runtimeTicker = null
+}
+
 watch(
   [isProcessing, workflowExecuting, workflowAnalyzing],
   ([processing, executing, analyzing]) => {
@@ -612,6 +667,19 @@ watch(
       processingStartedAt.value = 0
     }
   }
+)
+
+watch(
+  activeRunCount,
+  (count) => {
+    if (count > 0) {
+      startRuntimeTicker()
+    } else {
+      stopRuntimeTicker()
+      runtimeNow.value = Date.now()
+    }
+  },
+  { immediate: true }
 )
 
 const getLogDuration = (log) => {
@@ -1098,11 +1166,9 @@ watch(
 
 // Initialize | 初始化
 onMounted(() => {
+  canvasPerfLite.value = detectCanvasPerfLite()
   checkMobile()
   refreshSuggestions()
-  runtimeTicker = window.setInterval(() => {
-    runtimeNow.value = Date.now()
-  }, 1000)
   window.addEventListener('resize', checkMobile)
   
   // Initialize projects store | 初始化项目存储
@@ -1134,10 +1200,7 @@ onMounted(() => {
 
 // Cleanup on unmount | 卸载时清理
 onUnmounted(() => {
-  if (runtimeTicker) {
-    window.clearInterval(runtimeTicker)
-    runtimeTicker = null
-  }
+  stopRuntimeTicker()
   window.removeEventListener('resize', checkMobile)
   // Save project before leaving | 离开前保存项目
   saveProject()
@@ -1180,6 +1243,24 @@ onUnmounted(() => {
   background-position: center, center, center, -1px -1px, -1px -1px, -1px -1px, -1px -1px, center;
 }
 
+.canvas-shell.is-perf-lite .canvas-flow {
+  background:
+    linear-gradient(rgba(15, 23, 42, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(15, 23, 42, 0.045) 1px, transparent 1px),
+    linear-gradient(135deg, #f8fbff 0%, #f3faf8 52%, #f8fafc 100%);
+  background-size: 40px 40px, 40px 40px, auto;
+  background-position: -1px -1px, -1px -1px, center;
+}
+
+.dark .canvas-shell.is-perf-lite .canvas-flow {
+  background:
+    linear-gradient(rgba(148, 163, 184, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.08) 1px, transparent 1px),
+    linear-gradient(135deg, #07111f 0%, #0a1a1c 52%, #101827 100%);
+  background-size: 40px 40px, 40px 40px, auto;
+  background-position: -1px -1px, -1px -1px, center;
+}
+
 .canvas-flow::before {
   content: "";
   position: absolute;
@@ -1201,6 +1282,12 @@ onUnmounted(() => {
     radial-gradient(circle, rgba(125, 211, 252, 0.2) 0 0.8px, transparent 1.2px);
 }
 
+.canvas-shell.is-perf-lite .canvas-flow::before,
+.canvas-shell.is-perf-lite::before,
+.canvas-shell.is-perf-lite .canvas-ambient {
+  display: none;
+}
+
 .canvas-shell {
   position: relative;
   isolation: isolate;
@@ -1217,6 +1304,18 @@ onUnmounted(() => {
     radial-gradient(circle at 18% 12%, rgba(0, 163, 255, 0.18), transparent 32%),
     radial-gradient(circle at 84% 6%, rgba(34, 197, 94, 0.14), transparent 26%),
     linear-gradient(135deg, #07111f 0%, #0b1d1d 52%, #101827 100%);
+}
+
+.canvas-shell.is-perf-lite {
+  background:
+    radial-gradient(circle at 18% 10%, rgba(20, 184, 166, 0.12), transparent 28%),
+    linear-gradient(135deg, #f8fbff 0%, #f3faf8 52%, #f8fafc 100%);
+}
+
+.dark .canvas-shell.is-perf-lite {
+  background:
+    radial-gradient(circle at 18% 10%, rgba(45, 212, 191, 0.1), transparent 28%),
+    linear-gradient(135deg, #07111f 0%, #0a1a1c 52%, #101827 100%);
 }
 
 .canvas-shell::before {
@@ -1384,6 +1483,35 @@ onUnmounted(() => {
   overflow: hidden;
 }
 
+.canvas-shell.is-perf-lite .canvas-header,
+.canvas-shell.is-perf-lite .canvas-toolbar,
+.canvas-shell.is-perf-lite .node-menu-pop,
+.canvas-shell.is-perf-lite .zoom-dock,
+.canvas-shell.is-perf-lite .composer-card,
+.canvas-shell.is-perf-lite .processing-card,
+.canvas-shell.is-perf-lite .runtime-log-panel {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: 0 12px 34px rgba(15, 23, 42, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.46);
+}
+
+.canvas-shell.is-perf-lite .composer-card::before {
+  display: none;
+}
+
+.canvas-shell.is-perf-lite .canvas-toolbar button,
+.canvas-shell.is-perf-lite .zoom-dock button,
+.canvas-shell.is-perf-lite .node-menu-pop button {
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.canvas-shell.is-perf-lite .canvas-toolbar button:hover,
+.canvas-shell.is-perf-lite .zoom-dock button:hover,
+.canvas-shell.is-perf-lite .node-menu-pop button:hover {
+  transform: none;
+  box-shadow: none;
+}
+
 .composer-card::before {
   content: "";
   position: absolute;
@@ -1442,6 +1570,17 @@ onUnmounted(() => {
   background: #22c55e;
   box-shadow: 0 0 0 5px rgba(34, 197, 94, 0.14), 0 0 18px rgba(34, 197, 94, 0.8);
   animation: live-run-pulse 1.35s ease-in-out infinite;
+}
+
+.canvas-shell.is-perf-lite .live-run-chip,
+.canvas-shell.is-perf-lite .canvas-suggestions button {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.canvas-shell.is-perf-lite .live-run-chip i {
+  animation: none;
+  box-shadow: none;
 }
 
 .dark .live-run-chip {
@@ -1629,6 +1768,23 @@ onUnmounted(() => {
   50% {
     transform: scale(1.15);
     opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .canvas-toolbar button,
+  .zoom-dock button,
+  .node-menu-pop button,
+  .live-run-chip i {
+    animation: none;
+    transition: none;
+  }
+
+  .canvas-toolbar button:hover,
+  .zoom-dock button:hover,
+  .node-menu-pop button:hover {
+    transform: none;
+    box-shadow: none;
   }
 }
 </style>
