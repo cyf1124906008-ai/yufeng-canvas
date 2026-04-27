@@ -675,6 +675,7 @@ let pointerFrame = null
 let pendingPointer = null
 let heroMorphIndex = 0
 let heroMorphTimer = null
+let heroMorphKickoffTimer = null
 let heroMorphRaf = null
 const onboardingStorageKey = 'yufeng-canvas-onboarding-v2'
 const homeTourStorageKey = 'yufeng-canvas-home-tour-v1'
@@ -968,18 +969,27 @@ const isHeroPunctuation = (char) => {
   return /[\s，。、,.!?！？]/.test(char)
 }
 
-const buildHeroMorphFrame = (target, progress) => {
+const buildHeroMorphFrame = (target, previous, progress) => {
   const chars = Array.from(target)
-  const revealCount = Math.floor(chars.length * progress)
+  const previousChars = Array.from(previous || '')
+  const length = Math.max(chars.length, previousChars.length)
 
-  return chars
-    .map((char, index) => {
+  return Array.from({ length }, (_, index) => {
+      const char = chars[index] || ''
       if (isHeroPunctuation(char)) {
         return char
       }
 
-      if (index < revealCount) {
+      const waveDelay = length > 1 ? index / (length - 1) * 0.32 : 0
+      const charProgress = Math.min(1, Math.max(0, progress * 1.16 - waveDelay))
+      const nearReveal = charProgress > 0.58 && Math.random() > 0.42
+
+      if (charProgress > 0.84 || nearReveal) {
         return char
+      }
+
+      if (previousChars[index] && Math.random() > 0.62) {
+        return previousChars[index]
       }
 
       return getRandomHeroGlyph()
@@ -1011,7 +1021,7 @@ const runHeroMorphOnce = () => {
   const nextIndex = (heroMorphIndex + 1) % heroMorphPhrases.length
   const targetText = heroMorphPhrases[nextIndex]
   const previousText = heroMorphText.value
-  const duration = 680
+  const duration = 820
   const startedAt = window.performance.now()
 
   heroMorphPreviousText.value = previousText
@@ -1021,7 +1031,7 @@ const runHeroMorphOnce = () => {
     const rawProgress = Math.min(1, (now - startedAt) / duration)
     const progress = easeOutCubic(rawProgress)
 
-    heroMorphText.value = buildHeroMorphFrame(targetText, progress)
+    heroMorphText.value = buildHeroMorphFrame(targetText, previousText, progress)
 
     if (rawProgress < 1) {
       heroMorphRaf = window.requestAnimationFrame(tick)
@@ -1050,7 +1060,12 @@ const startHeroMorphLoop = () => {
     window.clearInterval(heroMorphTimer)
   }
 
-  heroMorphTimer = window.setInterval(runHeroMorphOnce, 4200)
+  if (heroMorphKickoffTimer) {
+    window.clearTimeout(heroMorphKickoffTimer)
+  }
+
+  heroMorphKickoffTimer = window.setTimeout(runHeroMorphOnce, 820)
+  heroMorphTimer = window.setInterval(runHeroMorphOnce, 3800)
 }
 
 const stopHeroMorphLoop = () => {
@@ -1061,6 +1076,11 @@ const stopHeroMorphLoop = () => {
   if (heroMorphTimer) {
     window.clearInterval(heroMorphTimer)
     heroMorphTimer = null
+  }
+
+  if (heroMorphKickoffTimer) {
+    window.clearTimeout(heroMorphKickoffTimer)
+    heroMorphKickoffTimer = null
   }
 
   if (heroMorphRaf) {
@@ -2118,6 +2138,27 @@ onUnmounted(() => {
 
 .hero-title-line-dynamic {
   min-height: 1em;
+  isolation: isolate;
+  perspective: 900px;
+}
+
+.hero-title-line-dynamic::before {
+  content: "";
+  position: absolute;
+  left: 0.02em;
+  right: 0.08em;
+  bottom: -0.08em;
+  height: 0.08em;
+  border-radius: 999px;
+  pointer-events: none;
+  opacity: 0.34;
+  background:
+    linear-gradient(90deg, transparent, rgba(39, 245, 219, 0.88), rgba(255, 255, 255, 0.58), transparent);
+  box-shadow:
+    0 0 16px rgba(64, 255, 230, 0.42),
+    0 0 36px rgba(56, 189, 248, 0.18);
+  transform-origin: left center;
+  animation: heroDecodeRail 3.8s ease-in-out infinite;
 }
 
 .hero-morph-text {
@@ -2148,6 +2189,7 @@ onUnmounted(() => {
     opacity 0.18s ease,
     transform 0.18s ease,
     letter-spacing 0.18s ease;
+  will-change: transform, filter, opacity, letter-spacing;
   animation: heroTitleGradientDrift 8s ease-in-out infinite;
 }
 
@@ -2203,18 +2245,26 @@ onUnmounted(() => {
 }
 
 .hero-morph-text.is-morphing {
-  opacity: 0.9;
-  filter: blur(1.4px);
-  transform: translateY(1px) scale(0.995);
-  letter-spacing: -0.025em;
+  opacity: 0.98;
+  filter: blur(0.35px) contrast(1.08);
+  transform: translateY(1px) scale(1.006);
+  letter-spacing: -0.015em;
+  animation:
+    heroTitleGradientDrift 8s ease-in-out infinite,
+    heroMorphSettle 0.82s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .hero-morph-text.is-morphing::before {
   content: attr(data-prev);
-  color: rgba(221, 251, 255, 0.2);
-  filter: blur(10px);
-  transform: translateY(-4px);
-  opacity: 0.62;
+  color: rgba(221, 251, 255, 0.24);
+  filter: blur(7px);
+  transform: translate3d(0, -0.14em, 0) skewX(-4deg);
+  opacity: 0.74;
+}
+
+.hero-morph-text.is-morphing::after {
+  opacity: 1;
+  animation: heroDecodeSweep 0.82s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @keyframes heroTitleGradientDrift {
@@ -2249,6 +2299,66 @@ onUnmounted(() => {
   100% {
     background-position: -45% 0;
     opacity: 0;
+  }
+}
+
+@keyframes heroDecodeSweep {
+  0% {
+    background-position: 130% 0;
+    opacity: 0;
+    filter: blur(1px);
+    transform: translateX(-0.04em);
+  }
+
+  18% {
+    opacity: 0.94;
+  }
+
+  58% {
+    background-position: -30% 0;
+    opacity: 0.78;
+  }
+
+  100% {
+    background-position: -56% 0;
+    opacity: 0;
+    filter: blur(0);
+    transform: translateX(0);
+  }
+}
+
+@keyframes heroMorphSettle {
+  0% {
+    filter: blur(2px) contrast(1.2);
+    opacity: 0.72;
+    transform: translate3d(0, -0.08em, 0) rotateX(5deg) scale(1.018);
+    letter-spacing: 0.01em;
+  }
+
+  44% {
+    filter: blur(0.6px) contrast(1.12);
+    opacity: 1;
+    transform: translate3d(0, 0.03em, 0) rotateX(-2deg) scale(1.006);
+  }
+
+  100% {
+    filter: blur(0) contrast(1);
+    opacity: 1;
+    transform: translate3d(0, 0, 0) rotateX(0deg) scale(1);
+    letter-spacing: -0.045em;
+  }
+}
+
+@keyframes heroDecodeRail {
+  0%,
+  100% {
+    opacity: 0.16;
+    transform: scaleX(0.28) translateX(0);
+  }
+
+  48% {
+    opacity: 0.44;
+    transform: scaleX(0.82) translateX(0.1em);
   }
 }
 
@@ -2898,6 +3008,7 @@ onUnmounted(() => {
 
 @media (prefers-reduced-motion: reduce) {
   .hero-title-morph::before,
+  .hero-title-line-dynamic::before,
   .hero-morph-text,
   .hero-morph-text::after {
     animation: none;
