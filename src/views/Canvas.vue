@@ -505,7 +505,13 @@ const detectCanvasPerfLite = () => {
   const largeCanvas = window.innerWidth * window.innerHeight > 2_600_000
   const weakGraphics = !hasWebGLSupport()
 
-  return Boolean(reduceMotion || weakGraphics || lowCore || lowMemory || largeCanvas)
+  if (reduceMotion) return true
+
+  const constrainedCpuAndMemory = lowCore && lowMemory
+  const constrainedGraphics = weakGraphics && (lowCore || lowMemory)
+  const overloadedViewport = largeCanvas && constrainedCpuAndMemory
+
+  return Boolean(constrainedCpuAndMemory || constrainedGraphics || overloadedViewport)
 }
 
 const canvasTourSteps = [

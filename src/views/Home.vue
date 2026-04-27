@@ -731,7 +731,13 @@ const detectPerformanceLite = () => {
   const largeScreen = window.innerWidth * window.innerHeight > 2_600_000
   const weakGraphics = !hasWebGLSupport()
 
-  return Boolean(reduceMotion || weakGraphics || lowCore || lowMemory || largeScreen)
+  if (reduceMotion) return true
+
+  const constrainedCpuAndMemory = lowCore && lowMemory
+  const constrainedGraphics = weakGraphics && (lowCore || lowMemory)
+  const overloadedViewport = largeScreen && constrainedCpuAndMemory
+
+  return Boolean(constrainedCpuAndMemory || constrainedGraphics || overloadedViewport)
 }
 
 const handlePointerMove = (event) => {
@@ -990,7 +996,7 @@ const shouldReduceHeroMotion = () => {
     return true
   }
 
-  return performanceLite.value || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+  return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 }
 
 const runHeroMorphOnce = () => {
@@ -1721,21 +1727,40 @@ onUnmounted(() => {
     linear-gradient(135deg, #030a12 0%, #061a1b 48%, #07111f 100%);
 }
 
-.home-shell.is-perf-lite .particle-field,
-.home-shell.is-perf-lite .y-signal,
-.home-shell.is-perf-lite .hero-prism {
+.home-shell.is-perf-lite .particle-field {
   display: none;
 }
 
-.home-shell.is-perf-lite .liquid-stage::before,
-.home-shell.is-perf-lite .liquid-stage::after,
-.home-shell.is-perf-lite .liquid-orb,
-.home-shell.is-perf-lite .mesh-grid,
-.home-shell.is-perf-lite .prompt-panel-glow {
-  animation: none;
-  filter: none;
-  opacity: 0.16;
+.home-shell.is-perf-lite .liquid-stage::before {
+  opacity: 0.24;
+  filter: blur(30px) saturate(1.12);
+  animation-duration: 34s;
+}
+
+.home-shell.is-perf-lite .liquid-stage::after {
+  opacity: 0.18;
+}
+
+.home-shell.is-perf-lite .liquid-orb {
+  opacity: 0.22;
+  filter: blur(18px);
+  animation-duration: 28s;
   transform: none;
+}
+
+.home-shell.is-perf-lite .mesh-grid {
+  opacity: 0.16;
+  transform: perspective(700px) rotateX(62deg) translate3d(0, 120px, 0);
+}
+
+.home-shell.is-perf-lite .prompt-panel-glow {
+  opacity: 0.24;
+  filter: blur(18px);
+}
+
+.home-shell.is-perf-lite .y-signal,
+.home-shell.is-perf-lite .hero-prism {
+  opacity: 0.26;
 }
 
 .home-shell.is-perf-lite .home-header,
@@ -1749,12 +1774,9 @@ onUnmounted(() => {
   -webkit-backdrop-filter: none;
 }
 
-.home-shell.is-perf-lite .hero-title-morph::before,
-.home-shell.is-perf-lite .hero-morph-text,
-.home-shell.is-perf-lite .hero-morph-text::after,
 .home-shell.is-perf-lite .mode-tabs button.active::after,
 .home-shell.is-perf-lite .selection-flow.is-selected::after {
-  animation: none;
+  animation-duration: 5.6s;
 }
 
 .liquid-stage {
