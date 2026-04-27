@@ -2073,18 +2073,19 @@ onUnmounted(() => {
 }
 
 .home-main {
-  width: min(1430px, calc(100vw - 40px));
+  width: min(1440px, calc(100vw - 28px));
   margin: 0 auto;
   box-sizing: border-box;
-  padding: 74px 0 96px 104px;
+  padding: clamp(46px, 6.6vh, 72px) clamp(18px, 3vw, 44px) 96px;
 }
 
 .hero-grid {
   display: grid;
-  grid-template-columns: minmax(360px, 0.82fr) minmax(640px, 1.18fr);
-  gap: 34px;
+  grid-template-columns: minmax(430px, 0.92fr) minmax(560px, 1.08fr);
+  gap: clamp(28px, 3.1vw, 48px);
   align-items: center;
   min-height: calc(100vh - 170px);
+  max-width: 100%;
 }
 
 .eyebrow {
@@ -2097,12 +2098,13 @@ onUnmounted(() => {
 }
 
 .hero-copy h1 {
-  max-width: 720px;
+  max-width: min(100%, 620px);
   font-size: clamp(48px, 4.7vw, 78px);
   line-height: 0.98;
   letter-spacing: -0.07em;
   font-weight: 900;
   text-wrap: balance;
+  overflow: visible;
   color: transparent;
   background:
     linear-gradient(135deg, #082f2b 0%, #0f172a 45%, #0891b2 100%);
@@ -2120,7 +2122,11 @@ onUnmounted(() => {
 }
 
 .hero-copy {
+  width: 100%;
+  min-width: 0;
+  max-width: 620px;
   margin-top: clamp(-64px, -4vh, -36px);
+  justify-self: start;
 }
 
 .hero-title-rotator {
@@ -2136,6 +2142,9 @@ onUnmounted(() => {
   background: none;
   -webkit-background-clip: initial;
   background-clip: initial;
+  width: 100%;
+  max-width: 620px;
+  padding-left: 2px;
 }
 
 .hero-title-rotator::before {
@@ -2160,9 +2169,10 @@ onUnmounted(() => {
   display: inline-block;
   width: fit-content;
   max-width: 100%;
-  font-size: clamp(46px, 4.4vw, 78px);
+  font-size: clamp(42px, 4.05vw, 72px);
   font-weight: 850;
   line-height: 0.98;
+  letter-spacing: -0.055em;
   white-space: nowrap;
 }
 
@@ -2181,6 +2191,7 @@ onUnmounted(() => {
 }
 
 .hero-title-line-rotating {
+  width: 100%;
   min-height: 1em;
   height: 1em;
   overflow: visible;
@@ -2212,7 +2223,7 @@ onUnmounted(() => {
   inset: 0 auto auto 0;
   display: inline-block;
   width: max-content;
-  max-width: min(100vw - 40px, 760px);
+  max-width: 100%;
   color: transparent;
   white-space: nowrap;
   pointer-events: none;
@@ -2513,7 +2524,7 @@ onUnmounted(() => {
 }
 
 .hero-line {
-  min-height: 260px;
+  min-height: clamp(228px, 26vh, 260px);
 }
 
 .hero-copy-enter-active,
@@ -2534,7 +2545,7 @@ onUnmounted(() => {
 }
 
 .hero-desc {
-  max-width: 620px;
+  max-width: 560px;
   margin-top: 22px;
   color: color-mix(in srgb, var(--text-secondary) 82%, var(--text-primary));
   font-size: 16px;
