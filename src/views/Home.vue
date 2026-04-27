@@ -54,12 +54,31 @@
       <section class="hero-grid">
         <div class="hero-copy">
           <div class="eyebrow">YUFENG CREATIVE CANVAS</div>
-          <transition name="hero-copy" mode="out-in">
-            <div :key="currentHero.id" class="hero-line">
-              <h1>{{ currentHero.title }}</h1>
-              <p class="hero-desc">{{ currentHero.desc }}</p>
-            </div>
-          </transition>
+          <div class="hero-line">
+            <h1
+              class="hero-title hero-title-morph"
+              aria-label="图片、视频、模型，像搭积木一样编排。"
+            >
+              <span class="hero-title-line hero-title-line-static" aria-hidden="true">
+                图片、视频、模型，
+              </span>
+
+              <span
+                class="hero-title-line hero-title-line-dynamic"
+                aria-hidden="true"
+              >
+                <span
+                  class="hero-morph-text"
+                  :class="{ 'is-morphing': heroMorphing }"
+                  :data-text="heroMorphText"
+                  :data-prev="heroMorphPreviousText"
+                >
+                  {{ heroMorphText }}
+                </span>
+              </span>
+            </h1>
+            <p class="hero-desc">{{ currentHero.desc }}</p>
+          </div>
 
           <div class="hero-actions">
             <button class="primary-action" data-tour="start-create" @click="handleStartCreateClick">
@@ -615,7 +634,6 @@ const renameTargetId = ref(null)
 const projectsSection = ref(null)
 const inspirationSection = ref(null)
 const videoRefs = new Map()
-let heroTimer = null
 
 const isApiConfigured = computed(() => modelStore.hasAnyApiKey)
 const isChatConfigured = computed(() => !!modelStore.currentChatApiKey && !!modelStore.selectedChatModel)
@@ -635,6 +653,14 @@ const visibleSuggestions = ref([])
 const chatSuggestions = HOME_CHAT_SUGGESTIONS
 const inspirationCases = INSPIRATION_CASES
 const heroIndex = ref(0)
+const heroMorphPhrases = [
+  '像搭积木一样编排。',
+  '像工作流一样生成。',
+  '像节点图一样连接。'
+]
+const heroMorphText = ref(heroMorphPhrases[0])
+const heroMorphPreviousText = ref(heroMorphPhrases[0])
+const heroMorphing = ref(false)
 const pointer = ref({ x: 0.5, y: 0.5 })
 const particleCanvas = ref(null)
 const particleMouse = { x: -9999, y: -9999, active: false }
@@ -642,6 +668,9 @@ let particles = []
 let particleFrame = null
 let particleCleanup = null
 let particleStartedAt = 0
+let heroMorphIndex = 0
+let heroMorphTimer = null
+let heroMorphRaf = null
 const onboardingStorageKey = 'yufeng-canvas-onboarding-v2'
 const homeTourStorageKey = 'yufeng-canvas-home-tour-v1'
 const recentHomeProjects = computed(() => projects.value.slice(0, 4))
@@ -846,6 +875,117 @@ const heroSlides = [
 ]
 
 const currentHero = computed(() => heroSlides[heroIndex.value])
+
+const heroGlyphPool = '图片视频模型提示词参考图节点画布分镜工作流灵感创意生成'
+
+const getRandomHeroGlyph = () => {
+  return heroGlyphPool[Math.floor(Math.random() * heroGlyphPool.length)]
+}
+
+const isHeroPunctuation = (char) => {
+  return /[\s，。、,.!?！？]/.test(char)
+}
+
+const buildHeroMorphFrame = (target, progress) => {
+  const chars = Array.from(target)
+  const revealCount = Math.floor(chars.length * progress)
+
+  return chars
+    .map((char, index) => {
+      if (isHeroPunctuation(char)) {
+        return char
+      }
+
+      if (index < revealCount) {
+        return char
+      }
+
+      return getRandomHeroGlyph()
+    })
+    .join('')
+}
+
+const easeOutCubic = (value) => {
+  return 1 - Math.pow(1 - value, 3)
+}
+
+const shouldReduceHeroMotion = () => {
+  if (typeof window === 'undefined') {
+    return true
+  }
+
+  return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+}
+
+const runHeroMorphOnce = () => {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  if (heroMorphing.value || shouldReduceHeroMotion()) {
+    return
+  }
+
+  const nextIndex = (heroMorphIndex + 1) % heroMorphPhrases.length
+  const targetText = heroMorphPhrases[nextIndex]
+  const previousText = heroMorphText.value
+  const duration = 680
+  const startedAt = window.performance.now()
+
+  heroMorphPreviousText.value = previousText
+  heroMorphing.value = true
+
+  const tick = (now) => {
+    const rawProgress = Math.min(1, (now - startedAt) / duration)
+    const progress = easeOutCubic(rawProgress)
+
+    heroMorphText.value = buildHeroMorphFrame(targetText, progress)
+
+    if (rawProgress < 1) {
+      heroMorphRaf = window.requestAnimationFrame(tick)
+      return
+    }
+
+    heroMorphText.value = targetText
+    heroMorphIndex = nextIndex
+    heroMorphing.value = false
+    heroMorphRaf = null
+  }
+
+  heroMorphRaf = window.requestAnimationFrame(tick)
+}
+
+const startHeroMorphLoop = () => {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  if (shouldReduceHeroMotion()) {
+    return
+  }
+
+  if (heroMorphTimer) {
+    window.clearInterval(heroMorphTimer)
+  }
+
+  heroMorphTimer = window.setInterval(runHeroMorphOnce, 4200)
+}
+
+const stopHeroMorphLoop = () => {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  if (heroMorphTimer) {
+    window.clearInterval(heroMorphTimer)
+    heroMorphTimer = null
+  }
+
+  if (heroMorphRaf) {
+    window.cancelAnimationFrame(heroMorphRaf)
+    heroMorphRaf = null
+  }
+}
 
 const localApiLabel = computed(() => {
   const origin = 'http://127.0.0.1:43112'
@@ -1462,15 +1602,11 @@ onMounted(() => {
       showOnboarding.value = true
     }, 700)
   }
-  heroTimer = window.setInterval(() => {
-    heroIndex.value = (heroIndex.value + 1) % heroSlides.length
-  }, 4200)
+  startHeroMorphLoop()
 })
 
 onUnmounted(() => {
-  if (heroTimer) {
-    window.clearInterval(heroTimer)
-  }
+  stopHeroMorphLoop()
   particleCleanup?.()
 })
 </script>
@@ -1772,6 +1908,211 @@ onUnmounted(() => {
   -webkit-background-clip: text;
   background-clip: text;
   filter: drop-shadow(0 20px 40px rgba(0, 255, 202, 0.12));
+}
+
+.hero-title-morph {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(6px, 0.8vw, 12px);
+  margin: 0;
+  isolation: isolate;
+  color: inherit;
+  line-height: 0.95;
+  letter-spacing: -0.045em;
+  background: none;
+  -webkit-background-clip: initial;
+  background-clip: initial;
+}
+
+.hero-title-morph::before {
+  content: "";
+  position: absolute;
+  inset: -12px -18px;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(
+      circle at 28% 55%,
+      rgba(111, 247, 232, 0.16),
+      rgba(111, 247, 232, 0) 58%
+    );
+  filter: blur(22px);
+  opacity: 0.72;
+  animation: heroTitleGlowPulse 4.8s ease-in-out infinite;
+}
+
+.hero-title-line {
+  position: relative;
+  display: inline-block;
+  width: fit-content;
+  max-width: 100%;
+  font-size: clamp(44px, 4.4vw, 80px);
+  font-weight: 850;
+  line-height: 0.98;
+}
+
+.hero-title-line-static {
+  color: #0a2430;
+  text-shadow:
+    0 0 10px rgba(221, 251, 255, 0.14),
+    0 0 26px rgba(111, 247, 232, 0.08);
+}
+
+.dark .hero-title-line-static {
+  color: #f4fbff;
+  text-shadow:
+    0 0 10px rgba(221, 251, 255, 0.14),
+    0 0 26px rgba(111, 247, 232, 0.06);
+}
+
+.hero-title-line-dynamic {
+  min-height: 1em;
+}
+
+.hero-morph-text {
+  position: relative;
+  display: inline-block;
+  color: transparent;
+  background-image:
+    linear-gradient(
+      92deg,
+      #0d3440 0%,
+      #0f5962 18%,
+      #16b8ab 46%,
+      #0f9f8e 70%,
+      #113a46 100%
+    );
+  background-size: 220% 100%;
+  background-position: 0% 50%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  text-shadow:
+    0 0 12px rgba(111, 247, 232, 0.18),
+    0 0 28px rgba(32, 215, 199, 0.08);
+  filter: blur(0);
+  transform: translateY(0);
+  opacity: 1;
+  transition:
+    filter 0.18s ease,
+    opacity 0.18s ease,
+    transform 0.18s ease,
+    letter-spacing 0.18s ease;
+  animation: heroTitleGradientDrift 8s ease-in-out infinite;
+}
+
+.dark .hero-morph-text {
+  background-image:
+    linear-gradient(
+      92deg,
+      #f7fdff 0%,
+      #dffcff 18%,
+      #8af7ef 46%,
+      #35e0cf 70%,
+      #dffcff 100%
+    );
+  text-shadow:
+    0 0 12px rgba(111, 247, 232, 0.22),
+    0 0 28px rgba(32, 215, 199, 0.10);
+}
+
+.hero-morph-text::before {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  color: rgba(111, 247, 232, 0.16);
+  filter: blur(12px);
+  transform: translateY(2px);
+  pointer-events: none;
+}
+
+.hero-morph-text::after {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  color: transparent;
+  pointer-events: none;
+  background:
+    linear-gradient(
+      105deg,
+      rgba(255, 255, 255, 0) 18%,
+      rgba(255, 255, 255, 0.08) 34%,
+      rgba(255, 255, 255, 0.7) 48%,
+      rgba(255, 255, 255, 0.12) 62%,
+      rgba(255, 255, 255, 0) 78%
+    );
+  background-size: 240% 100%;
+  background-position: 140% 0;
+  -webkit-background-clip: text;
+  background-clip: text;
+  mix-blend-mode: screen;
+  opacity: 0;
+  animation: heroTitleSheen 4.8s ease-in-out infinite;
+}
+
+.hero-morph-text.is-morphing {
+  opacity: 0.9;
+  filter: blur(1.4px);
+  transform: translateY(1px) scale(0.995);
+  letter-spacing: -0.025em;
+}
+
+.hero-morph-text.is-morphing::before {
+  content: attr(data-prev);
+  color: rgba(221, 251, 255, 0.2);
+  filter: blur(10px);
+  transform: translateY(-4px);
+  opacity: 0.62;
+}
+
+@keyframes heroTitleGradientDrift {
+  0% {
+    background-position: 0% 50%;
+  }
+
+  50% {
+    background-position: 100% 50%;
+  }
+
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+@keyframes heroTitleSheen {
+  0% {
+    background-position: 145% 0;
+    opacity: 0;
+  }
+
+  14% {
+    opacity: 0.82;
+  }
+
+  42% {
+    background-position: -45% 0;
+    opacity: 0.18;
+  }
+
+  100% {
+    background-position: -45% 0;
+    opacity: 0;
+  }
+}
+
+@keyframes heroTitleGlowPulse {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: scale(0.995);
+  }
+
+  50% {
+    opacity: 0.78;
+    transform: scale(1.01);
+  }
 }
 
 .hero-line {
@@ -2406,9 +2747,34 @@ onUnmounted(() => {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .hero-title-morph::before,
+  .hero-morph-text,
+  .hero-morph-text::after {
+    animation: none;
+  }
+
+  .hero-morph-text {
+    transition: none;
+  }
+
   .selection-flow.is-selected::after,
   .mode-tabs button.active::after {
     animation: none;
+  }
+}
+
+@media (max-width: 1100px) {
+  .home-main {
+    width: min(100% - 24px, 760px);
+    padding-left: 0;
+  }
+
+  .hero-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .hero-title-line {
+    font-size: clamp(40px, 7vw, 64px);
   }
 }
 
@@ -3498,8 +3864,8 @@ onUnmounted(() => {
     padding: 32px 0 80px;
   }
 
-  .hero-copy h1 {
-    font-size: 42px;
+  .hero-title-line {
+    font-size: clamp(40px, 7vw, 64px);
     line-height: 1.05;
   }
 
