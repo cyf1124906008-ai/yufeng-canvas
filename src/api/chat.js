@@ -15,7 +15,7 @@ export const chatCompletions = (data) =>
 
 export const streamChatCompletions = async function* (data, signal, options = {}) {
   const apiKey = getRuntimeApiKey(undefined, 'chat')
-  const baseUrl = options.baseUrl || getBaseUrl() || getRuntimeBaseUrl()
+  const baseUrl = options.baseUrl || getBaseUrl() || getRuntimeBaseUrl(undefined, 'chat')
   const endpoint = options.endpoint || '/chat/completions'
 
   const response = await fetch(`${baseUrl}${endpoint}`, {

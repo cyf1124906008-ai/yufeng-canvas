@@ -43,7 +43,7 @@ instance.interceptors.request.use(
     const isAbsoluteUrl = /^https?:\/\//i.test(config.url || '')
 
     if (!isAbsoluteUrl) {
-      config.baseURL = getRuntimeBaseUrl(currentProvider)
+      config.baseURL = getRuntimeBaseUrl(currentProvider, capability)
     }
 
     const noAuthEndpoints = ['/model/page', '/model/fullName', '/model/types']

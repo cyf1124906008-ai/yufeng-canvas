@@ -5,6 +5,7 @@
 import { createMemoryHistory, createRouter, createWebHistory } from 'vue-router'
 import Home from '../views/Home.vue'
 import Canvas from '../views/Canvas.vue'
+import ImageExpert from '../views/ImageExpert.vue'
 
 const routes = [
   {
@@ -16,6 +17,11 @@ const routes = [
     path: '/canvas/:id?',
     name: 'Canvas',
     component: Canvas
+  },
+  {
+    path: '/image-expert',
+    name: 'ImageExpert',
+    component: ImageExpert
   }
 ]
 

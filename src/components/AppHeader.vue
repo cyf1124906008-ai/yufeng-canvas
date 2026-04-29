@@ -52,7 +52,7 @@
         class="p-2 rounded-lg hover:bg-[var(--bg-tertiary)] transition-colors text-[var(--text-primary)] hover:text-[var(--accent-color)]"
         title="联系作者 / 使用支持"
       >
-        <n-icon :size="20"><ChatbubbleOutline /></n-icon>
+        <n-icon :size="20"><MailOutline /></n-icon>
       </button>
 
       <button
@@ -81,7 +81,7 @@ import {
   MoonOutline,
   LogoGithub,
   CloudDownloadOutline,
-  ChatbubbleOutline
+  MailOutline
 } from '@vicons/ionicons5'
 import { isDark, toggleTheme } from '../stores/theme'
 import { getGithubUrl } from '../config/distribution'

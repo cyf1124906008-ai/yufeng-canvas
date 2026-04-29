@@ -12,6 +12,7 @@ const STORAGE_KEYS = {
 }
 
 const API_KEY_CAPABILITIES = ['default', 'chat', 'image', 'video']
+const API_BASE_URL_CAPABILITIES = ['default', 'chat', 'image', 'video']
 
 const readStorage = (key, defaultValue = '') => {
   try {
@@ -59,6 +60,35 @@ const normalizeApiKeyEntry = (entry) => {
   return normalized
 }
 
+const normalizeBaseUrlEntry = (entry) => {
+  if (typeof entry === 'string') {
+    return {
+      default: entry.trim(),
+      chat: '',
+      image: '',
+      video: ''
+    }
+  }
+
+  const normalized = {
+    default: '',
+    chat: '',
+    image: '',
+    video: ''
+  }
+
+  if (!entry || typeof entry !== 'object') {
+    return normalized
+  }
+
+  API_BASE_URL_CAPABILITIES.forEach((capability) => {
+    const value = entry[capability]
+    normalized[capability] = typeof value === 'string' ? value.trim() : ''
+  })
+
+  return normalized
+}
+
 export const getRuntimeProvider = () => {
   const fallbackProvider = DISTRIBUTION_CONFIG.api.defaultProvider || 'dataeyes'
 
@@ -88,7 +118,8 @@ export const getRuntimeApiKey = (provider = getRuntimeProvider(), capability = '
   return apiKeyEntry[normalizedCapability] || apiKeyEntry.default || ''
 }
 
-export const getRuntimeBaseUrl = (provider = getRuntimeProvider()) => {
+export const getRuntimeBaseUrl = (provider = getRuntimeProvider(), capability = 'default') => {
+  const normalizedCapability = API_BASE_URL_CAPABILITIES.includes(capability) ? capability : 'default'
   const presetBaseUrl = getPresetBaseUrl(provider)
 
   if (DISTRIBUTION_CONFIG.api.lockBaseUrl && presetBaseUrl) {
@@ -96,5 +127,6 @@ export const getRuntimeBaseUrl = (provider = getRuntimeProvider()) => {
   }
 
   const baseUrlsByProvider = readJsonStorage(STORAGE_KEYS.baseUrlsByProvider)
-  return baseUrlsByProvider[provider] || presetBaseUrl || getDefaultBaseUrl(provider)
+  const baseUrlEntry = normalizeBaseUrlEntry(baseUrlsByProvider[provider])
+  return baseUrlEntry[normalizedCapability] || baseUrlEntry.default || presetBaseUrl || getDefaultBaseUrl(provider)
 }

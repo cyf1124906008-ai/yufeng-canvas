@@ -34,6 +34,7 @@ const STORAGE_KEYS = {
 }
 
 const API_KEY_CAPABILITIES = ['default', 'chat', 'image', 'video']
+const API_BASE_URL_CAPABILITIES = ['default', 'chat', 'image', 'video']
 const REQUIRE_USER_MODELS = DISTRIBUTION_CONFIG.models?.requireUserModels === true
 
 const inferImageProtocol = (modelKey = '') => {
@@ -119,6 +120,36 @@ const normalizeApiKeysByProvider = (apiKeysByProvider = {}) =>
     return result
   }, {})
 
+const normalizeBaseUrlEntry = (entry, presetDefault = '') => {
+  const normalized = {
+    default: '',
+    chat: '',
+    image: '',
+    video: ''
+  }
+
+  if (typeof entry === 'string') {
+    normalized.default = entry.trim()
+  } else if (entry && typeof entry === 'object') {
+    API_BASE_URL_CAPABILITIES.forEach((capability) => {
+      const value = entry[capability]
+      normalized[capability] = typeof value === 'string' ? value.trim() : ''
+    })
+  }
+
+  if (!normalized.default && presetDefault) {
+    normalized.default = presetDefault
+  }
+
+  return normalized
+}
+
+const normalizeBaseUrlsByProvider = (baseUrlsByProvider = {}) =>
+  Object.entries(baseUrlsByProvider).reduce((result, [provider, entry]) => {
+    result[provider] = normalizeBaseUrlEntry(entry)
+    return result
+  }, {})
+
 const isModelSupported = (model, provider) => {
   if (!model.provider) {
     return true
@@ -167,14 +198,16 @@ export const useModelStore = defineStore('model', () => {
     return PROVIDERS[storedProvider] ? storedProvider : distributionDefaultProvider
   }
 
-  const resolveBaseUrl = (provider, baseUrlsByProvider) => {
+  const resolveBaseUrl = (provider, baseUrlsByProvider, capability = 'default') => {
+    const normalizedCapability = API_BASE_URL_CAPABILITIES.includes(capability) ? capability : 'default'
     const presetBaseUrl = getPresetBaseUrl(provider)
 
     if (DISTRIBUTION_CONFIG.api.lockBaseUrl && presetBaseUrl) {
       return presetBaseUrl
     }
 
-    return baseUrlsByProvider[provider] || presetBaseUrl || getDefaultBaseUrl(provider)
+    const baseUrlEntry = normalizeBaseUrlEntry(baseUrlsByProvider[provider], presetBaseUrl || getDefaultBaseUrl(provider))
+    return baseUrlEntry[normalizedCapability] || baseUrlEntry.default || presetBaseUrl || getDefaultBaseUrl(provider)
   }
 
   const currentProvider = ref(resolveInitialProvider())
@@ -229,7 +262,7 @@ export const useModelStore = defineStore('model', () => {
   )
 
   const apiKeysByProvider = ref(normalizeApiKeysByProvider(getStoredJson(STORAGE_KEYS.API_KEYS_BY_PROVIDER, {})))
-  const baseUrlsByProvider = ref(getStoredJson(STORAGE_KEYS.BASE_URLS_BY_PROVIDER, {}))
+  const baseUrlsByProvider = ref(normalizeBaseUrlsByProvider(getStoredJson(STORAGE_KEYS.BASE_URLS_BY_PROVIDER, {})))
 
   const getApiKeyByProvider = (provider, capability = 'default') => {
     const normalizedCapability = API_KEY_CAPABILITIES.includes(capability) ? capability : 'default'
@@ -244,7 +277,13 @@ export const useModelStore = defineStore('model', () => {
   const hasAnyApiKey = computed(() =>
     API_KEY_CAPABILITIES.some((capability) => !!getApiKeyByProvider(currentProvider.value, capability))
   )
-  const currentBaseUrl = computed(() => resolveBaseUrl(currentProvider.value, baseUrlsByProvider.value))
+  const getBaseUrlByProvider = (provider, capability = 'default') =>
+    resolveBaseUrl(provider, baseUrlsByProvider.value, capability)
+
+  const currentBaseUrl = computed(() => getBaseUrlByProvider(currentProvider.value))
+  const currentChatBaseUrl = computed(() => getBaseUrlByProvider(currentProvider.value, 'chat'))
+  const currentImageBaseUrl = computed(() => getBaseUrlByProvider(currentProvider.value, 'image'))
+  const currentVideoBaseUrl = computed(() => getBaseUrlByProvider(currentProvider.value, 'video'))
 
   const setApiKeyByProvider = (provider, apiKey, capability = 'default') => {
     const normalizedCapability = API_KEY_CAPABILITIES.includes(capability) ? capability : 'default'
@@ -264,14 +303,22 @@ export const useModelStore = defineStore('model', () => {
     }
   }
 
-  const setBaseUrlByProvider = (provider, baseUrl) => {
+  const setBaseUrlByProvider = (provider, baseUrl, capability = 'default') => {
+    const normalizedCapability = API_BASE_URL_CAPABILITIES.includes(capability) ? capability : 'default'
     const normalizedBaseUrl = baseUrl?.trim?.() || ''
     const nextBaseUrl = DISTRIBUTION_CONFIG.api.lockBaseUrl
       ? resolveBaseUrl(provider, {})
       : normalizedBaseUrl
+    const nextEntry = normalizeBaseUrlEntry(baseUrlsByProvider.value[provider])
 
     if (nextBaseUrl) {
-      baseUrlsByProvider.value[provider] = nextBaseUrl
+      nextEntry[normalizedCapability] = nextBaseUrl
+    } else {
+      nextEntry[normalizedCapability] = ''
+    }
+
+    if (API_BASE_URL_CAPABILITIES.some((key) => nextEntry[key])) {
+      baseUrlsByProvider.value[provider] = nextEntry
     } else {
       delete baseUrlsByProvider.value[provider]
     }
@@ -457,27 +504,27 @@ export const useModelStore = defineStore('model', () => {
 
   const getImageEndpoint = () => {
     const endpoint = providerConfig.value.endpoints?.image || '/images/generations'
-    return `${currentBaseUrl.value}${endpoint}`
+    return `${currentImageBaseUrl.value}${endpoint}`
   }
 
   const getImageEditEndpoint = () => {
     const endpoint = providerConfig.value.endpoints?.imageEdit || '/images/edits'
-    return `${currentBaseUrl.value}${endpoint}`
+    return `${currentImageBaseUrl.value}${endpoint}`
   }
 
   const getVideoEndpoint = () => {
     const endpoint = providerConfig.value.endpoints?.video || '/videos'
-    return `${currentBaseUrl.value}${endpoint}`
+    return `${currentVideoBaseUrl.value}${endpoint}`
   }
 
   const getVideoTaskEndpoint = () => {
     const endpoint = providerConfig.value.endpoints?.videoQuery || providerConfig.value.endpoints?.video || '/videos'
-    return `${currentBaseUrl.value}${endpoint}`
+    return `${currentVideoBaseUrl.value}${endpoint}`
   }
 
   const getChatEndpoint = () => {
     const endpoint = providerConfig.value.endpoints?.chat || '/chat/completions'
-    return `${currentBaseUrl.value}${endpoint}`
+    return `${currentChatBaseUrl.value}${endpoint}`
   }
 
   const getModelsByProvider = (provider) => ({
@@ -713,9 +760,13 @@ export const useModelStore = defineStore('model', () => {
     currentVideoApiKey,
     hasAnyApiKey,
     currentBaseUrl,
+    currentChatBaseUrl,
+    currentImageBaseUrl,
+    currentVideoBaseUrl,
     apiKeysByProvider,
     baseUrlsByProvider,
     getApiKeyByProvider,
+    getBaseUrlByProvider,
     setApiKeyByProvider,
     setBaseUrlByProvider,
     clearApiConfigByProvider

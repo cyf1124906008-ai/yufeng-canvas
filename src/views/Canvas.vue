@@ -26,6 +26,14 @@
           运行中 {{ activeRunLabel }}
         </span>
         <button
+          @click="showAgentPanel = !showAgentPanel"
+          class="p-2 hover:bg-[var(--bg-tertiary)] rounded-lg transition-colors"
+          :class="{ 'text-[var(--accent-color)]': showAgentPanel }"
+          title="多 Agent 任务面板"
+        >
+          <n-icon :size="20"><SparklesOutline /></n-icon>
+        </button>
+        <button 
           @click="startCanvasTour"
           class="p-2 hover:bg-[var(--bg-tertiary)] rounded-lg transition-colors"
           title="使用指引"
@@ -39,7 +47,7 @@
           title="运行日志"
           data-tour="runtime-logs"
         >
-          <n-icon :size="20"><ChatbubbleOutline /></n-icon>
+          <n-icon :size="20"><DocumentTextOutline /></n-icon>
           <span v-if="runtimeErrorCount" class="log-error-dot">{{ runtimeErrorCount }}</span>
         </button>
         <button 
@@ -94,7 +102,7 @@
           position="bottom-right"
           :pannable="true"
           :zoomable="true"
-          class="canvas-minimap"
+          :class="['canvas-minimap', { 'is-raised': !!selectedNode }]"
           node-color="#14b8a6"
           node-stroke-color="#0f766e"
           mask-color="rgba(15, 118, 110, 0.14)"
@@ -177,6 +185,36 @@
         </div>
       </div>
 
+      <aside v-if="showAgentPanel" class="agent-task-panel absolute left-24 top-4 z-30">
+        <div class="agent-panel-head">
+          <div>
+            <p>AGENT TASK</p>
+            <h3>多 Agent 任务拆解</h3>
+          </div>
+          <button @click="showAgentPanel = false">×</button>
+        </div>
+        <article
+          v-for="agent in agentTasks"
+          :key="agent.id"
+          class="agent-card"
+          :class="`is-${agent.status}`"
+        >
+          <div>
+            <strong>{{ agent.name }}</strong>
+            <span>{{ agent.statusLabel }}</span>
+          </div>
+          <p>{{ agent.summary }}</p>
+          <details>
+            <summary>展开详情</summary>
+            <small>{{ agent.detail }}</small>
+          </details>
+          <div class="agent-actions">
+            <button @click="rerunAgent(agent)">重新执行</button>
+            <button @click="applyAgentResult(agent)">应用结果</button>
+          </div>
+        </article>
+      </aside>
+
       <aside v-if="showRuntimeLogs" class="runtime-log-panel absolute right-4 top-4 z-30" data-tour="runtime-log-panel">
         <div class="runtime-log-head">
           <div>
@@ -212,6 +250,66 @@
             <p>{{ log.message }}</p>
             <pre v-if="getVisibleLogMeta(log)">{{ getVisibleLogMeta(log) }}</pre>
           </article>
+        </div>
+      </aside>
+
+      <aside v-if="selectedNode" class="node-inspector-panel absolute right-4 bottom-4 z-30" data-tour="node-inspector">
+        <div class="inspector-head">
+          <div>
+            <p>INSPECTOR</p>
+            <h3>{{ nodeTypeLabel(selectedNode.type) }}</h3>
+          </div>
+          <span :class="['node-status-pill', selectedNodeStatus]">{{ selectedNodeStatus }}</span>
+        </div>
+        <div class="inspector-body">
+          <label>
+            <span>节点名称</span>
+            <input :value="selectedNode.data?.label || ''" @input="updateSelectedNodeField('label', $event.target.value)" />
+          </label>
+          <label v-if="hasNodeField('content')">
+            <span>Prompt / 内容</span>
+            <textarea :value="selectedNode.data?.content || selectedNode.data?.prompt || ''" @input="updateSelectedPrompt($event.target.value)"></textarea>
+          </label>
+          <label v-if="selectedNode.type === 'imageConfig' || selectedNode.type === 'videoConfig'">
+            <span>Negative Prompt</span>
+            <textarea :value="selectedNode.data?.negativePrompt || ''" @input="updateSelectedNodeField('negativePrompt', $event.target.value)"></textarea>
+          </label>
+          <div class="inspector-grid">
+            <label>
+              <span>模型</span>
+              <input :value="selectedNode.data?.model || ''" @input="updateSelectedNodeField('model', $event.target.value)" />
+            </label>
+            <label>
+              <span>尺寸 / 比例</span>
+              <input :value="selectedNode.data?.size || selectedNode.data?.ratio || ''" @input="updateSelectedSize($event.target.value)" />
+            </label>
+            <label>
+              <span>Seed</span>
+              <input :value="selectedNode.data?.seed || ''" @input="updateSelectedNodeField('seed', $event.target.value)" />
+            </label>
+            <label>
+              <span>状态</span>
+              <select :value="selectedNodeStatus" @change="updateSelectedNodeField('status', $event.target.value)">
+                <option value="idle">idle</option>
+                <option value="running">running</option>
+                <option value="success">success</option>
+                <option value="error">error</option>
+                <option value="disabled">disabled</option>
+              </select>
+            </label>
+          </div>
+          <div v-if="selectedNode.data?.url" class="inspector-preview">
+            <img v-if="selectedNode.type === 'image'" :src="selectedNode.data.url" alt="节点输出预览" />
+            <video v-else-if="selectedNode.type === 'video'" :src="selectedNode.data.url" controls></video>
+          </div>
+          <div class="inspector-actions">
+            <button @click="markSelectedNodeRunning">运行节点</button>
+            <button @click="markSelectedNodeRunning">重新运行</button>
+            <button @click="duplicateSelectedNode">复制节点</button>
+            <button @click="deleteSelectedNode">删除节点</button>
+            <button @click="copySelectedNodeOutput">查看输出</button>
+            <button @click="saveProject">保存结果</button>
+          </div>
         </div>
       </aside>
 
@@ -356,9 +454,11 @@ import {
   DownloadOutline,
   AppsOutline,
   ChatbubbleOutline,
-  HelpCircleOutline
+  DocumentTextOutline,
+  HelpCircleOutline,
+  SparklesOutline
 } from '@vicons/ionicons5'
-import { nodes, edges, runtimeLogs, clearRuntimeLogs, addNode, addNodes, addEdge, addEdges, updateNode, initSampleData, loadProject, saveProject, clearCanvas, canvasViewport, updateViewport, undo, redo, canUndo, canRedo, manualSaveHistory, startBatchOperation, endBatchOperation } from '../stores/canvas'
+import { nodes, edges, runtimeLogs, clearRuntimeLogs, addNode, addNodes, addEdge, addEdges, updateNode, removeNode, duplicateNode, initSampleData, loadProject, saveProject, clearCanvas, canvasViewport, updateViewport, undo, redo, canUndo, canRedo, manualSaveHistory, startBatchOperation, endBatchOperation } from '../stores/canvas'
 import { loadAllModels } from '../stores/models'
 import { useChat, useWorkflowOrchestrator } from '../hooks'
 import { useModelStore } from '../stores/pinia'
@@ -475,11 +575,143 @@ const showDownloadModal = ref(false)
 const showWorkflowPanel = ref(false)
 const showRuntimeLogs = ref(false)
 const showCanvasTour = ref(false)
+const showAgentPanel = ref(false)
+const selectedNodeId = ref(null)
 const renameValue = ref('')
 const canvasTourStorageKey = 'yufeng-canvas-canvas-tour-v1'
 const runtimeNow = ref(Date.now())
 const processingStartedAt = ref(0)
 let runtimeTicker = null
+
+const agentTasks = ref([
+  {
+    id: 'director',
+    name: '创意总监 Agent',
+    status: 'done',
+    statusLabel: '已完成',
+    summary: '负责判断用户目标、画面主题和商业表达方向。',
+    detail: '后续会接入真实任务拆解；当前先作为前端结构，承载方向摘要和应用入口。'
+  },
+  {
+    id: 'prompt',
+    name: 'Prompt 专家 Agent',
+    status: 'running',
+    statusLabel: '进行中',
+    summary: '把自然语言需求整理成可执行 Prompt、Negative Prompt 和风格约束。',
+    detail: '会与生图专家模式联动，把输出直接填入 Prompt 工作区。'
+  },
+  {
+    id: 'image',
+    name: '生图专家 Agent',
+    status: 'waiting',
+    statusLabel: '等待中',
+    summary: '检查模型、比例、参考图和生成数量，准备执行图片任务。',
+    detail: '后续会根据图片模型能力推荐参数。'
+  },
+  {
+    id: 'review',
+    name: '审核 Agent',
+    status: 'waiting',
+    statusLabel: '等待中',
+    summary: '对结果做清晰度、主体一致性、构图和可用性检查。',
+    detail: '后续可以输出改图建议或自动生成变化版本。'
+  },
+  {
+    id: 'workflow',
+    name: '工作流 Agent',
+    status: 'waiting',
+    statusLabel: '等待中',
+    summary: '把最终 Prompt、参数和输出组织进节点画布。',
+    detail: '后续会自动生成可编辑节点流。'
+  }
+])
+
+const selectedNode = computed(() =>
+  nodes.value.find((node) => node.id === selectedNodeId.value) || null
+)
+
+const selectedNodeStatus = computed(() => {
+  if (!selectedNode.value) return 'idle'
+  if (selectedNode.value.data?.disabled) return 'disabled'
+  if (selectedNode.value.data?.loading) return 'running'
+  return selectedNode.value.data?.status || (selectedNode.value.data?.url ? 'success' : 'idle')
+})
+
+const nodeTypeLabel = (type) => ({
+  text: 'Prompt Node',
+  llmConfig: 'Agent Node',
+  image: 'Output Node',
+  imageConfig: 'Image Generation Node',
+  video: 'Video Output Node',
+  videoConfig: 'Video Generation Node'
+}[type] || '节点')
+
+const hasNodeField = (field) => {
+  if (!selectedNode.value) return false
+  return field in (selectedNode.value.data || {}) || ['text', 'imageConfig', 'videoConfig', 'llmConfig'].includes(selectedNode.value.type)
+}
+
+const updateSelectedNodeField = (field, value) => {
+  if (!selectedNode.value) return
+  updateNode(selectedNode.value.id, { [field]: value, updatedAt: Date.now() })
+}
+
+const updateSelectedPrompt = (value) => {
+  if (!selectedNode.value) return
+  const field = selectedNode.value.type === 'text' ? 'content' : 'prompt'
+  updateSelectedNodeField(field, value)
+}
+
+const updateSelectedSize = (value) => {
+  if (!selectedNode.value) return
+  const field = selectedNode.value.type === 'videoConfig' ? 'ratio' : 'size'
+  updateSelectedNodeField(field, value)
+}
+
+const markSelectedNodeRunning = () => {
+  if (!selectedNode.value) return
+  updateNode(selectedNode.value.id, { status: 'running', loading: true, updatedAt: Date.now() })
+  window.$message?.info('已标记为运行中。实际执行仍使用节点自身的生成按钮。')
+}
+
+const duplicateSelectedNode = () => {
+  if (!selectedNode.value) return
+  const id = duplicateNode(selectedNode.value.id)
+  selectedNodeId.value = id || selectedNode.value.id
+  window.$message?.success('已复制节点')
+}
+
+const deleteSelectedNode = () => {
+  if (!selectedNode.value) return
+  removeNode(selectedNode.value.id)
+  selectedNodeId.value = null
+  window.$message?.success('已删除节点')
+}
+
+const copySelectedNodeOutput = async () => {
+  if (!selectedNode.value) return
+  const output = selectedNode.value.data?.url || selectedNode.value.data?.outputContent || selectedNode.value.data?.content || selectedNode.value.data?.prompt || ''
+  try {
+    await navigator.clipboard?.writeText(output)
+    window.$message?.success('已复制节点输出')
+  } catch {
+    window.$message?.info(output || '当前节点暂无输出')
+  }
+}
+
+const rerunAgent = (agent) => {
+  agent.status = 'running'
+  agent.statusLabel = '进行中'
+  window.setTimeout(() => {
+    agent.status = 'done'
+    agent.statusLabel = '已完成'
+  }, 900)
+}
+
+const applyAgentResult = (agent) => {
+  chatInput.value = `${agent.name} 建议：${agent.summary}`
+  window.$message?.success('已把 Agent 输出放入画布输入框')
+}
 
 const hasWebGLSupport = () => {
   if (typeof document === 'undefined') return false
@@ -603,6 +835,7 @@ const showCanvasBackground = computed(() => showGrid.value && !canvasPerfLite.va
 
 const showMiniMap = computed(() => {
   if (isMobile.value || canvasPerfLite.value) return false
+  if (showRuntimeLogs.value) return false
   return nodes.value.length <= 24
 })
 
@@ -915,6 +1148,7 @@ const onConnect = (params) => {
   }
 }
 const onNodeClick = (event) => {
+  selectedNodeId.value = event.node?.id || null
   // nodes.value.forEach(node => {
   //   updateNode(node.id, { selected: false })
   // })
@@ -947,6 +1181,7 @@ const onEdgesChange = (changes) => {
 // Handle pane click | 处理画布点击
 const onPaneClick = () => {
   showNodeMenu.value = false
+  selectedNodeId.value = null
   // Clear all selections | 清除所有选中
   // nodes.value = nodes.value.map(node => ({
   //   ...node,
@@ -1354,6 +1589,12 @@ onUnmounted(() => {
     0 24px 70px rgba(15, 23, 42, 0.2),
     inset 0 1px 0 rgba(255, 255, 255, 0.78);
   backdrop-filter: blur(22px) saturate(1.3);
+}
+
+.vue-flow__minimap.canvas-minimap.is-raised {
+  top: 18px;
+  right: 16px;
+  bottom: auto !important;
 }
 
 .dark .vue-flow__minimap.canvas-minimap {
@@ -1764,6 +2005,208 @@ onUnmounted(() => {
   word-break: break-word;
   color: var(--text-secondary);
   font-size: 11px;
+}
+
+.agent-task-panel,
+.node-inspector-panel {
+  width: min(360px, calc(100vw - 32px));
+  max-height: calc(100vh - 140px);
+  overflow: auto;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 24px;
+  padding: 14px;
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(22px);
+}
+
+.dark .agent-task-panel,
+.dark .node-inspector-panel {
+  background: rgba(15, 23, 42, 0.74);
+  border-color: rgba(148, 163, 184, 0.18);
+}
+
+.agent-panel-head,
+.inspector-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.agent-panel-head p,
+.inspector-head p {
+  margin: 0 0 3px;
+  color: #14b8a6;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.18em;
+}
+
+.agent-panel-head h3,
+.inspector-head h3 {
+  margin: 0;
+  font-size: 17px;
+}
+
+.agent-panel-head button {
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.16);
+}
+
+.agent-card {
+  margin-top: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-left: 3px solid #94a3b8;
+  border-radius: 18px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.dark .agent-card {
+  background: rgba(2, 6, 23, 0.34);
+}
+
+.agent-card.is-running {
+  border-left-color: #06b6d4;
+}
+
+.agent-card.is-done {
+  border-left-color: #10b981;
+}
+
+.agent-card.is-error {
+  border-left-color: #ef4444;
+}
+
+.agent-card > div:first-child {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.agent-card span {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.agent-card p,
+.agent-card small {
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.agent-actions,
+.inspector-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.agent-actions button,
+.inspector-actions button {
+  border: 1px solid rgba(20, 184, 166, 0.28);
+  border-radius: 999px;
+  padding: 7px 10px;
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.48);
+  font-size: 12px;
+}
+
+.dark .agent-actions button,
+.dark .inspector-actions button {
+  background: rgba(15, 23, 42, 0.44);
+}
+
+.node-status-pill {
+  padding: 6px 9px;
+  border-radius: 999px;
+  color: #475569;
+  background: rgba(148, 163, 184, 0.16);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.node-status-pill.running {
+  color: #0369a1;
+  background: rgba(14, 165, 233, 0.14);
+}
+
+.node-status-pill.success {
+  color: #047857;
+  background: rgba(16, 185, 129, 0.14);
+}
+
+.node-status-pill.error {
+  color: #dc2626;
+  background: rgba(248, 113, 113, 0.14);
+}
+
+.node-status-pill.disabled {
+  color: #64748b;
+  background: rgba(100, 116, 139, 0.14);
+}
+
+.inspector-body {
+  display: grid;
+  gap: 10px;
+}
+
+.inspector-body label span {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.inspector-body input,
+.inspector-body textarea,
+.inspector-body select {
+  width: 100%;
+  border: 1px solid rgba(148, 163, 184, 0.26);
+  border-radius: 14px;
+  padding: 9px 10px;
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.58);
+  outline: none;
+}
+
+.dark .inspector-body input,
+.dark .inspector-body textarea,
+.dark .inspector-body select {
+  background: rgba(2, 6, 23, 0.32);
+}
+
+.inspector-body textarea {
+  min-height: 86px;
+  resize: vertical;
+}
+
+.inspector-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.inspector-preview img,
+.inspector-preview video {
+  width: 100%;
+  max-height: 180px;
+  object-fit: contain;
+  border-radius: 16px;
+  background: rgba(15, 23, 42, 0.08);
+}
+
+.inspector-empty {
+  color: var(--text-secondary);
+  line-height: 1.6;
+  font-size: 13px;
 }
 
 @keyframes live-run-pulse {

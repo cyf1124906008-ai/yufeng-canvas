@@ -118,7 +118,7 @@ const requestImageEdit = async (endpoint, formData) => {
   const apiKey = getRuntimeApiKey(provider, 'image')
   const resolvedEndpoint = /^https?:\/\//.test(endpoint)
     ? endpoint
-    : `${getRuntimeBaseUrl(provider)}${endpoint}`
+    : `${getRuntimeBaseUrl(provider, 'image')}${endpoint}`
   const headers = {}
 
   if (apiKey) {

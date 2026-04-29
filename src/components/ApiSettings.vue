@@ -32,6 +32,35 @@
             <n-input :value="resolvedBaseUrl" readonly />
           </n-form-item>
 
+          <n-divider title-placement="left" class="!my-3">
+            <span class="text-xs text-[var(--text-secondary)]">能力覆盖 Base URL</span>
+          </n-divider>
+
+          <n-alert type="info" class="mb-4">
+            留空时会自动回退到默认 Base URL。你可以让对话、生图、视频分别走不同供应商地址。
+          </n-alert>
+
+          <n-form-item label="对话 Base URL" path="chatBaseUrl">
+            <n-input
+              v-model:value="formData.chatBaseUrl"
+              placeholder="可选，用于语言模型 / AI 润色"
+            />
+          </n-form-item>
+
+          <n-form-item label="生图 Base URL" path="imageBaseUrl">
+            <n-input
+              v-model:value="formData.imageBaseUrl"
+              placeholder="可选，用于文生图 / 图生图"
+            />
+          </n-form-item>
+
+          <n-form-item label="视频 Base URL" path="videoBaseUrl">
+            <n-input
+              v-model:value="formData.videoBaseUrl"
+              placeholder="可选，用于文生视频 / 图生视频"
+            />
+          </n-form-item>
+
           <n-form-item label="默认 Key" path="apiKey">
             <n-input
               v-model:value="formData.apiKey"
@@ -295,7 +324,10 @@ const formData = reactive({
   chatApiKey: '',
   imageApiKey: '',
   videoApiKey: '',
-  baseUrl: ''
+  baseUrl: '',
+  chatBaseUrl: '',
+  imageBaseUrl: '',
+  videoBaseUrl: ''
 })
 
 const newChatModel = ref('')
@@ -320,8 +352,8 @@ const showProviderSelect = computed(() =>
 const showBaseUrlInput = computed(() => !DISTRIBUTION_CONFIG.api.hideBaseUrlInput)
 const isProductPresetMode = computed(() => !showProviderSelect.value && !showBaseUrlInput.value)
 
-const resolveBaseUrl = (provider) =>
-  modelStore.baseUrlsByProvider[provider] || getProviderConfig(provider).defaultBaseUrl || ''
+const resolveBaseUrl = (provider, capability = 'default') =>
+  modelStore.getBaseUrlByProvider(provider, capability) || getProviderConfig(provider).defaultBaseUrl || ''
 
 const resolvedBaseUrl = computed(() => resolveBaseUrl(formData.provider))
 
@@ -367,6 +399,9 @@ const syncForm = () => {
     ? ''
     : modelStore.apiKeysByProvider[lockedProvider]?.video || ''
   formData.baseUrl = resolveBaseUrl(lockedProvider)
+  formData.chatBaseUrl = modelStore.baseUrlsByProvider[lockedProvider]?.chat || ''
+  formData.imageBaseUrl = modelStore.baseUrlsByProvider[lockedProvider]?.image || ''
+  formData.videoBaseUrl = modelStore.baseUrlsByProvider[lockedProvider]?.video || ''
 }
 
 watch(
@@ -387,6 +422,9 @@ watch(
     formData.imageApiKey = modelStore.apiKeysByProvider[provider]?.image || ''
     formData.videoApiKey = modelStore.apiKeysByProvider[provider]?.video || ''
     formData.baseUrl = resolveBaseUrl(provider)
+    formData.chatBaseUrl = modelStore.baseUrlsByProvider[provider]?.chat || ''
+    formData.imageBaseUrl = modelStore.baseUrlsByProvider[provider]?.image || ''
+    formData.videoBaseUrl = modelStore.baseUrlsByProvider[provider]?.video || ''
   }
 )
 
@@ -452,6 +490,9 @@ const handleSave = () => {
   modelStore.setApiKeyByProvider(provider, formData.imageApiKey, 'image')
   modelStore.setApiKeyByProvider(provider, formData.videoApiKey, 'video')
   modelStore.setBaseUrlByProvider(provider, showBaseUrlInput.value ? formData.baseUrl : resolvedBaseUrl.value)
+  modelStore.setBaseUrlByProvider(provider, formData.chatBaseUrl, 'chat')
+  modelStore.setBaseUrlByProvider(provider, formData.imageBaseUrl, 'image')
+  modelStore.setBaseUrlByProvider(provider, formData.videoBaseUrl, 'video')
 
   showModal.value = false
   emit('saved')

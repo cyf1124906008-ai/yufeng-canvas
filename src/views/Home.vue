@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div
     ref="homeShellRef"
     class="home-shell min-h-screen h-screen overflow-y-auto text-[var(--text-primary)]"
@@ -41,6 +41,16 @@
           <span>使用指引</span>
         </button>
         <button
+          @click="showHomeRuntimeLogs = !showHomeRuntimeLogs"
+          class="header-pill"
+          :class="{ 'is-ready': runtimeLogs.length > 0 }"
+          title="查看主页请求日志"
+        >
+          <n-icon :size="18"><DocumentTextOutline /></n-icon>
+          <span>日志</span>
+          <b v-if="homeRuntimeErrorCount" class="home-log-badge">{{ homeRuntimeErrorCount }}</b>
+        </button>
+        <button
           @click="showApiSettings = true"
           class="header-pill"
           :class="{ 'is-ready': isApiConfigured }"
@@ -53,48 +63,89 @@
       </template>
     </AppHeader>
 
-    <main class="home-main">
-      <section class="hero-grid">
-        <div class="hero-copy">
+    <main
+      class="home-main"
+      :class="{ 'is-workspace': isWorkspacePage }"
+      @click.self="handleWelcomeContinue"
+    >
+      <div v-if="isWorkspacePage" class="workspace-brand-strip">
+        <div>
+          <strong>YUFENG Canvas</strong>
+          <span>AI 创作工作台</span>
+        </div>
+      </div>
+
+      <section
+        class="hero-grid"
+        :class="{ 'is-collapsed': isWorkspacePage }"
+        @click="!isWorkspacePage && handleWelcomeContinue()"
+      >
+        <aside v-if="isWorkspacePage" class="chat-history-panel" aria-label="历史对话">
+          <div class="history-head">
+            <div>
+              <span>CHAT HISTORY</span>
+              <strong>历史对话</strong>
+            </div>
+            <button @click="startNewChat">新对话</button>
+          </div>
+          <div v-if="chatHistory.length" class="history-list">
+            <button
+              v-for="item in chatHistory"
+              :key="item.id"
+              class="history-item"
+              :class="{ active: item.id === activeChatId }"
+              @click="restoreChatSession(item.id)"
+            >
+              <strong>{{ item.title }}</strong>
+              <span>{{ formatChatTime(item.updatedAt) }}</span>
+            </button>
+          </div>
+          <div v-else class="history-empty">
+            <n-icon :size="24"><ChatbubbleOutline /></n-icon>
+            <p>开始一次对话后，这里会保存你的历史记录。</p>
+          </div>
+        </aside>
+
+        <div v-show="!isWorkspacePage" class="hero-copy">
           <div class="eyebrow hero-eyebrow">
             <span class="eyebrow-dot" aria-hidden="true">●</span>
             YUFENG CREATIVE CANVAS
           </div>
           <div class="hero-line">
             <h1
-              class="hero-title hero-title-rotator"
-              :aria-label="`和 AI 一起，${heroRotatingLines[heroRotatingIndex]}`"
+              class="hero-title hero-title-typewriter"
+              :aria-label="heroTypewriterAriaLabel"
             >
               <span class="hero-title-line hero-title-line-static" aria-hidden="true">
                 和 AI 一起，
               </span>
 
               <span
-                class="hero-title-line hero-title-line-rotating"
+                class="hero-title-line hero-title-line-typewriter"
                 aria-hidden="true"
               >
                 <span
-                  v-for="(line, index) in heroRotatingLines"
-                  :key="line"
-                  class="hero-rotating-line"
+                  class="hero-typewriter-text"
                   :class="{
-                    'is-active': index === heroRotatingIndex,
-                    'is-prev': index === heroRotatingPrevIndex
+                    'is-typing': heroTypePhase === 'typing',
+                    'is-holding': heroTypePhase === 'holding',
+                    'is-erasing': heroTypePhase === 'erasing'
                   }"
-                  :data-text="line"
                 >
                   <span
-                    v-for="(char, charIndex) in splitHeroLine(line)"
-                    :key="`${line}-${charIndex}`"
-                    class="hero-tide-char"
-                    :style="{
-                      '--char-index': charIndex,
-                      '--char-count': splitHeroLine(line).length
-                    }"
+                    v-for="(char, index) in heroTypeChars"
+                    :key="`${heroTypeCycle}-${index}-${char}`"
+                    class="hero-typewriter-char"
+                    :style="{ '--char-index': index }"
                   >
                     {{ char }}
                   </span>
                 </span>
+
+                <span
+                  class="hero-typewriter-cursor"
+                  aria-hidden="true"
+                ></span>
               </span>
             </h1>
             <p class="hero-desc">
@@ -102,50 +153,12 @@
             </p>
           </div>
 
-          <div class="hero-actions">
-            <button class="primary-action" data-tour="start-create" @click="handleStartCreateClick">
-              <n-icon :size="20"><SendOutline /></n-icon>
-              开始创作
-            </button>
-            <button class="secondary-action" @click="showApiSettings = true">
-              <n-icon :size="18"><SettingsOutline /></n-icon>
-              配置模型
-            </button>
-            <button class="secondary-action" @click="scrollToInspiration">
-              <n-icon :size="18"><SparklesOutline /></n-icon>
-              看案例
-            </button>
-          </div>
-
-          <div class="feature-strip" data-tour="quick-actions">
-            <button
-              v-for="item in featureCards"
-              :key="item.title"
-              class="feature-mini"
-              @click="createFromTemplate(item.prompt)"
-            >
-              <n-icon :size="18"><component :is="item.icon" /></n-icon>
-              <span>{{ item.title }}</span>
-            </button>
-          </div>
-
-          <div class="hero-metrics" aria-label="YUFENG Canvas 能力概览">
-            <div>
-              <strong>Text</strong>
-              <span>对话润色 / 提示词拆解</span>
-            </div>
-            <div>
-              <strong>Image</strong>
-              <span>文生图 / 图生图 / 多比例</span>
-            </div>
-            <div>
-              <strong>Video</strong>
-              <span>文生视频 / 首尾帧 / 任务日志</span>
-            </div>
+          <div class="welcome-continue">
+            <span>点击任意位置或按任意键继续</span>
           </div>
         </div>
 
-        <div class="prompt-panel" data-tour="home-chat">
+        <div v-if="isWorkspacePage" class="prompt-panel" data-tour="home-chat">
           <div class="prompt-panel-glow"></div>
           <div class="hero-prism" aria-hidden="true">
             <div class="prism-core">Y</div>
@@ -200,7 +213,27 @@
                   class="chat-message"
                   :class="message.role"
                 >
-                  {{ message.content }}
+                  <div v-if="message.content">{{ message.content }}</div>
+                  <div v-if="message.images?.length" class="chat-image-grid">
+                    <figure v-for="(image, index) in message.images" :key="image.id || image.url">
+                      <img :src="image.url" :alt="`聊天生成图片 ${index + 1}`" />
+                      <figcaption>
+                        <button @click="generateImageInChat(image.prompt || message.prompt || message.content, { addUserMessage: false })">重新生成</button>
+                        <button @click="varyChatImage(image)">变化</button>
+                        <button @click="upscaleChatImage(image)">放大</button>
+                        <button @click="copyText(image.prompt || message.prompt)">复制 Prompt</button>
+                        <button @click="placeChatImageIntoCanvas(image)">放入画布</button>
+                        <button @click="openImageExpert(image.prompt || message.prompt)">专家模式</button>
+                      </figcaption>
+                    </figure>
+                  </div>
+                  <div v-if="message.role === 'assistant' && !message.images?.length" class="chat-action-row">
+                    <button @click="generateImageInChat(message.content, { addUserMessage: false })">用这个生成图片</button>
+                    <button @click="fillChatPrompt(`请把下面内容优化成更适合生图的中文 Prompt：\n${message.content}`)">优化提示词</button>
+                    <button @click="fillChatPrompt(`请基于下面内容生成 3 个不同视觉版本：\n${message.content}`)">生成 3 个版本</button>
+                    <button @click="createFromTemplate(message.content)">放入画布</button>
+                    <button @click="createFromTemplate(`把下面内容拆成可执行的图片/视频节点工作流：\n${message.content}`)">创建工作流</button>
+                  </div>
                 </div>
                 <div v-if="chatLoading && currentResponse" class="chat-message assistant">
                   {{ currentResponse }}
@@ -208,6 +241,10 @@
                 <div v-else-if="chatLoading" class="chat-message assistant thinking">
                   <n-spin :size="14" />
                   正在思考...
+                </div>
+                <div v-if="chatImageLoading" class="chat-message assistant thinking">
+                  <n-spin :size="14" />
+                  正在调用图片模型生成...
                 </div>
               </div>
 
@@ -226,6 +263,17 @@
                 </span>
               </div>
 
+              <div class="chat-model-row">
+                <span>对话模型</span>
+                <select v-model="modelStore.selectedChatModel" class="model-select" title="选择语言模型">
+                  <option value="">选择语言模型</option>
+                  <option v-for="model in chatModelOptions" :key="model.key" :value="model.key">
+                    {{ model.label || model.key }}
+                  </option>
+                </select>
+                <button @click="showApiSettings = true">配置模型</button>
+              </div>
+
               <div
                 class="chat-composer selection-flow"
                 :class="{ 'is-selected': focusedEntry === 'chat' }"
@@ -235,17 +283,20 @@
               >
                 <input
                   ref="chatFileInputRef"
+                  id="home-chat-file-input"
                   type="file"
                   multiple
                   accept="image/*,.txt,.md,.json,.csv"
                   class="hidden-file-input"
+                  tabindex="-1"
+                  aria-label="上传图片或文本资料"
                   @change="handleChatFiles"
                 />
                 <button
                   class="attach-button"
                   :disabled="chatLoading"
                   title="上传图片或文本资料"
-                  @click="chatFileInputRef?.click()"
+                  @click.prevent="triggerChatFilePicker"
                 >
                   <n-icon :size="19"><ImageOutline /></n-icon>
                 </button>
@@ -259,6 +310,15 @@
                   <n-spin v-if="chatReadingUrls" :size="15" />
                   <n-icon v-else :size="18"><SearchOutline /></n-icon>
                 </button>
+                <button
+                  class="attach-button image-generate-trigger"
+                  :disabled="chatImageLoading || chatReadingUrls || !effectiveChatImageModel || (!chatText.trim() && !chatAttachments.length)"
+                  title="直接用当前提示词生成图片"
+                  @click="generateImageFromComposer"
+                >
+                  <n-spin v-if="chatImageLoading" :size="15" />
+                  <n-icon v-else :size="18"><SparklesOutline /></n-icon>
+                </button>
                 <textarea
                   ref="chatTextareaRef"
                   v-model="chatText"
@@ -270,6 +330,38 @@
                 <button class="send-button" :disabled="chatLoading || chatReadingUrls || (!chatText.trim() && !chatAttachments.length)" @click="sendHomeChat">
                   <n-spin v-if="chatLoading" :size="16" />
                   <n-icon v-else :size="20"><SendOutline /></n-icon>
+                </button>
+              </div>
+
+              <div class="chat-image-controls">
+                <span>直接生图：</span>
+                <select v-model="chatImageModel" class="model-select" title="选择图片模型">
+                  <option value="">选择图片模型</option>
+                  <option v-for="model in chatImageModelOptions" :key="model.key" :value="model.key">
+                    {{ model.label || model.key }}
+                  </option>
+                </select>
+                <select v-model="chatImageResolution" title="选择图片清晰度">
+                  <option v-for="item in chatImageResolutionOptions" :key="item.key" :value="item.key">
+                    {{ item.label }}
+                  </option>
+                </select>
+                <select v-model="chatImageSize">
+                  <option v-for="item in chatImageSizeOptions" :key="item.key" :value="item.key">
+                    {{ getChatImageSizeLabel(item) }}
+                  </option>
+                </select>
+                <select v-model.number="chatImageCount">
+                  <option :value="1">1 张</option>
+                  <option :value="2">2 张</option>
+                  <option :value="3">3 张</option>
+                  <option :value="4">4 张</option>
+                </select>
+                <button :disabled="chatImageLoading || !chatText.trim() || !effectiveChatImageModel" @click="generateImageFromComposer">
+                  当前输入生成图片
+                </button>
+                <button @click="openImageExpert(chatText)">
+                  专家参数
                 </button>
               </div>
 
@@ -507,6 +599,38 @@
       </button>
     </aside>
 
+    <aside v-if="showHomeRuntimeLogs" class="home-runtime-panel">
+      <div class="home-runtime-head">
+        <div>
+          <p>RUN LOG</p>
+          <h3>主页请求日志</h3>
+        </div>
+        <div>
+          <button @click="clearRuntimeLogs">清空</button>
+          <button @click="showHomeRuntimeLogs = false">×</button>
+        </div>
+      </div>
+      <div v-if="runtimeLogs.length === 0" class="home-runtime-empty">
+        暂无日志。主页对话、生图、读取链接和模型请求会记录在这里。
+      </div>
+      <div v-else class="home-runtime-list">
+        <article
+          v-for="log in runtimeLogs"
+          :key="log.id"
+          class="home-runtime-item"
+          :class="`is-${log.level}`"
+        >
+          <div class="home-runtime-line">
+            <strong>{{ log.level }}</strong>
+            <span v-if="getHomeLogDuration(log)">{{ getHomeLogDuration(log) }}</span>
+            <time>{{ formatHomeLogTime(log.timestamp) }}</time>
+          </div>
+          <p>{{ log.message }}</p>
+          <pre v-if="getVisibleHomeLogMeta(log)">{{ getVisibleHomeLogMeta(log) }}</pre>
+        </article>
+      </div>
+    </aside>
+
     <ApiSettings v-model:show="showApiSettings" @saved="refreshApiConfig" />
 
     <n-modal
@@ -588,7 +712,7 @@
 </template>
 
 <script setup>
-import { computed, h, nextTick, onMounted, onUnmounted, ref } from 'vue'
+import { computed, h, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { NButton, NDropdown, NIcon, NInput, NModal, NSpin, useDialog } from 'naive-ui'
 import {
@@ -596,6 +720,7 @@ import {
   ColorPaletteOutline,
   CopyOutline,
   DocumentOutline,
+  DocumentTextOutline,
   EllipsisHorizontalOutline,
   FolderOutline,
   ImageOutline,
@@ -614,12 +739,15 @@ import {
   projects,
   initProjectsStore,
   createProject,
+  updateProjectCanvas,
   deleteProject,
   duplicateProject,
   renameProject
 } from '../stores/projects'
+import { runtimeLogs, clearRuntimeLogs } from '../stores/canvas'
 import { useModelStore } from '../stores/pinia'
-import { useChat } from '../hooks'
+import { useChat, useImageGeneration } from '../hooks'
+import { getModelSizeOptions } from '../stores/models'
 import ApiSettings from '../components/ApiSettings.vue'
 import AppHeader from '../components/AppHeader.vue'
 import GuidedTour from '../components/GuidedTour.vue'
@@ -638,13 +766,21 @@ const dialog = useDialog()
 const modelStore = useModelStore()
 
 const showApiSettings = ref(false)
+const showHomeRuntimeLogs = ref(false)
 const showOnboarding = ref(false)
 const showHomeTour = ref(false)
+const isWorkspacePage = ref(false)
 const activeMode = ref('create')
 const inputText = ref('')
 const chatText = ref('')
 const chatMessages = ref([])
 const chatAttachments = ref([])
+const chatHistory = ref([])
+const activeChatId = ref('')
+const chatImageModel = ref('')
+const chatImageResolution = ref('auto')
+const chatImageSize = ref('1024x1024')
+const chatImageCount = ref(1)
 const chatFileInputRef = ref(null)
 const chatReadingUrls = ref(false)
 const createTextareaRef = ref(null)
@@ -662,6 +798,43 @@ const isApiConfigured = computed(() => modelStore.hasAnyApiKey)
 const isChatConfigured = computed(() => !!modelStore.currentChatApiKey && !!modelStore.selectedChatModel)
 const isImageConfigured = computed(() => !!modelStore.currentImageApiKey && !!modelStore.selectedImageModel)
 const isVideoConfigured = computed(() => !!modelStore.currentVideoApiKey && !!modelStore.selectedVideoModel)
+const chatModelOptions = computed(() => modelStore.chatModelOptions)
+const chatImageModelOptions = computed(() => modelStore.imageModelOptions)
+const homeRuntimeErrorCount = computed(() => runtimeLogs.value.filter((log) => log.level === 'error').length)
+const effectiveChatImageModel = computed(() =>
+  chatImageModel.value || modelStore.selectedImageModel || modelStore.availableImageModels[0]?.key || ''
+)
+const isChatImageConfigured = computed(() => !!modelStore.currentImageApiKey && !!effectiveChatImageModel.value)
+const chatImageResolutionOptions = [
+  { label: '自动', key: 'auto', target: 0 },
+  { label: '720p', key: '720p', target: 1280 },
+  { label: '1080p', key: '1080p', target: 1920 },
+  { label: '2K', key: '2k', target: 2048 },
+  { label: '4K', key: '4k', target: 4096 }
+]
+const safeChatImageSizeOptions = [
+  { label: '1024x1024', key: '1024x1024' },
+  { label: '1536x1024 (横版)', key: '1536x1024' },
+  { label: '1024x1536 (竖版)', key: '1024x1536' }
+]
+const chatImageSizeOptions = computed(() => {
+  const modelKey = effectiveChatImageModel.value || ''
+  const model = modelStore.getImageModel?.(modelKey)
+  const quality = chatImageResolution.value === '4k' ? '4k' : 'standard'
+
+  if (model?.getSizesByQuality) {
+    return model.getSizesByQuality(quality)
+  }
+
+  if (Array.isArray(model?.sizes) && model.sizes.length) {
+    return model.sizes.map((size) => {
+      const knownOption = getModelSizeOptions(modelKey, quality).find((item) => item.key === size)
+      return knownOption || { label: size, key: size }
+    })
+  }
+
+  return safeChatImageSizeOptions
+})
 
 const {
   loading: chatLoading,
@@ -671,18 +844,107 @@ const {
   systemPrompt: '你是 YUFENG Canvas 的创意助手。回答要直接、有帮助；如果用户在做视觉创作，可以主动给出可执行的提示词、镜头、构图、比例和下一步建议。'
 })
 
+const {
+  loading: chatImageLoading,
+  generate: generateChatImage
+} = useImageGeneration()
+
+const parseImageSizeValue = (value = '') => {
+  const match = String(value).match(/^(\d+)x(\d+)$/)
+  if (!match) return null
+
+  const width = Number(match[1])
+  const height = Number(match[2])
+  return {
+    width,
+    height,
+    longSide: Math.max(width, height),
+    pixels: width * height
+  }
+}
+
+const findClosestChatImageSize = (options = [], resolution = chatImageResolution.value) => {
+  if (!options.length) return ''
+  if (resolution === 'auto') return options[0]?.key || ''
+
+  const target = chatImageResolutionOptions.find((item) => item.key === resolution)?.target
+  if (!target) return options[0]?.key || ''
+
+  const numericOptions = options
+    .map((item) => ({
+      ...item,
+      meta: parseImageSizeValue(item.key)
+    }))
+    .filter((item) => item.meta)
+
+  if (!numericOptions.length) return options[0]?.key || ''
+
+  return numericOptions
+    .sort((a, b) => Math.abs(a.meta.longSide - target) - Math.abs(b.meta.longSide - target))[0]?.key || options[0]?.key || ''
+}
+
+const getChatImageSizeLabel = (item) => {
+  const meta = parseImageSizeValue(item.key)
+  const base = item.label || item.key
+  if (!meta || chatImageResolution.value === 'auto') return base
+
+  const resolution = chatImageResolutionOptions.find((option) => option.key === chatImageResolution.value)?.label
+  if (!resolution) return base
+
+  const selectedTarget = chatImageResolutionOptions.find((option) => option.key === chatImageResolution.value)?.target || 0
+  const isModelLimit = selectedTarget > 0 && meta.longSide < selectedTarget * 0.82
+  return isModelLimit ? `${base} · 模型上限` : `${base} · ${resolution}匹配`
+}
+
+watch(() => modelStore.selectedImageModel, (model) => {
+  if (!chatImageModel.value && model) {
+    chatImageModel.value = model
+  }
+}, { immediate: true })
+
+watch(chatImageModelOptions, (options = []) => {
+  if (!options.length) {
+    chatImageModel.value = ''
+    return
+  }
+
+  if (chatImageModel.value && options.some((model) => model.key === chatImageModel.value)) {
+    return
+  }
+
+  const selectedModel = options.find((model) => model.key === modelStore.selectedImageModel)
+  chatImageModel.value = selectedModel?.key || options[0]?.key || ''
+}, { immediate: true })
+
+watch(chatImageSizeOptions, (options = []) => {
+  if (!options.length) return
+  const nextSize = findClosestChatImageSize(options)
+  if (!options.some((item) => item.key === chatImageSize.value) || chatImageResolution.value !== 'auto') {
+    chatImageSize.value = nextSize
+  }
+}, { immediate: true })
+
+watch(chatImageResolution, () => {
+  const nextSize = findClosestChatImageSize(chatImageSizeOptions.value)
+  if (nextSize) {
+    chatImageSize.value = nextSize
+  }
+})
+
 const suggestionPool = CANVAS_PROMPT_SUGGESTIONS
 const visibleSuggestions = ref([])
 const chatSuggestions = HOME_CHAT_SUGGESTIONS
 const inspirationCases = INSPIRATION_CASES
-const heroRotatingLines = [
-  '聊出创意方向。',
-  '搭建视觉画布。',
-  '编排多模型流程。',
-  '协同智能体创作。'
+const heroTypeLines = [
+  '聊出创意方向',
+  '搭建视觉画布',
+  '编排多模型流程',
+  '协同智能体创作'
 ]
-const heroRotatingIndex = ref(0)
-const heroRotatingPrevIndex = ref(heroRotatingLines.length - 1)
+const heroTypeText = ref('')
+const heroTypeIndex = ref(0)
+const heroTypePhase = ref('idle')
+const heroTypeCycle = ref(0)
 const performanceLite = ref(false)
 const pointer = ref({ x: 0.5, y: 0.5 })
 const scrollProgress = ref(0)
@@ -696,13 +958,16 @@ let lastParticleDraw = 0
 let pointerFrame = null
 let pendingPointer = null
 let scrollFrame = null
-let heroRotatingTimer = null
-let heroRotatingKickoffTimer = null
+let heroTypeTimer = null
 const onboardingStorageKey = 'yufeng-canvas-onboarding-v2'
 const homeTourStorageKey = 'yufeng-canvas-home-tour-v1'
+const chatHistoryStorageKey = 'yufeng-canvas-chat-history-v1'
 const recentHomeProjects = computed(() => projects.value.slice(0, 4))
-
-const splitHeroLine = (line) => Array.from(line)
+const heroTypeChars = computed(() => Array.from(heroTypeText.value))
+const heroTypewriterAriaLabel = computed(() => {
+  const fallback = heroTypeLines[heroTypeIndex.value] || heroTypeLines[0]
+  return `和 AI 一起，${heroTypeText.value || fallback}`
+})
 
 const stageStyle = computed(() => {
   if (performanceLite.value) {
@@ -745,6 +1010,116 @@ const stageStyle = computed(() => {
     '--scroll-hero-opacity': (1 - scroll * 0.36).toFixed(3)
   }
 })
+
+const enterWorkspace = () => {
+  isWorkspacePage.value = true
+}
+
+const handleWelcomeContinue = () => {
+  if (isWorkspacePage.value) return
+  enterWorkspace()
+  activeMode.value = 'chat'
+  nextTick(() => chatTextareaRef.value?.focus?.())
+}
+
+const handleWelcomeKeydown = (event) => {
+  if (isWorkspacePage.value) return
+  if (event.ctrlKey || event.metaKey || event.altKey) return
+  if (['Tab', 'Shift', 'Control', 'Alt', 'Meta'].includes(event.key)) return
+  handleWelcomeContinue()
+}
+
+const createChatTitle = (messages = chatMessages.value) => {
+  const firstUserMessage = messages.find((message) => message.role === 'user' && message.content)?.content || '新对话'
+  return String(firstUserMessage).replace(/\s+/g, ' ').slice(0, 28)
+}
+
+const loadChatHistory = () => {
+  try {
+    const stored = JSON.parse(localStorage.getItem(chatHistoryStorageKey) || '[]')
+    chatHistory.value = Array.isArray(stored) ? stored.slice(0, 30) : []
+  } catch {
+    chatHistory.value = []
+  }
+}
+
+const saveChatHistoryToStorage = () => {
+  localStorage.setItem(chatHistoryStorageKey, JSON.stringify(chatHistory.value.slice(0, 30)))
+}
+
+const persistCurrentChat = () => {
+  if (!chatMessages.value.length) return
+
+  const now = Date.now()
+  const id = activeChatId.value || `chat_${now}`
+  activeChatId.value = id
+
+  const session = {
+    id,
+    title: createChatTitle(),
+    updatedAt: now,
+    messages: chatMessages.value
+  }
+
+  chatHistory.value = [
+    session,
+    ...chatHistory.value.filter((item) => item.id !== id)
+  ].slice(0, 30)
+  saveChatHistoryToStorage()
+}
+
+const restoreChatSession = (id) => {
+  const session = chatHistory.value.find((item) => item.id === id)
+  if (!session) return
+
+  enterWorkspace()
+  activeMode.value = 'chat'
+  activeChatId.value = id
+  chatMessages.value = Array.isArray(session.messages) ? session.messages : []
+  nextTick(() => chatTextareaRef.value?.focus?.())
+}
+
+const startNewChat = () => {
+  persistCurrentChat()
+  enterWorkspace()
+  activeMode.value = 'chat'
+  activeChatId.value = ''
+  chatMessages.value = []
+  chatText.value = ''
+  chatAttachments.value = []
+  nextTick(() => chatTextareaRef.value?.focus?.())
+}
+
+const formatChatTime = (value) => {
+  if (!value) return '刚刚'
+  const diff = Date.now() - value
+  if (diff < 60 * 1000) return '刚刚'
+  if (diff < 60 * 60 * 1000) return `${Math.floor(diff / 60000)} 分钟前`
+  if (diff < 24 * 60 * 60 * 1000) return `${Math.floor(diff / 3600000)} 小时前`
+  return `${Math.floor(diff / 86400000)} 天前`
+}
+
+const formatHomeLogTime = (timestamp) => {
+  const date = new Date(timestamp)
+  return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}:${date.getSeconds().toString().padStart(2, '0')}`
+}
+
+const getHomeLogDuration = (log) => {
+  const value = log?.meta?.durationMs ?? log?.meta?.elapsedMs ?? log?.durationMs
+  if (!Number.isFinite(value) || value <= 0) return ''
+  if (value < 1000) return `${Math.round(value)}ms`
+  if (value < 60_000) return `${(value / 1000).toFixed(value < 10_000 ? 1 : 0)}s`
+  return `${Math.floor(value / 60_000)}m ${Math.round((value % 60_000) / 1000)}s`
+}
+
+const getVisibleHomeLogMeta = (log) => {
+  if (!log?.meta || !Object.keys(log.meta).length) return ''
+  const hiddenKeys = new Set(['durationMs', 'elapsedMs'])
+  const visibleMeta = Object.fromEntries(
+    Object.entries(log.meta).filter(([key]) => !hiddenKeys.has(key))
+  )
+  return Object.keys(visibleMeta).length ? JSON.stringify(visibleMeta, null, 2) : ''
+}
 
 const hasWebGLSupport = () => {
   if (typeof document === 'undefined') return false
@@ -983,73 +1358,6 @@ const initParticleField = () => {
   }
 }
 
-const heroSlides = [
-  {
-    id: 'model',
-    title: '图片、视频、模型，像搭积木一样编排。',
-    desc: '用一句话生成提示词、参考图、模型配置和节点流程，让图片、视频和模型任务在同一个画布里协作。'
-  },
-  {
-    id: 'flow',
-    title: '让灵感自己长成作品。',
-    desc: '一个给创作者用的本地 AI 视觉工作台。填入自己的 Key 和模型名后，就能把图片、视频和提示词编排成可复用的创作流程。'
-  },
-  {
-    id: 'case',
-    title: '从案例出发，一键生成工作流。',
-    desc: '公共工作流和灵感案例库已经准备好，点击模板就能进入画布，再替换成你的产品、角色、场景或短视频创意。'
-  },
-  {
-    id: 'debug',
-    title: '每次生成，都有日志可追踪。',
-    desc: '运行日志会记录请求地址、模型、任务 ID、轮询状态和原始响应，方便判断是模型能力、参数还是供应商返回的问题。'
-  }
-]
-
-const currentHero = computed(() => heroSlides[heroIndex.value])
-
-const heroGlyphPool = '图片视频模型提示词参考图节点画布分镜工作流灵感创意生成'
-
-const getRandomHeroGlyph = () => {
-  return heroGlyphPool[Math.floor(Math.random() * heroGlyphPool.length)]
-}
-
-const isHeroPunctuation = (char) => {
-  return /[\s，。、,.!?！？]/.test(char)
-}
-
-const buildHeroMorphFrame = (target, previous, progress) => {
-  const chars = Array.from(target)
-  const previousChars = Array.from(previous || '')
-  const length = Math.max(chars.length, previousChars.length)
-
-  return Array.from({ length }, (_, index) => {
-      const char = chars[index] || ''
-      if (isHeroPunctuation(char)) {
-        return char
-      }
-
-      const waveDelay = length > 1 ? index / (length - 1) * 0.32 : 0
-      const charProgress = Math.min(1, Math.max(0, progress * 1.16 - waveDelay))
-      const nearReveal = charProgress > 0.58 && Math.random() > 0.42
-
-      if (charProgress > 0.84 || nearReveal) {
-        return char
-      }
-
-      if (previousChars[index] && Math.random() > 0.62) {
-        return previousChars[index]
-      }
-
-      return getRandomHeroGlyph()
-    })
-    .join('')
-}
-
-const easeOutCubic = (value) => {
-  return 1 - Math.pow(1 - value, 3)
-}
-
 const shouldReduceHeroMotion = () => {
   if (typeof window === 'undefined') {
     return true
@@ -1058,119 +1366,119 @@ const shouldReduceHeroMotion = () => {
   return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 }
 
-const runHeroMorphOnce = () => {
+const heroTypeSpeed = 112
+const heroEraseSpeed = 82
+const heroHoldDuration = 1900
+const heroBetweenLinesDelay = 360
+const heroInitialDelay = 420
+
+const clearHeroTypeTimer = () => {
   if (typeof window === 'undefined') {
     return
   }
 
-  if (heroMorphing.value || shouldReduceHeroMotion()) {
-    return
+  if (heroTypeTimer) {
+    window.clearTimeout(heroTypeTimer)
+    heroTypeTimer = null
   }
-
-  const nextIndex = (heroMorphIndex + 1) % heroMorphPhrases.length
-  const targetText = heroMorphPhrases[nextIndex]
-  const previousText = heroMorphText.value
-  const duration = 820
-  const startedAt = window.performance.now()
-
-  heroMorphPreviousText.value = previousText
-  heroMorphing.value = true
-
-  const tick = (now) => {
-    const rawProgress = Math.min(1, (now - startedAt) / duration)
-    const progress = easeOutCubic(rawProgress)
-
-    heroMorphText.value = buildHeroMorphFrame(targetText, previousText, progress)
-
-    if (rawProgress < 1) {
-      heroMorphRaf = window.requestAnimationFrame(tick)
-      return
-    }
-
-    heroMorphText.value = targetText
-    heroMorphIndex = nextIndex
-    heroMorphing.value = false
-    heroMorphRaf = null
-  }
-
-  heroMorphRaf = window.requestAnimationFrame(tick)
 }
 
-const startHeroMorphLoop = () => {
+const setHeroTypeTimer = (callback, delay) => {
   if (typeof window === 'undefined') {
     return
   }
 
-  if (shouldReduceHeroMotion()) {
-    return
-  }
+  clearHeroTypeTimer()
 
-  if (heroMorphTimer) {
-    window.clearInterval(heroMorphTimer)
-  }
-
-  if (heroMorphKickoffTimer) {
-    window.clearTimeout(heroMorphKickoffTimer)
-  }
-
-  heroMorphKickoffTimer = window.setTimeout(runHeroMorphOnce, 820)
-  heroMorphTimer = window.setInterval(runHeroMorphOnce, 3800)
+  heroTypeTimer = window.setTimeout(() => {
+    heroTypeTimer = null
+    callback()
+  }, delay)
 }
 
-const stopHeroMorphLoop = () => {
+const typeHeroLine = (lineIndex, charIndex = 0) => {
   if (typeof window === 'undefined') {
     return
   }
 
-  if (heroMorphTimer) {
-    window.clearInterval(heroMorphTimer)
-    heroMorphTimer = null
+  const line = heroTypeLines[lineIndex]
+  const chars = Array.from(line)
+
+  heroTypePhase.value = 'typing'
+  heroTypeText.value = chars.slice(0, charIndex).join('')
+
+  if (charIndex < chars.length) {
+    setHeroTypeTimer(() => {
+      typeHeroLine(lineIndex, charIndex + 1)
+    }, heroTypeSpeed)
+    return
   }
 
-  if (heroMorphKickoffTimer) {
-    window.clearTimeout(heroMorphKickoffTimer)
-    heroMorphKickoffTimer = null
-  }
+  heroTypePhase.value = 'holding'
 
-  if (heroMorphRaf) {
-    window.cancelAnimationFrame(heroMorphRaf)
-    heroMorphRaf = null
-  }
+  setHeroTypeTimer(() => {
+    eraseHeroLine(lineIndex, chars.length)
+  }, heroHoldDuration)
 }
 
-const rotateHeroLine = () => {
-  if (shouldReduceHeroMotion()) return
+const eraseHeroLine = (lineIndex, charIndex) => {
+  if (typeof window === 'undefined') {
+    return
+  }
 
-  heroRotatingPrevIndex.value = heroRotatingIndex.value
-  heroRotatingIndex.value = (heroRotatingIndex.value + 1) % heroRotatingLines.length
+  const line = heroTypeLines[lineIndex]
+  const chars = Array.from(line)
+
+  heroTypePhase.value = 'erasing'
+  heroTypeText.value = chars.slice(0, charIndex).join('')
+
+  if (charIndex > 0) {
+    setHeroTypeTimer(() => {
+      eraseHeroLine(lineIndex, charIndex - 1)
+    }, heroEraseSpeed)
+    return
+  }
+
+  const nextIndex = (lineIndex + 1) % heroTypeLines.length
+
+  heroTypeIndex.value = nextIndex
+  heroTypeCycle.value += 1
+  heroTypePhase.value = 'idle'
+
+  setHeroTypeTimer(() => {
+    typeHeroLine(nextIndex, 0)
+  }, heroBetweenLinesDelay)
 }
 
-const startHeroRotatorLoop = () => {
-  if (typeof window === 'undefined' || shouldReduceHeroMotion()) return
-
-  if (heroRotatingTimer) {
-    window.clearInterval(heroRotatingTimer)
+const startHeroTypewriter = () => {
+  if (typeof window === 'undefined') {
+    return
   }
 
-  if (heroRotatingKickoffTimer) {
-    window.clearTimeout(heroRotatingKickoffTimer)
-  }
+  clearHeroTypeTimer()
 
-  heroRotatingKickoffTimer = window.setTimeout(rotateHeroLine, 1800)
-  heroRotatingTimer = window.setInterval(rotateHeroLine, 5600)
+  heroTypeIndex.value = 0
+  heroTypeCycle.value += 1
+
+  heroTypeText.value = ''
+  heroTypePhase.value = 'idle'
+
+  setHeroTypeTimer(() => {
+    typeHeroLine(0, 0)
+  }, heroInitialDelay)
 }
 
-const stopHeroRotatorLoop = () => {
-  if (typeof window === 'undefined') return
+const stopHeroTypewriter = () => {
+  clearHeroTypeTimer()
+}
 
-  if (heroRotatingTimer) {
-    window.clearInterval(heroRotatingTimer)
-    heroRotatingTimer = null
+const handleHeroTypewriterVisibility = () => {
+  if (typeof document === 'undefined') {
+    return
   }
 
-  if (heroRotatingKickoffTimer) {
-    window.clearTimeout(heroRotatingKickoffTimer)
-    heroRotatingKickoffTimer = null
+  if (!document.hidden) {
+    startHeroTypewriter()
   }
 }
 
@@ -1345,6 +1653,7 @@ const randomFill = () => {
 }
 
 const scrollPromptPanelIntoView = () => {
+  if (isWorkspacePage.value) return
   document.querySelector('[data-tour="home-chat"]')?.scrollIntoView({
     behavior: 'smooth',
     block: 'center'
@@ -1352,6 +1661,7 @@ const scrollPromptPanelIntoView = () => {
 }
 
 const focusCreateEntry = async () => {
+  enterWorkspace()
   activeMode.value = 'create'
   focusedEntry.value = 'create'
   scrollPromptPanelIntoView()
@@ -1360,6 +1670,7 @@ const focusCreateEntry = async () => {
 }
 
 const focusChatEntry = async () => {
+  enterWorkspace()
   activeMode.value = 'chat'
   focusedEntry.value = 'chat'
   scrollPromptPanelIntoView()
@@ -1368,6 +1679,7 @@ const focusChatEntry = async () => {
 }
 
 const handleStartCreateClick = async () => {
+  enterWorkspace()
   if (activeMode.value === 'create' && inputText.value.trim()) {
     handleCreateWithInput()
     return
@@ -1489,6 +1801,21 @@ const readFileAsDataUrl = (file) => new Promise((resolve, reject) => {
   reader.readAsDataURL(file)
 })
 
+const triggerChatFilePicker = async () => {
+  if (chatLoading.value) return
+
+  await nextTick()
+  const input = chatFileInputRef.value || document.getElementById('home-chat-file-input')
+
+  if (!input) {
+    window.$message?.error('没有找到上传入口，请重新打开页面后再试')
+    return
+  }
+
+  input.value = ''
+  input.click()
+}
+
 const handleChatFiles = async (event) => {
   const files = Array.from(event.target.files || [])
   event.target.value = ''
@@ -1608,6 +1935,7 @@ const buildChatPayload = (content, webContexts = []) => {
 }
 
 const sendHomeChat = async () => {
+  enterWorkspace()
   const content = chatText.value.trim()
   if ((!content && !chatAttachments.value.length) || chatLoading.value) return
 
@@ -1649,6 +1977,7 @@ const sendHomeChat = async () => {
         role: 'assistant',
         content: reply
       })
+      persistCurrentChat()
     }
   } catch (err) {
     chatMessages.value.push({
@@ -1656,12 +1985,195 @@ const sendHomeChat = async () => {
       role: 'assistant',
       content: err.message || '对话失败，请检查模型名、API Key 或网络。'
     })
+    persistCurrentChat()
   }
+}
+
+const normalizeImageUrl = (image) => {
+  const value = image?.url || image?.image_url || image?.output_url || image?.b64_json || image?.base64 || ''
+  if (!value) return ''
+  if (String(value).startsWith('data:') || String(value).startsWith('http')) return value
+  return `data:image/png;base64,${value}`
+}
+
+const buildChatImagePrompt = (text) => {
+  const content = String(text || '').trim()
+  return content || '生成一张高质量商业视觉图片，主体清晰，构图稳定，细节丰富。'
+}
+
+const buildChatImageRequestPrompt = (prompt) => {
+  if (chatImageResolution.value === 'auto') return prompt
+
+  const resolution = chatImageResolutionOptions.find((item) => item.key === chatImageResolution.value)?.label
+  if (!resolution) return prompt
+
+  return `${prompt}\n\n质量目标：尽量接近 ${resolution} 的清晰细节；如果当前模型尺寸受限，请按模型支持的最高可用尺寸生成，保持画面清晰、细节完整。`
+}
+
+const generateImageInChat = async (sourcePrompt, options = {}) => {
+  enterWorkspace()
+  const imagePrompt = buildChatImagePrompt(sourcePrompt)
+  const requestPrompt = buildChatImageRequestPrompt(imagePrompt)
+
+  if (!isChatImageConfigured.value) {
+    showApiSettings.value = true
+    window.$message?.warning('请先选择图片模型，并配置可用的 API Key')
+    return
+  }
+
+  const model = effectiveChatImageModel.value
+
+  if (options.addUserMessage !== false) {
+    chatMessages.value.push({
+      id: `user_image_${Date.now()}`,
+      role: 'user',
+      content: `生成图片：${imagePrompt}\n模型：${model}`
+    })
+  }
+
+  try {
+    const generated = await generateChatImage({
+      model,
+      prompt: requestPrompt,
+      size: chatImageSize.value,
+      n: chatImageCount.value,
+      image: options.referenceImages || (options.referenceImage ? [options.referenceImage] : undefined)
+    })
+
+    const images = generated.map((item, index) => ({
+      id: `chat_image_${Date.now()}_${index}`,
+      url: normalizeImageUrl(item),
+      prompt: requestPrompt,
+      model,
+      raw: item
+    })).filter((item) => item.url)
+
+    chatMessages.value.push({
+      id: `assistant_image_${Date.now()}`,
+      role: 'assistant',
+      content: images.length ? `已使用 ${model} 生成 ${images.length} 张图片。你可以继续变化、放大、复制 Prompt 或放入画布。` : '图片接口返回成功，但没有解析到图片地址。',
+      prompt: requestPrompt,
+      model,
+      images
+    })
+    persistCurrentChat()
+  } catch (err) {
+    chatMessages.value.push({
+      id: `assistant_image_error_${Date.now()}`,
+      role: 'assistant',
+      content: err.message || '图片生成失败，请检查图片模型、API Key 或运行日志。'
+    })
+    persistCurrentChat()
+  }
+}
+
+const generateImageFromComposer = async () => {
+  const content = chatText.value.trim()
+  if (!content && !chatAttachments.value.length) return
+
+  const payload = buildChatPayload(content)
+  const referenceImages = payload.imageAttachments.map((item) => item.url).filter(Boolean)
+  chatText.value = ''
+  chatAttachments.value = []
+  await generateImageInChat(payload.modelContent, { addUserMessage: true, referenceImages })
+}
+
+const varyChatImage = async (image) => {
+  await generateImageInChat(`${image.prompt || ''}\n基于参考图生成一个变化版本，保持主体一致，调整构图、细节和氛围。`, {
+    referenceImage: image.url,
+    addUserMessage: false
+  })
+}
+
+const upscaleChatImage = async (image) => {
+  await generateImageInChat(`${image.prompt || ''}\n放大并增强细节，保持原图构图和主体一致，提升清晰度和质感。`, {
+    referenceImage: image.url,
+    addUserMessage: false
+  })
+}
+
+const copyText = async (text) => {
+  try {
+    await navigator.clipboard?.writeText(text || '')
+    window.$message?.success('已复制')
+  } catch {
+    window.$message?.info(text || '')
+  }
+}
+
+const buildChatCanvasData = (image) => {
+  const now = Date.now()
+  const textId = `chat_text_${now}`
+  const configId = `chat_config_${now}`
+  const imageId = `chat_image_${now}`
+  const prompt = image.prompt || ''
+  const model = image.model || effectiveChatImageModel.value
+
+  return {
+    nodes: [
+      {
+        id: textId,
+        type: 'text',
+        position: { x: 120, y: 150 },
+        data: { label: '聊天生图 Prompt', content: prompt, status: 'success', createdAt: now, updatedAt: now }
+      },
+      {
+        id: configId,
+        type: 'imageConfig',
+        position: { x: 440, y: 150 },
+        data: {
+          label: '聊天生图配置',
+          prompt,
+          model,
+          size: chatImageSize.value,
+          count: chatImageCount.value,
+          status: 'success',
+          createdAt: now,
+          updatedAt: now
+        }
+      },
+      {
+        id: imageId,
+        type: 'image',
+        position: { x: 760, y: 150 },
+        data: {
+          label: '聊天生成图片',
+          url: image.url,
+          prompt,
+          model,
+          size: chatImageSize.value,
+          status: 'success',
+          createdAt: now,
+          updatedAt: now,
+          publicProps: { name: '聊天生成图片' }
+        }
+      }
+    ],
+    edges: [
+      { id: `edge_${textId}_${configId}`, source: textId, target: configId, sourceHandle: 'right', targetHandle: 'left', type: 'promptOrder', data: { promptOrder: 1 } },
+      { id: `edge_${configId}_${imageId}`, source: configId, target: imageId, sourceHandle: 'right', targetHandle: 'left' }
+    ],
+    viewport: { x: 80, y: 60, zoom: 0.86 }
+  }
+}
+
+const placeChatImageIntoCanvas = (image) => {
+  const id = createProject((image.prompt || '聊天生图').slice(0, 24))
+  updateProjectCanvas(id, buildChatCanvasData(image))
+  router.push(`/canvas/${id}`)
 }
 
 const createFromTemplate = (prompt) => {
   inputText.value = prompt
   handleCreateWithInput()
+}
+
+const openImageExpert = (prompt = '') => {
+  const value = String(prompt || '').trim()
+  router.push({
+    name: 'ImageExpert',
+    query: value ? { prompt: value.slice(0, 1600) } : {}
+  })
 }
 
 const openPromptSource = () => {
@@ -1783,6 +2295,7 @@ const scrollToTop = () => {
 onMounted(() => {
   performanceLite.value = detectPerformanceLite()
   initProjectsStore()
+  loadChatHistory()
   refreshSuggestions()
   initParticleField()
   if (!localStorage.getItem(onboardingStorageKey)) {
@@ -1790,11 +2303,15 @@ onMounted(() => {
       showOnboarding.value = true
     }, 700)
   }
-  startHeroRotatorLoop()
+  document.addEventListener('visibilitychange', handleHeroTypewriterVisibility)
+  window.addEventListener('keydown', handleWelcomeKeydown)
+  startHeroTypewriter()
 })
 
 onUnmounted(() => {
-  stopHeroRotatorLoop()
+  stopHeroTypewriter()
+  document.removeEventListener('visibilitychange', handleHeroTypewriterVisibility)
+  window.removeEventListener('keydown', handleWelcomeKeydown)
   if (scrollFrame) {
     window.cancelAnimationFrame(scrollFrame)
     scrollFrame = null
@@ -2125,6 +2642,19 @@ onUnmounted(() => {
   border-color: rgba(34, 197, 94, 0.35);
 }
 
+.home-log-badge {
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  padding: 0 5px;
+  color: #fff;
+  background: #ef4444;
+  font-size: 11px;
+  line-height: 1;
+}
+
 .home-main {
   width: min(1440px, calc(100vw - 28px));
   margin: 0 auto;
@@ -2134,12 +2664,198 @@ onUnmounted(() => {
 
 .hero-grid {
   display: grid;
-  grid-template-columns: minmax(430px, 0.92fr) minmax(560px, 1.08fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: clamp(28px, 3.1vw, 48px);
-  align-items: start;
-  min-height: auto;
+  align-items: center;
+  min-height: calc(100vh - 150px);
   max-width: 100%;
   padding-top: clamp(6px, 1.2vh, 16px);
+}
+
+.home-main.is-workspace {
+  width: min(1560px, calc(100vw - 28px));
+  padding-top: 10px;
+}
+
+.workspace-brand-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin: 0 0 14px;
+  border: 1px solid rgba(20, 184, 166, 0.18);
+  border-radius: 22px;
+  padding: 10px 14px;
+  color: #082f2b;
+  background: rgba(255, 255, 255, 0.58);
+  box-shadow: 0 18px 46px rgba(15, 23, 42, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.68);
+  backdrop-filter: blur(22px);
+}
+
+.dark .workspace-brand-strip {
+  color: #eafff8;
+  background: rgba(5, 18, 32, 0.62);
+  border-color: rgba(125, 249, 231, 0.18);
+}
+
+.workspace-brand-strip div {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.workspace-brand-strip strong {
+  font-size: 15px;
+  font-weight: 950;
+}
+
+.workspace-brand-strip span {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.workspace-brand-strip button,
+.history-head button {
+  border: 1px solid rgba(20, 184, 166, 0.26);
+  border-radius: 999px;
+  padding: 7px 11px;
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.56);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.dark .workspace-brand-strip button,
+.dark .history-head button {
+  background: rgba(15, 23, 42, 0.46);
+}
+
+.hero-grid.is-collapsed {
+  grid-template-columns: minmax(220px, 280px) minmax(680px, 1fr);
+  gap: 18px;
+  align-items: stretch;
+  min-height: auto;
+}
+
+.chat-history-panel {
+  position: sticky;
+  top: 96px;
+  align-self: start;
+  overflow: hidden;
+  border: 1px solid rgba(20, 184, 166, 0.18);
+  border-radius: 28px;
+  min-height: 520px;
+  max-height: calc(100vh - 140px);
+  padding: 16px;
+  background:
+    radial-gradient(circle at 20% 0%, rgba(111, 247, 232, 0.18), transparent 34%),
+    rgba(255, 255, 255, 0.54);
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.10), inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(24px);
+}
+
+.dark .chat-history-panel {
+  border-color: rgba(125, 249, 231, 0.16);
+  background:
+    radial-gradient(circle at 20% 0%, rgba(111, 247, 232, 0.12), transparent 36%),
+    rgba(5, 18, 32, 0.68);
+  box-shadow: 0 24px 72px rgba(0, 0, 0, 0.24);
+}
+
+.history-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.history-head div {
+  display: grid;
+  gap: 2px;
+}
+
+.history-head span {
+  color: #0fb981;
+  font-size: 10px;
+  font-weight: 950;
+  letter-spacing: 0.16em;
+}
+
+.history-head strong {
+  color: var(--text-primary);
+  font-size: 18px;
+  font-weight: 950;
+}
+
+.history-list {
+  display: grid;
+  gap: 8px;
+  overflow-y: auto;
+  max-height: calc(100vh - 236px);
+  padding-right: 4px;
+}
+
+.history-item {
+  display: grid;
+  gap: 5px;
+  width: 100%;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 18px;
+  padding: 11px 12px;
+  text-align: left;
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.38);
+  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+}
+
+.history-item:hover,
+.history-item.active {
+  transform: translateY(-1px);
+  border-color: rgba(20, 184, 166, 0.48);
+  background: rgba(255, 255, 255, 0.66);
+}
+
+.dark .history-item {
+  background: rgba(15, 23, 42, 0.36);
+}
+
+.dark .history-item:hover,
+.dark .history-item.active {
+  background: rgba(15, 23, 42, 0.62);
+}
+
+.history-item strong {
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 850;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-item span,
+.history-empty {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.history-empty {
+  display: grid;
+  place-items: center;
+  gap: 8px;
+  min-height: 260px;
+  text-align: center;
+  line-height: 1.6;
+}
+
+.hero-grid.is-collapsed .prompt-panel {
+  transform: none;
+}
+
+.hero-grid.is-collapsed .mode-card {
+  min-height: calc(100vh - 140px);
 }
 
 .eyebrow {
@@ -2194,15 +2910,15 @@ onUnmounted(() => {
 .hero-copy {
   width: 100%;
   min-width: 0;
-  max-width: 620px;
-  margin-top: -8px;
-  justify-self: start;
+  max-width: 780px;
+  margin: clamp(-62px, -5vh, -34px) auto 0;
+  justify-self: center;
   opacity: var(--scroll-hero-opacity);
   transform: translate3d(0, var(--scroll-hero-y), 0);
   will-change: transform, opacity;
 }
 
-.hero-title-rotator {
+.hero-title-typewriter {
   position: relative;
   display: flex;
   flex-direction: column;
@@ -2210,8 +2926,8 @@ onUnmounted(() => {
   margin: 0;
   isolation: isolate;
   color: inherit;
-  line-height: 0.95;
-  letter-spacing: -0.045em;
+  line-height: 0.94;
+  letter-spacing: -0.04em;
   background: none;
   -webkit-background-clip: initial;
   background-clip: initial;
@@ -2220,32 +2936,30 @@ onUnmounted(() => {
   padding-left: 2px;
 }
 
-.hero-title-rotator::before {
+.hero-title-typewriter::before {
   content: "";
   position: absolute;
-  inset: -12px -18px;
+  inset: -14px -22px;
   z-index: -1;
   pointer-events: none;
   background:
     radial-gradient(
-      circle at 28% 55%,
+      circle at 30% 55%,
       rgba(111, 247, 232, 0.16),
       rgba(111, 247, 232, 0) 58%
     );
-  filter: blur(22px);
-  opacity: 0.72;
-  animation: heroTitleGlowPulse 4.8s ease-in-out infinite;
+  filter: blur(24px);
+  opacity: 0.58;
 }
 
 .hero-title-line {
   position: relative;
-  display: inline-block;
+  display: block;
   width: fit-content;
   max-width: 100%;
-  font-size: clamp(42px, 4.05vw, 72px);
+  font-size: clamp(46px, 4.4vw, 78px);
   font-weight: 850;
   line-height: 0.98;
-  letter-spacing: -0.055em;
   white-space: nowrap;
 }
 
@@ -2263,124 +2977,34 @@ onUnmounted(() => {
     0 0 26px rgba(111, 247, 232, 0.06);
 }
 
-.hero-title-line-rotating {
-  width: 100%;
-  min-height: 1em;
-  height: 1em;
-  overflow: visible;
-  isolation: isolate;
-  perspective: 900px;
-}
-
-.hero-title-line-rotating::before {
-  content: "";
-  position: absolute;
-  left: 0.02em;
-  right: 0.08em;
-  bottom: -0.08em;
-  height: 0.08em;
-  border-radius: 999px;
-  pointer-events: none;
-  opacity: 0.34;
-  background:
-    linear-gradient(90deg, transparent, rgba(39, 245, 219, 0.88), rgba(255, 255, 255, 0.58), transparent);
-  box-shadow:
-    0 0 16px rgba(64, 255, 230, 0.42),
-    0 0 36px rgba(56, 189, 248, 0.18);
-  transform-origin: left center;
-  animation: heroDecodeRail 3.8s ease-in-out infinite;
-  display: none;
-}
-
-.hero-rotating-line {
-  position: absolute;
-  inset: 0 auto auto 0;
-  display: inline-flex;
-  width: max-content;
-  max-width: 100%;
-  align-items: baseline;
-  color: inherit;
-  white-space: nowrap;
-  pointer-events: none;
-  opacity: 0;
-  filter: blur(7px);
-  transform: translate3d(0, 0.28em, 0) rotateX(-6deg) scale(0.99);
-  transform-origin: left center;
-  transition:
-    opacity 0.72s cubic-bezier(0.16, 1, 0.3, 1),
-    filter 0.72s cubic-bezier(0.16, 1, 0.3, 1),
-    transform 0.72s cubic-bezier(0.16, 1, 0.3, 1);
-  will-change: transform, filter, opacity;
-}
-
-.hero-tide-char {
-  display: inline-block;
-  color: transparent;
-  background-image:
-    linear-gradient(
-      92deg,
-      #0d3440 0%,
-      #0f5962 18%,
-      #16b8ab 46%,
-      #0f9f8e 70%,
-      #113a46 100%
-    );
-  background-size: 240% 100%;
-  background-position: 0% 50%;
-  -webkit-background-clip: text;
-  background-clip: text;
-  text-shadow:
-    0 0 10px rgba(111, 247, 232, 0.16),
-    0 0 24px rgba(32, 215, 199, 0.08);
-  transform: translate3d(0, 0, 0);
-  transform-origin: center bottom;
-  will-change: transform, filter, opacity, background-position;
-}
-
-.dark .hero-tide-char {
-  background-image:
-    linear-gradient(
-      92deg,
-      #f7fdff 0%,
-      #dffcff 18%,
-      #8af7ef 46%,
-      #35e0cf 70%,
-      #dffcff 100%
-    );
-  text-shadow:
-    0 0 12px rgba(111, 247, 232, 0.22),
-    0 0 28px rgba(32, 215, 199, 0.10);
-}
-
-.hero-rotating-line.is-active {
-  opacity: 1;
-  filter: blur(0);
-  transform: translate3d(0, 0, 0) rotateX(0) scale(1);
-}
-
-.hero-rotating-line.is-active .hero-tide-char {
-  animation: heroTideChar 4.8s cubic-bezier(0.33, 0, 0.18, 1) infinite;
-  animation-delay: calc(var(--char-index) * 76ms);
-}
-
-.hero-rotating-line.is-prev {
-  opacity: 0;
-  filter: blur(8px);
-  transform: translate3d(0, -0.34em, 0) rotateX(8deg) scale(1.01);
-}
-
-.hero-morph-text {
+.hero-title-line-typewriter {
   position: relative;
+  display: inline-flex;
+  align-items: baseline;
+  height: 1.1em;
+  min-width: 8.5em;
+  overflow: visible;
+}
+
+.hero-typewriter-text {
+  position: relative;
+  display: inline-flex;
+  align-items: baseline;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.hero-typewriter-char {
   display: inline-block;
   color: transparent;
   background-image:
     linear-gradient(
       92deg,
-      #0d3440 0%,
-      #0f5962 18%,
-      #16b8ab 46%,
-      #0f9f8e 70%,
-      #113a46 100%
+      #052e2b 0%,
+      #064e3b 28%,
+      #0f766e 54%,
+      #0891b2 78%,
+      #0f172a 100%
     );
   background-size: 220% 100%;
   background-position: 0% 50%;
@@ -2388,250 +3012,96 @@ onUnmounted(() => {
   background-clip: text;
   text-shadow:
     0 0 12px rgba(111, 247, 232, 0.18),
-    0 0 28px rgba(32, 215, 199, 0.08);
-  filter: blur(0);
-  transform: translateY(0);
-  opacity: 1;
-  transition:
-    filter 0.18s ease,
-    opacity 0.18s ease,
-    transform 0.18s ease,
-    letter-spacing 0.18s ease;
-  will-change: transform, filter, opacity, letter-spacing;
-  animation: heroTitleGradientDrift 8s ease-in-out infinite;
+    0 0 26px rgba(32, 215, 199, 0.08);
+  animation:
+    heroTypeCharIn 220ms cubic-bezier(0.22, 1, 0.36, 1) both,
+    heroTypeGradientDrift 8s ease-in-out infinite;
+  animation-delay:
+    0ms,
+    0ms;
 }
 
-.dark .hero-morph-text {
+.dark .hero-typewriter-char {
   background-image:
     linear-gradient(
       92deg,
       #f7fdff 0%,
-      #dffcff 18%,
+      #dffcff 20%,
       #8af7ef 46%,
-      #35e0cf 70%,
+      #35e0cf 72%,
       #dffcff 100%
     );
+}
+
+.hero-typewriter-text.is-erasing .hero-typewriter-char {
   text-shadow:
-    0 0 12px rgba(111, 247, 232, 0.22),
-    0 0 28px rgba(32, 215, 199, 0.10);
+    0 0 10px rgba(221, 251, 255, 0.16),
+    0 0 24px rgba(32, 215, 199, 0.08);
 }
 
-.hero-morph-text::before {
-  content: attr(data-text);
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  color: rgba(111, 247, 232, 0.16);
-  filter: blur(12px);
-  transform: translateY(2px);
-  pointer-events: none;
+.hero-typewriter-cursor {
+  display: inline-block;
+  width: 0.27em;
+  height: 0.27em;
+  margin-left: 0.095em;
+  border-radius: 999px;
+  align-self: center;
+  transform: translateY(0.01em);
+  background: rgba(8, 47, 73, 0.86);
+  box-shadow:
+    0 0 4px rgba(221, 251, 255, 0.34),
+    0 0 8px rgba(111, 247, 232, 0.14);
+  opacity: 0.92;
 }
 
-.hero-morph-text::after {
-  content: attr(data-text);
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  color: transparent;
-  pointer-events: none;
-  background:
-    linear-gradient(
-      105deg,
-      rgba(255, 255, 255, 0) 18%,
-      rgba(255, 255, 255, 0.08) 34%,
-      rgba(255, 255, 255, 0.7) 48%,
-      rgba(255, 255, 255, 0.12) 62%,
-      rgba(255, 255, 255, 0) 78%
-    );
-  background-size: 240% 100%;
-  background-position: 140% 0;
-  -webkit-background-clip: text;
-  background-clip: text;
-  mix-blend-mode: screen;
-  opacity: 0;
-  animation: heroTitleSheen 4.8s ease-in-out infinite;
+.dark .hero-typewriter-cursor {
+  background: rgba(221, 251, 255, 0.96);
 }
 
-.hero-morph-text.is-morphing {
-  opacity: 0.98;
-  filter: blur(0.35px) contrast(1.08);
-  transform: translateY(1px) scale(1.006);
-  letter-spacing: -0.015em;
-  animation:
-    heroTitleGradientDrift 8s ease-in-out infinite,
-    heroMorphSettle 0.82s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.hero-morph-text.is-morphing::before {
-  content: attr(data-prev);
-  color: rgba(221, 251, 255, 0.24);
-  filter: blur(7px);
-  transform: translate3d(0, -0.14em, 0) skewX(-4deg);
-  opacity: 0.74;
-}
-
-.hero-morph-text.is-morphing::after {
-  opacity: 1;
-  animation: heroDecodeSweep 0.82s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-@keyframes heroTitleGradientDrift {
+@keyframes heroTypeCharIn {
   0% {
-    background-position: 0% 50%;
-  }
-
-  50% {
-    background-position: 100% 50%;
-  }
-
-  100% {
-    background-position: 0% 50%;
-  }
-}
-
-@keyframes heroTitleSheen {
-  0% {
-    background-position: 145% 0;
     opacity: 0;
+    filter: blur(8px);
+    transform: translateY(0.22em) scale(0.98);
   }
 
-  14% {
+  60% {
     opacity: 0.82;
-  }
-
-  42% {
-    background-position: -45% 0;
-    opacity: 0.18;
+    filter: blur(2px);
+    transform: translateY(0.04em) scale(1.01);
   }
 
   100% {
-    background-position: -45% 0;
-    opacity: 0;
-  }
-}
-
-@keyframes heroTideChar {
-  0%,
-  12%,
-  100% {
-    opacity: 0.92;
-    filter: brightness(1);
-    background-position: 0% 50%;
-    transform: translate3d(0, 0, 0) scale(1);
-    text-shadow:
-      0 0 10px rgba(111, 247, 232, 0.16),
-      0 0 24px rgba(32, 215, 199, 0.08);
-  }
-
-  27% {
     opacity: 1;
-    filter: brightness(1.28) saturate(1.12);
-    background-position: 56% 50%;
-    transform: translate3d(0.08em, -0.025em, 0) scale(1.018);
-    text-shadow:
-      0 0 13px rgba(210, 255, 250, 0.42),
-      0 0 30px rgba(64, 255, 230, 0.22);
-  }
-
-  42% {
-    opacity: 1;
-    filter: brightness(1.58) saturate(1.2);
-    background-position: 100% 50%;
-    transform: translate3d(0.19em, -0.055em, 0) scale(1.052);
-    text-shadow:
-      0 0 18px rgba(242, 255, 255, 0.62),
-      0 0 38px rgba(72, 255, 232, 0.38),
-      0 0 72px rgba(56, 189, 248, 0.18);
-  }
-
-  58% {
-    opacity: 0.98;
-    filter: brightness(1.24) saturate(1.08);
-    background-position: 54% 50%;
-    transform: translate3d(0.08em, 0.018em, 0) scale(1.014);
-    text-shadow:
-      0 0 12px rgba(210, 255, 250, 0.28),
-      0 0 28px rgba(64, 255, 230, 0.16);
-  }
-
-  74% {
-    opacity: 0.94;
-    filter: brightness(1.05);
-    background-position: 18% 50%;
-    transform: translate3d(-0.025em, 0, 0) scale(0.998);
-  }
-}
-
-@keyframes heroDecodeSweep {
-  0% {
-    background-position: 130% 0;
-    opacity: 0;
-    filter: blur(1px);
-    transform: translateX(-0.04em);
-  }
-
-  18% {
-    opacity: 0.94;
-  }
-
-  58% {
-    background-position: -30% 0;
-    opacity: 0.78;
-  }
-
-  100% {
-    background-position: -56% 0;
-    opacity: 0;
     filter: blur(0);
-    transform: translateX(0);
+    transform: translateY(0) scale(1);
   }
 }
 
-@keyframes heroMorphSettle {
+@keyframes heroTypeGradientDrift {
   0% {
-    filter: blur(2px) contrast(1.2);
-    opacity: 0.72;
-    transform: translate3d(0, -0.08em, 0) rotateX(5deg) scale(1.018);
-    letter-spacing: 0.01em;
-  }
-
-  44% {
-    filter: blur(0.6px) contrast(1.12);
-    opacity: 1;
-    transform: translate3d(0, 0.03em, 0) rotateX(-2deg) scale(1.006);
-  }
-
-  100% {
-    filter: blur(0) contrast(1);
-    opacity: 1;
-    transform: translate3d(0, 0, 0) rotateX(0deg) scale(1);
-    letter-spacing: -0.045em;
-  }
-}
-
-@keyframes heroDecodeRail {
-  0%,
-  100% {
-    opacity: 0.16;
-    transform: scaleX(0.28) translateX(0);
-  }
-
-  48% {
-    opacity: 0.44;
-    transform: scaleX(0.82) translateX(0.1em);
-  }
-}
-
-@keyframes heroTitleGlowPulse {
-  0%,
-  100% {
-    opacity: 0.45;
-    transform: scale(0.995);
+    background-position: 0% 50%;
   }
 
   50% {
-    opacity: 0.78;
-    transform: scale(1.01);
+    background-position: 100% 50%;
+  }
+
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+@keyframes welcomeContinuePulse {
+  0%,
+  100% {
+    opacity: 0.68;
+    transform: translateY(0);
+  }
+
+  50% {
+    opacity: 1;
+    transform: translateY(-1px);
   }
 }
 
@@ -2664,7 +3134,6 @@ onUnmounted(() => {
   line-height: 1.9;
 }
 
-.hero-actions,
 .feature-strip,
 .prompt-footer,
 .suggestion-cloud,
@@ -2674,10 +3143,27 @@ onUnmounted(() => {
   align-items: center;
 }
 
-.hero-actions {
-  flex-wrap: wrap;
-  gap: 14px;
-  margin-top: 28px;
+.welcome-continue {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 32px;
+  border: 1px solid rgba(20, 184, 166, 0.24);
+  border-radius: 999px;
+  padding: 11px 16px;
+  color: rgba(8, 47, 73, 0.72);
+  background: rgba(255, 255, 255, 0.52);
+  box-shadow: 0 18px 46px rgba(15, 23, 42, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.68);
+  backdrop-filter: blur(18px);
+  font-size: 13px;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  animation: welcomeContinuePulse 1.8s ease-in-out infinite;
+}
+
+.dark .welcome-continue {
+  color: rgba(234, 255, 248, 0.78);
+  background: rgba(5, 18, 32, 0.54);
+  border-color: rgba(125, 249, 231, 0.18);
 }
 
 .primary-action,
@@ -3141,8 +3627,99 @@ onUnmounted(() => {
   background: rgba(15, 23, 42, 0.06);
 }
 
+.chat-message:has(.chat-image-grid) {
+  width: min(100%, 720px);
+  max-width: 100%;
+}
+
 .dark .chat-message.assistant {
   background: rgba(255, 255, 255, 0.08);
+}
+
+.chat-image-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.chat-image-grid figure {
+  overflow: hidden;
+  margin: 0;
+  border: 1px solid rgba(20, 184, 166, 0.22);
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(255, 255, 255, 0.52));
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.14);
+}
+
+.dark .chat-image-grid figure {
+  border-color: rgba(125, 249, 231, 0.22);
+  background:
+    linear-gradient(180deg, rgba(9, 22, 37, 0.82), rgba(6, 34, 38, 0.62));
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
+}
+
+.chat-image-grid img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  background: rgba(15, 23, 42, 0.08);
+}
+
+.chat-image-grid figcaption {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px;
+}
+
+.chat-image-grid figcaption button {
+  border: 1px solid rgba(20, 184, 166, 0.28);
+  border-radius: 999px;
+  padding: 5px 8px;
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.62);
+  font-size: 12px;
+  font-weight: 700;
+  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+}
+
+.chat-image-grid figcaption button:hover {
+  transform: translateY(-1px);
+  border-color: rgba(20, 184, 166, 0.72);
+  background: rgba(255, 255, 255, 0.86);
+}
+
+.dark .chat-image-grid figcaption button {
+  background: rgba(15, 23, 42, 0.46);
+}
+
+.chat-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.chat-action-row button {
+  border: 1px solid rgba(20, 184, 166, 0.28);
+  border-radius: 999px;
+  padding: 5px 9px;
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.44);
+  font-size: 12px;
+  transition: border-color 0.18s ease, transform 0.18s ease;
+}
+
+.dark .chat-action-row button {
+  background: rgba(15, 23, 42, 0.36);
+}
+
+.chat-action-row button:hover {
+  transform: translateY(-1px);
+  border-color: rgba(20, 184, 166, 0.75);
 }
 
 .chat-message.thinking {
@@ -3154,7 +3731,7 @@ onUnmounted(() => {
 
 .chat-composer {
   display: grid;
-  grid-template-columns: 42px 42px 1fr 44px;
+  grid-template-columns: 42px 42px 42px 1fr 44px;
   align-items: end;
   gap: 10px;
   border: 1px solid rgba(172, 205, 218, 0.34);
@@ -3164,6 +3741,239 @@ onUnmounted(() => {
     radial-gradient(circle at 88% 50%, rgba(110, 247, 231, 0.12), transparent 28%),
     rgba(255, 255, 255, 0.64);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72), 0 14px 38px rgba(15, 23, 42, 0.1);
+}
+
+.image-generate-trigger {
+  color: #052e2b;
+  border-color: rgba(45, 212, 191, 0.44);
+  background:
+    radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.92), transparent 38%),
+    linear-gradient(135deg, rgba(111, 247, 232, 0.94), rgba(0, 163, 255, 0.66));
+  box-shadow: 0 14px 32px rgba(20, 184, 166, 0.24);
+}
+
+.chat-image-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 2px 14px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.chat-model-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0 2px 10px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.chat-model-row select,
+.chat-model-row button {
+  height: 32px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 999px;
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.64);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.56);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.chat-model-row select {
+  min-width: min(280px, 100%);
+  padding: 0 28px 0 12px;
+}
+
+.chat-model-row button {
+  padding: 0 12px;
+}
+
+.dark .chat-model-row select,
+.dark .chat-model-row button {
+  border-color: rgba(125, 249, 231, 0.18);
+  background: rgba(15, 23, 42, 0.48);
+}
+
+.home-runtime-panel {
+  position: fixed;
+  right: 22px;
+  top: 92px;
+  z-index: 80;
+  width: min(410px, calc(100vw - 32px));
+  max-height: calc(100vh - 122px);
+  overflow: hidden;
+  border: 1px solid rgba(20, 184, 166, 0.24);
+  border-radius: 28px;
+  color: var(--text-primary);
+  background:
+    radial-gradient(circle at 16% 0%, rgba(45, 212, 191, 0.18), transparent 34%),
+    rgba(255, 255, 255, 0.76);
+  box-shadow: 0 30px 90px rgba(15, 23, 42, 0.20), inset 0 1px 0 rgba(255, 255, 255, 0.68);
+  backdrop-filter: blur(26px) saturate(1.25);
+}
+
+.dark .home-runtime-panel {
+  border-color: rgba(125, 249, 231, 0.18);
+  background:
+    radial-gradient(circle at 16% 0%, rgba(45, 212, 191, 0.14), transparent 34%),
+    rgba(5, 18, 32, 0.78);
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.42);
+}
+
+.home-runtime-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 16px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.22);
+}
+
+.home-runtime-head p {
+  margin: 0 0 3px;
+  color: var(--accent-color);
+  font-size: 11px;
+  font-weight: 950;
+  letter-spacing: 0.16em;
+}
+
+.home-runtime-head h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.home-runtime-head div:last-child {
+  display: flex;
+  gap: 8px;
+}
+
+.home-runtime-head button {
+  height: 30px;
+  border-radius: 999px;
+  padding: 0 10px;
+  background: rgba(148, 163, 184, 0.16);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.home-runtime-empty {
+  padding: 18px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.home-runtime-list {
+  max-height: calc(100vh - 210px);
+  overflow-y: auto;
+  padding: 12px;
+}
+
+.home-runtime-item {
+  margin-bottom: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-left: 3px solid rgba(148, 163, 184, 0.72);
+  border-radius: 18px;
+  padding: 10px 12px;
+  background: rgba(248, 250, 252, 0.6);
+}
+
+.dark .home-runtime-item {
+  background: rgba(2, 6, 23, 0.38);
+}
+
+.home-runtime-item.is-success {
+  border-left-color: #22c55e;
+}
+
+.home-runtime-item.is-error {
+  border-left-color: #ef4444;
+}
+
+.home-runtime-item.is-info {
+  border-left-color: #38bdf8;
+}
+
+.home-runtime-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.home-runtime-line strong {
+  text-transform: uppercase;
+  color: var(--text-primary);
+}
+
+.home-runtime-line time {
+  margin-left: auto;
+}
+
+.home-runtime-item p {
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.home-runtime-item pre {
+  margin-top: 8px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.chat-image-controls select,
+.chat-image-controls button {
+  height: 32px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 999px;
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.64);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.56);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.chat-image-controls select {
+  padding: 0 28px 0 12px;
+}
+
+.chat-image-controls .model-select {
+  min-width: min(260px, 100%);
+  max-width: 100%;
+}
+
+.chat-image-controls button {
+  padding: 0 12px;
+  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+}
+
+.chat-image-controls button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: rgba(20, 184, 166, 0.58);
+  background: rgba(255, 255, 255, 0.86);
+}
+
+.chat-image-controls button:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+}
+
+.dark .chat-image-controls select,
+.dark .chat-image-controls button {
+  border-color: rgba(125, 249, 231, 0.18);
+  background: rgba(15, 23, 42, 0.48);
 }
 
 .create-composer {
@@ -3268,20 +4078,8 @@ onUnmounted(() => {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .hero-title-rotator::before,
-  .hero-title-line-rotating::before,
-  .hero-rotating-line,
-  .hero-tide-char,
-  .hero-title-morph::before,
-  .hero-title-line-dynamic::before,
-  .hero-morph-text,
-  .hero-morph-text::after {
+  .hero-typewriter-char {
     animation: none;
-  }
-
-  .hero-rotating-line,
-  .hero-morph-text {
-    transition: none;
   }
 
   .selection-flow.is-selected::after,
@@ -3303,9 +4101,20 @@ onUnmounted(() => {
     gap: 24px;
   }
 
+  .hero-grid.is-collapsed {
+    grid-template-columns: 1fr;
+  }
+
+  .chat-history-panel {
+    position: relative;
+    top: auto;
+    min-height: auto;
+    max-height: 260px;
+  }
+
   .hero-copy {
     max-width: 620px;
-    margin-top: -6px;
+    margin-top: -28px;
   }
 
   .hero-title-line {
@@ -3323,13 +4132,20 @@ onUnmounted(() => {
     line-height: 1.75;
   }
 
-  .hero-actions {
-    margin-top: 18px;
-  }
 }
 
 .hidden-file-input {
-  display: none;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .attach-button {
@@ -4525,3 +5341,4 @@ onUnmounted(() => {
   }
 }
 </style>
+
