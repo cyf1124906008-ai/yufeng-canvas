@@ -4,16 +4,15 @@
  * Provides naive-ui config and router view
  */
 import { computed, onMounted, ref } from 'vue'
-import { NButton, NConfigProvider, NDialogProvider, NInput, NMessageProvider, darkTheme } from 'naive-ui'
+import { NButton, NConfigProvider, NDialogProvider, NMessageProvider, NModal, darkTheme } from 'naive-ui'
 import { isDark } from './stores/theme'
 import AppFeedbackProvider from './components/AppFeedbackProvider.vue'
+import SupportModal from './components/SupportModal.vue'
 
-const INVITE_CODE = 'swsb'
-const INVITE_STORAGE_KEY = 'yufeng-canvas-invite-accepted'
+const SUPPORT_HINT_STORAGE_KEY = 'yufeng-canvas-support-hint-v1'
 
-const inviteCode = ref('')
-const inviteAccepted = ref(false)
-const inviteError = ref('')
+const showSupportHint = ref(false)
+const showSupportModal = ref(false)
 
 // Naive UI theme based on dark mode | 基于深色模式的 Naive UI 主题
 const theme = computed(() => isDark.value ? darkTheme : null)
@@ -49,27 +48,26 @@ const themeOverrides = {
   }
 }
 
-const submitInviteCode = () => {
-  if (inviteCode.value.trim().toLowerCase() !== INVITE_CODE) {
-    inviteError.value = '邀请码不正确，请重新输入。'
-    return
-  }
-
+const closeSupportHint = () => {
   try {
-    localStorage.setItem(INVITE_STORAGE_KEY, 'yes')
+    localStorage.setItem(SUPPORT_HINT_STORAGE_KEY, 'yes')
   } catch {
-    // Local storage can be unavailable in restricted environments; keep this session unlocked.
+    // Local storage can be unavailable in restricted environments.
   }
 
-  inviteAccepted.value = true
-  inviteError.value = ''
+  showSupportHint.value = false
+}
+
+const openSupportFromHint = () => {
+  closeSupportHint()
+  showSupportModal.value = true
 }
 
 onMounted(() => {
   try {
-    inviteAccepted.value = localStorage.getItem(INVITE_STORAGE_KEY) === 'yes'
+    showSupportHint.value = localStorage.getItem(SUPPORT_HINT_STORAGE_KEY) !== 'yes'
   } catch {
-    inviteAccepted.value = false
+    showSupportHint.value = true
   }
 })
 </script>
@@ -79,39 +77,37 @@ onMounted(() => {
     <n-message-provider>
       <n-dialog-provider>
         <app-feedback-provider>
-          <router-view v-if="inviteAccepted" />
-          <div v-else class="invite-gate">
-            <div class="invite-bg" aria-hidden="true">
-              <span></span>
-              <span></span>
-              <span></span>
-            </div>
-            <section class="invite-card" aria-label="YUFENG Canvas 邀请码验证">
-              <div class="invite-mark">
+          <router-view />
+
+          <n-modal
+            v-model:show="showSupportHint"
+            preset="card"
+            class="support-hint-modal"
+            :bordered="false"
+            :mask-closable="false"
+          >
+            <div class="support-hint">
+              <div class="support-hint-mark">
                 <img src="./assets/logo.png" alt="YUFENG Canvas" />
               </div>
-              <p class="invite-kicker">YUFENG CANVAS ACCESS</p>
-              <h1>输入邀请码，继续创作。</h1>
-              <p class="invite-desc">
-                本次更新后首次打开需要验证邀请码。验证通过后会保存在本机，以后可直接使用。
+              <p class="support-hint-kicker">YUFENG CANVAS</p>
+              <h2>遇到问题，直接联系作者。</h2>
+              <p>
+                有任何问题、扣费异常、模型配置失败或改进建议，请点击软件右上角的信封图标联系作者。
+                反馈时带上运行日志截图、模型名和请求时间，我们会更快定位。
               </p>
-              <div class="invite-form">
-                <n-input
-                  v-model:value="inviteCode"
-                  type="password"
-                  show-password-on="click"
-                  size="large"
-                  placeholder="请输入邀请码"
-                  autofocus
-                  @keyup.enter="submitInviteCode"
-                />
-                <n-button type="primary" size="large" @click="submitInviteCode">
-                  进入软件
+              <div class="support-hint-actions">
+                <n-button strong secondary round @click="closeSupportHint">
+                  我知道了
+                </n-button>
+                <n-button type="primary" round @click="openSupportFromHint">
+                  立即联系作者
                 </n-button>
               </div>
-              <p v-if="inviteError" class="invite-error">{{ inviteError }}</p>
-            </section>
-          </div>
+            </div>
+          </n-modal>
+
+          <support-modal v-model:show="showSupportModal" />
         </app-feedback-provider>
       </n-dialog-provider>
     </n-message-provider>
@@ -119,74 +115,30 @@ onMounted(() => {
 </template>
 
 <style>
-/* Global app styles handled in style.css */
-
-.invite-gate {
-  position: fixed;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  overflow: hidden;
-  padding: 24px;
-  color: #eafff8;
-  background:
-    radial-gradient(circle at 20% 16%, rgba(45, 212, 191, 0.34), transparent 34%),
-    radial-gradient(circle at 82% 76%, rgba(14, 165, 233, 0.24), transparent 36%),
-    linear-gradient(135deg, #020617 0%, #042f2e 46%, #061826 100%);
-}
-
-.invite-bg {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  opacity: 0.8;
-}
-
-.invite-bg span {
-  position: absolute;
-  width: 34vw;
-  height: 34vw;
-  border-radius: 999px;
-  background: rgba(94, 234, 212, 0.12);
-  filter: blur(52px);
-}
-
-.invite-bg span:nth-child(1) {
-  left: -10vw;
-  top: 8vh;
-}
-
-.invite-bg span:nth-child(2) {
-  right: -8vw;
-  bottom: 2vh;
-  background: rgba(56, 189, 248, 0.14);
-}
-
-.invite-bg span:nth-child(3) {
-  left: 38vw;
-  top: 56vh;
-  width: 18vw;
-  height: 18vw;
-  background: rgba(34, 197, 94, 0.12);
-}
-
-.invite-card {
-  position: relative;
-  z-index: 1;
+.support-hint-modal {
   width: min(520px, calc(100vw - 32px));
-  border: 1px solid rgba(203, 255, 239, 0.2);
+  border: 1px solid rgba(203, 255, 239, 0.22);
   border-radius: 34px;
-  padding: 38px;
+  overflow: hidden;
   background:
-    radial-gradient(circle at 18% 0%, rgba(125, 249, 231, 0.18), transparent 34%),
-    rgba(5, 18, 32, 0.76);
+    radial-gradient(circle at 16% 0%, rgba(125, 249, 231, 0.2), transparent 34%),
+    radial-gradient(circle at 88% 100%, rgba(56, 189, 248, 0.16), transparent 38%),
+    rgba(5, 18, 32, 0.82);
   box-shadow:
     0 40px 130px rgba(0, 0, 0, 0.46),
-    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
   backdrop-filter: blur(28px) saturate(1.25);
 }
 
-.invite-mark {
+.support-hint-modal .n-card__content {
+  padding: 34px;
+}
+
+.support-hint {
+  color: #eafff8;
+}
+
+.support-hint-mark {
   display: grid;
   place-items: center;
   width: 72px;
@@ -198,13 +150,13 @@ onMounted(() => {
   box-shadow: 0 20px 54px rgba(20, 184, 166, 0.22);
 }
 
-.invite-mark img {
+.support-hint-mark img {
   width: 52px;
   height: 52px;
   border-radius: 16px;
 }
 
-.invite-kicker {
+.support-hint-kicker {
   margin: 0 0 10px;
   color: #5ff6d2;
   font-size: 12px;
@@ -212,36 +164,33 @@ onMounted(() => {
   letter-spacing: 0.2em;
 }
 
-.invite-card h1 {
+.support-hint h2 {
   margin: 0;
   color: #f8fffc;
-  font-size: clamp(34px, 5vw, 52px);
+  font-size: clamp(30px, 4.5vw, 44px);
   font-weight: 950;
   letter-spacing: -0.06em;
   line-height: 1.02;
 }
 
-.invite-desc {
+.support-hint p:not(.support-hint-kicker) {
   margin: 18px 0 28px;
   color: rgba(234, 255, 248, 0.72);
   font-size: 15px;
   line-height: 1.8;
 }
 
-.invite-form {
-  display: grid;
+.support-hint-actions {
+  display: flex;
+  flex-wrap: wrap;
   gap: 12px;
+  justify-content: flex-end;
 }
 
-.invite-form .n-button {
-  height: 46px;
+.support-hint-actions .n-button {
+  min-width: 116px;
+  height: 42px;
   border-radius: 16px;
   font-weight: 900;
-}
-
-.invite-error {
-  margin: 12px 0 0;
-  color: #fecaca;
-  font-size: 13px;
 }
 </style>

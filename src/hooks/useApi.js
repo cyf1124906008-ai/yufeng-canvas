@@ -25,6 +25,17 @@ const elapsedMs = (startedAt) => Math.max(0, Math.round(nowMs() - startedAt))
 const isGeminiImageModel = (model = '') =>
   /gemini/i.test(model) && /image/i.test(model)
 
+const isImageEndpointUnsupportedError = (error) => {
+  const message = [
+    error?.message,
+    error?.response?.data?.message,
+    error?.response?.data?.error?.message,
+    typeof error?.response?.data === 'string' ? error.response.data : ''
+  ].filter(Boolean).join(' ').toLowerCase()
+
+  return /not supported model|unsupported model|not support|image generation/.test(message)
+}
+
 const extractImageUrlsFromChatContent = (content) => {
   const urls = []
 
@@ -198,6 +209,200 @@ const summarizeVideoTaskResponse = (response) => {
 /**
  * Base API state hook | 基础 API 状态 Hook
  */
+const normalizeVideoRatio = (ratio = '16:9') =>
+  String(ratio || '16:9').replace('x', ':')
+
+const normalizeVideoDuration = (duration, fallback = 5) => {
+  const numericDuration = Number(duration || fallback)
+  return Number.isFinite(numericDuration) && numericDuration > 0 ? numericDuration : fallback
+}
+
+const trimTrailingSlash = (value = '') => String(value || '').replace(/\/+$/, '')
+
+const getVideoTaskId = (task) =>
+  task?.id ||
+  task?.task_id ||
+  task?.taskId ||
+  task?.data?.id ||
+  task?.data?.task_id ||
+  task?.data?.taskId ||
+  task?.data?.[0]?.id ||
+  task?.data?.[0]?.task_id ||
+  task?.data?.[0]?.taskId ||
+  task?.task_info?.id ||
+  task?.task_info?.task_id
+
+const isDataEyesLikeVideoGateway = (baseUrl = '') =>
+  /dataeyes|shuyanai|platform\.shuyanai/i.test(String(baseUrl || ''))
+
+const inferVideoRequestProtocol = (model = '', modelConfig = {}) => {
+  const modelLower = String(model || '').toLowerCase()
+  const configuredFamily = String(modelConfig?.endpointFamily || '').toLowerCase()
+
+  if (configuredFamily && configuredFamily !== 'auto') {
+    if (configuredFamily.includes('veo')) return 'veo'
+    if (configuredFamily.includes('kling')) return 'kling'
+    if (configuredFamily.includes('seedance') || configuredFamily.includes('doubao') || configuredFamily.includes('dataeyes-video')) return 'seedance'
+    if (configuredFamily.includes('sora') || configuredFamily.includes('openai-video')) return 'openai-video'
+  }
+
+  if (/veo/.test(modelLower)) return 'veo'
+  if (/kling/.test(modelLower)) return 'kling'
+  if (/seedance|doubao/.test(modelLower)) return 'seedance'
+  if (/sora/.test(modelLower)) return 'openai-video'
+  if (/runway|luma|wan|hailuo|minimax/.test(modelLower)) return 'openai-video'
+  return 'auto'
+}
+
+const normalizeOpenAIVideoSize = (ratio = '16:9', resolution = '720p') => {
+  const normalizedRatio = normalizeVideoRatio(ratio)
+  const normalizedResolution = String(resolution || '720p').toLowerCase()
+  const shortSide = normalizedResolution.includes('1080') ? 1080 : 720
+
+  if (normalizedRatio === '9:16') return `${shortSide}x${Math.round(shortSide * 16 / 9)}`
+  if (normalizedRatio === '1:1') return `${shortSide}x${shortSide}`
+  if (normalizedRatio === '4:3') return `${Math.round(shortSide * 4 / 3)}x${shortSide}`
+  if (normalizedRatio === '3:4') return `${shortSide}x${Math.round(shortSide * 4 / 3)}`
+  return `${Math.round(shortSide * 16 / 9)}x${shortSide}`
+}
+
+const buildDataEyesVideoProfile = (params, modelStore, modelConfig) => {
+  const model = String(params.model || '')
+  const modelLower = model.toLowerCase()
+  const baseUrl = trimTrailingSlash(modelStore.currentVideoBaseUrl || modelStore.currentBaseUrl)
+  const protocol = inferVideoRequestProtocol(model, modelConfig)
+  const isKnownVideoModel = protocol !== 'auto'
+
+  if (!isKnownVideoModel && !isDataEyesLikeVideoGateway(baseUrl)) {
+    return null
+  }
+
+  const ratio = normalizeVideoRatio(params.ratio || modelConfig?.defaultParams?.ratio || '16:9')
+  const duration = normalizeVideoDuration(params.dur || modelConfig?.defaultParams?.duration, 5)
+  const resolution = params.resolution || modelConfig?.defaultParams?.resolution || modelConfig?.defaultResolution
+
+  if (protocol === 'veo') {
+    const data = {
+      model,
+      prompt: params.prompt || '',
+      seconds: String(duration)
+    }
+
+    // Veo on DataEyes rejects ratio strings such as "16:9" in the `size` field.
+    // Keep size/aspect_ratio out of the payload unless the provider exposes a
+    // confirmed format, otherwise task polling returns "不合法的size".
+    if (params.first_frame_image) {
+      data.image = params.first_frame_image
+      data.first_frame_image = params.first_frame_image
+    } else if (params.images?.[0]) {
+      data.image = params.images[0]
+    }
+
+    if (params.last_frame_image) data.last_frame_image = params.last_frame_image
+    if (params.images?.length) data.images = params.images
+
+    return {
+      data,
+      endpoint: `${baseUrl}/v1/videos`,
+      taskEndpoint: `${baseUrl}/v1/videos/{taskId}`,
+      protocol: 'dataeyes-veo'
+    }
+  }
+
+  if (protocol === 'seedance') {
+    const metadata = {
+      ratio,
+      watermark: false
+    }
+
+    if (resolution) metadata.resolution = resolution
+    if (params.seed !== undefined && params.seed !== '') metadata.seed = Number(params.seed)
+    if (params.camera_motion) metadata.camera_motion = params.camera_motion
+    if (params.last_frame_image) {
+      metadata.content = [
+        {
+          type: 'text',
+          text: params.prompt || '',
+          image_url: { url: params.last_frame_image }
+        }
+      ]
+    }
+
+    const data = {
+      model,
+      prompt: params.prompt || '',
+      ratio,
+      aspect_ratio: ratio,
+      duration,
+      seconds: String(duration),
+      metadata
+    }
+
+    if (params.first_frame_image) {
+      data.image = params.first_frame_image
+      data.first_frame_image = params.first_frame_image
+    } else if (params.images?.[0]) {
+      data.image = params.images[0]
+    }
+
+    if (params.last_frame_image) data.last_frame_image = params.last_frame_image
+    if (params.images?.length) data.images = params.images
+    if (resolution) data.resolution = resolution
+
+    return {
+      data,
+      endpoint: `${baseUrl}/v1/videos`,
+      taskEndpoint: `${baseUrl}/v1/videos/{taskId}`,
+      protocol: 'dataeyes-video'
+    }
+  }
+
+  if (protocol === 'kling') {
+    const data = {
+      model,
+      prompt: params.prompt || '',
+      duration,
+      aspect_ratio: ratio,
+      mode: params.last_frame_image ? 'pro' : 'std',
+      cfg_scale: 0.5
+    }
+
+    if (params.negative_prompt) data.negative_prompt = params.negative_prompt
+    if (params.first_frame_image) data.image = params.first_frame_image
+    if (params.last_frame_image) data.image_tail = params.last_frame_image
+    if (params.images?.length && !data.image) data.images = params.images
+
+    return {
+      data,
+      endpoint: `${baseUrl}/v1/videos`,
+      taskEndpoint: `${baseUrl}/v1/videos/{taskId}`,
+      protocol: 'dataeyes-kling'
+    }
+  }
+
+  if (protocol === 'openai-video') {
+    const data = {
+      model,
+      prompt: params.prompt || '',
+      seconds: String(duration),
+      size: normalizeOpenAIVideoSize(ratio, resolution)
+    }
+
+    if (params.first_frame_image) data.image = params.first_frame_image
+    if (params.last_frame_image) data.last_frame_image = params.last_frame_image
+    if (params.images?.length) data.images = params.images
+
+    return {
+      data,
+      endpoint: `${baseUrl}/v1/videos`,
+      taskEndpoint: `${baseUrl}/v1/videos/{taskId}`,
+      protocol: 'openai-video'
+    }
+  }
+
+  return null
+}
+
 export const useApiState = () => {
   const loading = ref(false)
   const error = ref(null)
@@ -389,6 +594,9 @@ export const useImageGeneration = () => {
       }
 
       const modelConfig = getModelByName(params.model)
+      if (imageModel.requiresReference && !params.image) {
+        throw new Error('当前模型是图片编辑模型，需要先连接或上传参考图后再生成。')
+      }
       addRuntimeLog('info', `图片生成开始：${params.model}`, {
         size: params.size,
         count: params.n || 1,
@@ -400,7 +608,7 @@ export const useImageGeneration = () => {
       const requestData = {
         model: params.model,
         prompt: params.prompt,
-        size: params.size || modelConfig?.defaultParams?.size || '2048x2048'
+        size: params.size || imageModel?.defaultParams?.size || modelConfig?.defaultParams?.size || '2048x2048'
       }
 
       if (params.n && Number(params.n) > 1) {
@@ -427,8 +635,7 @@ export const useImageGeneration = () => {
       let adaptedData = []
 
       const imageProtocol = modelStore.getImageModelProtocol(params.model)
-
-      if (imageProtocol === 'chat') {
+      const generateViaChatImageProtocol = async () => {
         const promptText = [
           params.prompt,
           params.size ? `\n\nTarget image size/aspect ratio: ${params.size}.` : ''
@@ -461,20 +668,36 @@ export const useImageGeneration = () => {
           endpoint: modelStore.getChatEndpoint()
         })
 
-        adaptedData = normalizeGeminiImageResponse(response)
-      } else {
-        const response = hasReferenceImages
-          ? await generateImage(await buildImageEditFormData(adaptedParams), {
-              requestType: 'formdata',
-              endpoint: modelStore.getImageEditEndpoint()
-            })
-          : await generateImage(adaptedParams, {
-              requestType: 'json',
-              endpoint: modelStore.getImageEndpoint()
-            })
+        return normalizeGeminiImageResponse(response)
+      }
 
-        // 适配响应数据
-        adaptedData = adaptResponse('image', response)
+      if (imageProtocol === 'chat') {
+        adaptedData = await generateViaChatImageProtocol()
+      } else {
+        try {
+          const response = hasReferenceImages
+            ? await generateImage(await buildImageEditFormData(adaptedParams), {
+                requestType: 'formdata',
+                endpoint: modelStore.getImageEditEndpoint()
+              })
+            : await generateImage(adaptedParams, {
+                requestType: 'json',
+                endpoint: modelStore.getImageEndpoint()
+              })
+
+          // 适配响应数据
+          adaptedData = adaptResponse('image', response)
+        } catch (imageEndpointError) {
+          if (isGeminiImageModel(params.model) && isImageEndpointUnsupportedError(imageEndpointError)) {
+            addRuntimeLog('info', `图片模型自动切换 Chat 图片通道：${params.model}`, {
+              reason: imageEndpointError.message || 'image endpoint unsupported'
+            })
+            modelStore.updateCustomImageModelProtocol?.(params.model, 'chat')
+            adaptedData = await generateViaChatImageProtocol()
+          } else {
+            throw imageEndpointError
+          }
+        }
       }
 
       if (!adaptedData[0]?.url) {
@@ -543,18 +766,21 @@ export const useVideoGeneration = () => {
     }
 
     const modelConfig = getModelByName(params.model)
+    const safePrompt = String(params.prompt || '').trim() ||
+      '根据参考图片生成一段自然流畅的视频，保持主体一致，镜头运动自然，画面稳定。'
     addRuntimeLog('info', `视频任务创建开始：${params.model}`, {
       ratio: params.ratio,
       duration: params.dur,
       hasFirstFrame: !!params.first_frame_image,
       hasLastFrame: !!params.last_frame_image,
-      referenceImageCount: params.images?.length || 0
+      referenceImageCount: params.images?.length || 0,
+      promptLength: safePrompt.length
     })
 
     // Build request data | 构建请求数据
     const requestData = {
       model: params.model,
-      prompt: params.prompt || ''
+      prompt: safePrompt
     }
     // Add optional params | 添加可选参数
     if (params.first_frame_image) requestData.first_frame_image = params.first_frame_image
@@ -565,14 +791,27 @@ export const useVideoGeneration = () => {
       requestData.resolution = params.resolution || modelConfig?.defaultParams?.resolution || modelConfig?.defaultResolution
     }
     if (params.dur) requestData.seconds = params.dur
+    if (params.seed !== undefined && params.seed !== '') requestData.seed = params.seed
+    if (params.negative_prompt) requestData.negative_prompt = params.negative_prompt
+    if (params.camera_motion) requestData.camera_motion = params.camera_motion
 
     // 适配请求参数
-    const adaptedParams = adaptRequest('video', requestData)
+    const dataEyesProfile = buildDataEyesVideoProfile({ ...params, prompt: safePrompt }, modelStore, modelConfig)
+    const adaptedParams = dataEyesProfile?.data || adaptRequest('video', requestData)
+    const videoEndpoint = dataEyesProfile?.endpoint || modelStore.getVideoEndpoint()
+    const taskEndpoint = dataEyesProfile?.taskEndpoint || modelStore.getVideoTaskEndpoint()
+    addRuntimeLog('info', `Video request profile: ${dataEyesProfile?.protocol || 'default'}`, {
+      endpoint: videoEndpoint,
+      taskEndpoint,
+      payloadKeys: Object.keys(adaptedParams || {}),
+      hasImage: Boolean(adaptedParams?.image || adaptedParams?.first_frame_image),
+      hasTailImage: Boolean(adaptedParams?.image_tail || adaptedParams?.last_frame_image)
+    })
 
     // Call API to create task | 调用 API 创建任务
     const task = await createVideoTask(adaptedParams, {
       requestType: 'json',
-      endpoint: modelStore.getVideoEndpoint()
+      endpoint: videoEndpoint
     })
 
     // Check if async (need polling) | 检查是否异步
@@ -587,7 +826,9 @@ export const useVideoGeneration = () => {
       })
       return {
         taskId: null,
-        url: directVideoUrl
+        url: directVideoUrl,
+        taskEndpoint,
+        videoProtocol: dataEyesProfile?.protocol || 'default'
       }
     }
 
@@ -599,13 +840,7 @@ export const useVideoGeneration = () => {
     }
 
     // Get task ID | 获取任务 ID
-    const newTaskId =
-      task.id ||
-      task.task_id ||
-      task.taskId ||
-      task.data?.id ||
-      task.data?.task_id ||
-      task.data?.taskId
+    const newTaskId = getVideoTaskId(task)
     if (!newTaskId) {
       throw new Error('未获取到任务 ID')
     }
@@ -614,13 +849,17 @@ export const useVideoGeneration = () => {
       model: params.model,
       durationMs: elapsedMs(startedAt)
     })
-    return { taskId: newTaskId }
+    return {
+      taskId: newTaskId,
+      taskEndpoint,
+      videoProtocol: dataEyesProfile?.protocol || 'default'
+    }
   }
 
   /**
    * Poll video task | 轮询视频任务
    */
-  const pollVideoTask = async (pollTaskId, onProgress = () => {}) => {
+  const pollVideoTask = async (pollTaskId, onProgress = () => {}, options = {}) => {
     const maxAttempts = 72
     const interval = 5000
     let lastResponse = null
@@ -633,7 +872,7 @@ export const useVideoGeneration = () => {
       onProgress(i + 1, Math.min(Math.round((i / maxAttempts) * 100), 99))
 
       // 获取任务查询端点，支持 {taskId} 占位符替换
-      let taskEndpoint = modelStore.getVideoTaskEndpoint()
+      let taskEndpoint = options.taskEndpoint || modelStore.getVideoTaskEndpoint()
       if (taskEndpoint.includes('{taskId}')) {
         taskEndpoint = taskEndpoint.replace('{taskId}', pollTaskId)
       }
@@ -704,7 +943,7 @@ export const useVideoGeneration = () => {
 
     try {
       // 创建任务
-      const { taskId: newTaskId, url } = await createVideoTaskOnly(params)
+      const { taskId: newTaskId, url, taskEndpoint } = await createVideoTaskOnly(params)
 
       // 如果有直接 URL，返回
       if (url) {
@@ -721,7 +960,7 @@ export const useVideoGeneration = () => {
       const result = await pollVideoTask(newTaskId, (attempt, percentage) => {
         progress.attempt = attempt
         progress.percentage = percentage
-      })
+      }, { taskEndpoint })
 
       video.value = result
       setSuccess()

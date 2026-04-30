@@ -127,16 +127,24 @@ export const useModelConfig = () => {
       label: m.label || m.key,
       key: m.key,
       isCustom: true,
-      sizes: ['1024x1024', '1536x1024', '1024x1536', '1792x1024', '1024x1792'],
-      defaultParams: { size: '1024x1024', quality: 'standard', style: 'vivid' }
+      protocol: m.protocol || 'auto',
+      sizes: m.sizes || ['1024x1024', '1536x1024', '1024x1536', '1792x1024', '1024x1792'],
+      defaultParams: m.defaultParams || { size: '1024x1024', quality: 'standard', style: 'vivid' },
+      endpointTypes: m.endpointTypes || [],
+      ownedBy: m.ownedBy || '',
+      requiresReference: Boolean(m.requiresReference)
     })),
     // 添加当前渠道的自定义模型
     ...(customImageModelsByProvider.value[currentProvider.value] || []).map(m => ({
       label: m.label || m.key,
       key: m.key,
       isCustom: true,
-      sizes: ['1024x1024', '1536x1024', '1024x1536', '1792x1024', '1024x1792'],
-      defaultParams: { size: '1024x1024', quality: 'standard', style: 'vivid' },
+      protocol: m.protocol || 'auto',
+      sizes: m.sizes || ['1024x1024', '1536x1024', '1024x1536', '1792x1024', '1024x1792'],
+      defaultParams: m.defaultParams || { size: '1024x1024', quality: 'standard', style: 'vivid' },
+      endpointTypes: m.endpointTypes || [],
+      ownedBy: m.ownedBy || '',
+      requiresReference: Boolean(m.requiresReference),
       provider: [currentProvider.value]
     }))
   ].filter((model) => isModelAllowedForCapability(model.key, 'image')))
@@ -147,18 +155,28 @@ export const useModelConfig = () => {
       label: m.label || m.key,
       key: m.key,
       isCustom: true,
-      ratios: ['16:9', '9:16', '1:1', '4:3', '3:4'],
+      ratios: m.ratios || ['16:9', '9:16', '1:1', '4:3', '3:4'],
       durs: [{ label: '5 秒', key: 5 }, { label: '10 秒', key: 10 }],
-      defaultParams: { ratio: '16:9', duration: 5 }
+      resolutions: m.resolutions || ['720p', '1080p'],
+      defaultResolution: m.defaultResolution || '720p',
+      defaultParams: m.defaultParams || { ratio: '16:9', duration: 5, resolution: '720p' },
+      endpointTypes: m.endpointTypes || [],
+      endpointFamily: m.endpointFamily || 'auto',
+      ownedBy: m.ownedBy || ''
     })),
     // 添加当前渠道的自定义模型
     ...(customVideoModelsByProvider.value[currentProvider.value] || []).map(m => ({
       label: m.label || m.key,
       key: m.key,
       isCustom: true,
-      ratios: ['16:9', '9:16', '1:1', '4:3', '3:4'],
+      ratios: m.ratios || ['16:9', '9:16', '1:1', '4:3', '3:4'],
       durs: [{ label: '5 秒', key: 5 }, { label: '10 秒', key: 10 }],
-      defaultParams: { ratio: '16:9', duration: 5 },
+      resolutions: m.resolutions || ['720p', '1080p'],
+      defaultResolution: m.defaultResolution || '720p',
+      defaultParams: m.defaultParams || { ratio: '16:9', duration: 5, resolution: '720p' },
+      endpointTypes: m.endpointTypes || [],
+      endpointFamily: m.endpointFamily || 'auto',
+      ownedBy: m.ownedBy || '',
       provider: [currentProvider.value]
     }))
   ].filter((model) => isModelAllowedForCapability(model.key, 'video')))

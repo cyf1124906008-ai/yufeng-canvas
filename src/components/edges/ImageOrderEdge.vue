@@ -18,7 +18,7 @@
         size="small"
       >
         <button 
-          class="flex items-center justify-center w-6 h-6 text-xs font-bold rounded-full bg-blue-500 text-white border-2 border-white shadow-md hover:scale-110 transition-transform"
+          class="edge-order-badge flex items-center justify-center w-7 h-7 text-xs font-bold rounded-full text-white shadow-md hover:scale-110 transition-transform"
         >
           {{ currentOrder }}
         </button>
@@ -120,8 +120,9 @@ const labelY = computed(() => (props.sourceY + props.targetY) / 2)
 
 // Edge style | 边样式
 const edgeStyle = computed(() => ({
-  stroke: '#3b82f6',
-  strokeWidth: 2,
+  stroke: '#38bdf8',
+  strokeWidth: 3.5,
+  filter: 'drop-shadow(0 0 7px rgba(56, 189, 248, 0.54))',
   ...props.style
 }))
 
@@ -148,3 +149,13 @@ const handleOrderSelect = (newOrder) => {
   updateEdgeData(props.id, { imageOrder: newOrder })
 }
 </script>
+
+<style scoped>
+.edge-order-badge {
+  border: 2px solid rgba(240, 249, 255, 0.92);
+  background:
+    radial-gradient(circle at 30% 18%, rgba(255, 255, 255, 0.5), transparent 38%),
+    linear-gradient(135deg, #38bdf8, #2563eb);
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.32), 0 0 20px rgba(56, 189, 248, 0.38);
+}
+</style>

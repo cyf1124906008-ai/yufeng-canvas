@@ -21,13 +21,13 @@
           @keydown.escape="cancelEditLabel"
           class="text-sm font-medium bg-[var(--bg-tertiary)] text-[var(--text-secondary)] px-1 rounded outline-none border border-blue-500"
         />
-        <div class="flex items-center gap-1">
-          <button @click="handleDuplicate" class="p-1 hover:bg-[var(--bg-tertiary)] rounded transition-colors" title="复制节点">
+        <div class="node-actions nodrag nopan flex items-center gap-1" @pointerdown.stop @mousedown.stop @click.stop>
+          <button type="button" @pointerdown.stop @mousedown.stop @click.stop="handleDuplicate" class="node-action-button p-1 hover:bg-[var(--bg-tertiary)] rounded transition-colors" title="复制节点">
             <n-icon :size="14">
               <CopyOutline />
             </n-icon>
           </button>
-          <button @click="handleDelete" class="p-1 hover:bg-[var(--bg-tertiary)] rounded transition-colors" title="删除节点">
+          <button type="button" @pointerdown.stop @mousedown.stop @click.stop="handleDelete" class="node-action-button p-1 hover:bg-[var(--bg-tertiary)] rounded transition-colors" title="删除节点">
             <n-icon :size="14">
               <TrashOutline />
             </n-icon>
@@ -36,12 +36,12 @@
       </div>
 
       <!-- Config options | 配置选项 -->
-      <div class="p-3 space-y-3">
+      <div class="node-control-zone nodrag nopan p-3 space-y-3" @pointerdown.capture.stop @mousedown.capture.stop @click.stop>
         <!-- Model selector | 模型选择 -->
         <div class="flex items-center justify-between">
           <span class="text-xs text-[var(--text-secondary)]">模型</span>
-          <n-dropdown :options="modelOptions" @select="handleModelSelect">
-            <button class="flex items-center gap-1 text-sm text-[var(--text-primary)] hover:text-[var(--accent-color)]">
+          <n-dropdown trigger="click" :options="modelOptions" @select="handleModelSelect">
+            <button type="button" class="node-trigger-button nodrag nopan flex items-center gap-1 text-sm text-[var(--text-primary)] hover:text-[var(--accent-color)]" @pointerdown.stop @mousedown.stop @click.stop>
               {{ displayModelName }}
               <n-icon :size="12"><ChevronDownOutline /></n-icon>
             </button>
@@ -51,8 +51,8 @@
         <!-- Aspect ratio selector | 宽高比选择 -->
         <div class="flex items-center justify-between">
           <span class="text-xs text-[var(--text-secondary)]">比例</span>
-          <n-dropdown :options="ratioOptions" @select="handleRatioSelect">
-            <button class="flex items-center gap-1 text-sm text-[var(--text-primary)] hover:text-[var(--accent-color)]">
+          <n-dropdown trigger="click" :options="ratioOptions" @select="handleRatioSelect">
+            <button type="button" class="node-trigger-button nodrag nopan flex items-center gap-1 text-sm text-[var(--text-primary)] hover:text-[var(--accent-color)]" @pointerdown.stop @mousedown.stop @click.stop>
               {{ localRatio }}
               <n-icon :size="12">
                 <ChevronForwardOutline />
@@ -64,8 +64,8 @@
         <!-- Duration selector | 时长选择 -->
         <div class="flex items-center justify-between">
           <span class="text-xs text-[var(--text-secondary)]">时长</span>
-          <n-dropdown :options="durationOptions" @select="handleDurationSelect">
-            <button class="flex items-center gap-1 text-sm text-[var(--text-primary)] hover:text-[var(--accent-color)]">
+          <n-dropdown trigger="click" :options="durationOptions" @select="handleDurationSelect">
+            <button type="button" class="node-trigger-button nodrag nopan flex items-center gap-1 text-sm text-[var(--text-primary)] hover:text-[var(--accent-color)]" @pointerdown.stop @mousedown.stop @click.stop>
               {{ localDuration }}s
               <n-icon :size="12">
                 <ChevronForwardOutline />
@@ -77,8 +77,8 @@
         <!-- Resolution selector | 清晰度选择 -->
         <div v-if="hasResolutionOptions" class="flex items-center justify-between">
           <span class="text-xs text-[var(--text-secondary)]">清晰度</span>
-          <n-dropdown :options="resolutionOptions" @select="handleResolutionSelect">
-            <button class="flex items-center gap-1 text-sm text-[var(--text-primary)] hover:text-[var(--accent-color)]">
+          <n-dropdown trigger="click" :options="resolutionOptions" @select="handleResolutionSelect">
+            <button type="button" class="node-trigger-button nodrag nopan flex items-center gap-1 text-sm text-[var(--text-primary)] hover:text-[var(--accent-color)]" @pointerdown.stop @mousedown.stop @click.stop>
               {{ displayResolution }}
               <n-icon :size="12">
                 <ChevronForwardOutline />
@@ -88,7 +88,7 @@
         </div>
 
         <div class="advanced-params">
-          <button class="advanced-toggle" @click="showAdvancedParams = !showAdvancedParams">
+          <button type="button" class="advanced-toggle node-trigger-button nodrag nopan" @pointerdown.stop @mousedown.stop @click.stop="showAdvancedParams = !showAdvancedParams">
             高级参数
             <span>{{ showAdvancedParams ? '收起' : '展开' }}</span>
           </button>
@@ -139,7 +139,7 @@
       </div> -->
 
         <!-- Generate button | 生成按钮 -->
-        <button @click="handleGenerate" :disabled="isGenerating || !canGenerate"
+        <button type="button" @pointerdown.stop @mousedown.stop @click.stop="handleGenerate" :disabled="isGenerating || !canGenerate"
           class="w-full flex items-center justify-center gap-2 py-2 px-4 rounded-lg bg-[var(--accent-color)] hover:bg-[var(--accent-hover)] text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
           <n-spin v-if="isGenerating" :size="14" />
           <template v-else>
@@ -376,24 +376,59 @@ const updateAdvancedParams = () => {
 }
 
 // Get connected inputs by role | 根据角色获取连接的输入
+const readPromptFromNode = (node) => {
+  const candidates = [
+    node?.data?.content,
+    node?.data?.prompt,
+    node?.data?.outputContent,
+    node?.data?.revisedPrompt,
+    node?.data?.description
+  ]
+
+  return candidates.find((value) => typeof value === 'string' && value.trim())?.trim() || ''
+}
+
+const collectPromptFromNode = (node, visited = new Set()) => {
+  if (!node || visited.has(node.id)) return ''
+  visited.add(node.id)
+
+  const directPrompt = readPromptFromNode(node)
+  if (directPrompt) return directPrompt
+
+  const upstreamEdges = edges.value.filter((edge) => edge.target === node.id)
+  const upstreamPrompts = upstreamEdges
+    .map((edge) => collectPromptFromNode(nodes.value.find((item) => item.id === edge.source), visited))
+    .filter(Boolean)
+
+  return [...new Set(upstreamPrompts)].join('\n\n')
+}
+
 const getConnectedInputs = () => {
   const connectedEdges = edges.value.filter(e => e.target === props.id)
 
-  let prompt = ''
+  const prompts = []
   let first_frame_image = ''
   let last_frame_image = ''
+  const appendPrompt = (value) => {
+    const normalized = String(value || '').trim()
+    if (normalized && !prompts.includes(normalized)) {
+      prompts.push(normalized)
+    }
+  }
   const images = [] // input_reference images | 参考图
 
   for (const edge of connectedEdges) {
     const sourceNode = nodes.value.find(n => n.id === edge.source)
     if (!sourceNode) continue
 
+    appendPrompt(collectPromptFromNode(sourceNode))
+
     if (sourceNode.type === 'text') {
-      prompt = sourceNode.data?.content || ''
+      appendPrompt(sourceNode.data?.content)
     } else if (sourceNode.type === 'llmConfig') {
       // LLM node output as prompt | LLM 节点输出作为提示词
       const content = sourceNode.data?.outputContent || ''
-      if (content) prompt = content
+      appendPrompt(content)
     } else if (sourceNode.type === 'image' && sourceNode.data?.url) {
       const imageData = sourceNode.data.base64 || sourceNode.data.url
       const role = edge.data?.imageRole || 'first_frame_image'
@@ -408,7 +443,7 @@ const getConnectedInputs = () => {
     }
   }
 
-  return { prompt, first_frame_image, last_frame_image, images }
+  return { prompt: prompts.join('\n\n'), first_frame_image, last_frame_image, images }
 }
 
 // Computed connected prompt | 计算连接的提示词
@@ -445,8 +480,10 @@ const handleGenerate = async () => {
   }
 
   const { prompt, first_frame_image, last_frame_image, images } = getConnectedInputs()
+  const fallbackImagePrompt = '根据参考图片生成一段自然流畅的视频，保持主体一致，镜头运动自然，画面稳定。'
+  const effectivePrompt = prompt || ((first_frame_image || last_frame_image || images.length > 0) ? fallbackImagePrompt : '')
 
-  const hasInput = prompt || first_frame_image || last_frame_image || images.length > 0
+  const hasInput = effectivePrompt || first_frame_image || last_frame_image || images.length > 0
   if (!hasInput) {
     window.$message?.warning('请先连接文本节点或图片节点')
     isGenerating.value = false
@@ -495,9 +532,7 @@ const handleGenerate = async () => {
     }
 
     // Add prompt if provided | 如果有提示词则添加
-    if (prompt) {
-      params.prompt = prompt
-    }
+    params.prompt = effectivePrompt
 
     // Add first frame image | 添加首帧图片
     if (first_frame_image) {
@@ -541,7 +576,7 @@ const handleGenerate = async () => {
     }
 
     // 只创建任务，获取 taskId，不在这里轮询
-    const { taskId: newTaskId, url } = await createVideoTaskOnly(params)
+    const { taskId: newTaskId, url, taskEndpoint, videoProtocol } = await createVideoTaskOnly(params)
 
     // 如果有直接 URL，更新视频节点
     if (url) {
@@ -551,6 +586,8 @@ const handleGenerate = async () => {
         error: '',
         label: '视频生成',
         model: localModel.value,
+        taskEndpoint,
+        videoProtocol,
         finishedAt: Date.now(),
         updatedAt: Date.now()
       })
@@ -566,6 +603,8 @@ const handleGenerate = async () => {
         startedAt: Date.now(),
         label: '视频生成中...',
         model: localModel.value,
+        taskEndpoint,
+        videoProtocol,
         updatedAt: Date.now()
       })
       window.$message?.success('视频任务已创建')
@@ -704,6 +743,28 @@ watch(
 .video-config-node {
   cursor: default;
   position: relative;
+}
+
+.node-actions,
+.node-control-zone {
+  position: relative;
+  z-index: 20;
+  pointer-events: auto;
+}
+
+.node-action-button,
+.node-trigger-button,
+.node-control-zone button,
+.node-control-zone input,
+.node-control-zone :deep(.n-dropdown-trigger) {
+  pointer-events: auto;
+  user-select: none;
+}
+
+.node-trigger-button {
+  cursor: pointer;
+  position: relative;
+  z-index: 30;
 }
 
 .advanced-params {

@@ -275,6 +275,10 @@ const startPolling = async (taskId) => {
         progress: percentage,
         attempt
       })
+    }, {
+      taskEndpoint: props.data?.taskEndpoint,
+      videoProtocol: props.data?.videoProtocol,
+      model: props.data?.model
     })
     // 轮询成功，更新视频节点
     updateNode(props.id, {

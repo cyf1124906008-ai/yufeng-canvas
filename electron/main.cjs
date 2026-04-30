@@ -1,7 +1,8 @@
-const { app, BrowserWindow, shell, ipcMain } = require('electron')
+const { app, BrowserWindow, shell, ipcMain, dialog } = require('electron')
 const { autoUpdater } = require('electron-updater')
 const path = require('path')
 const http = require('http')
+const fs = require('fs')
 const packageJson = require('../package.json')
 
 const rendererUrl = process.env.ELECTRON_RENDERER_URL
@@ -613,6 +614,175 @@ const startLocalApiServer = () => {
   })
 }
 
+const userDataBackupFileName = 'yufeng-canvas-data-backup.json'
+const userDataBackupKind = 'yufeng-canvas.user-data'
+const protectedBackupKeys = [
+  'ai-canvas-projects',
+  'yufeng-image-expert-history',
+  'image-expert-history',
+  'yufeng-canvas-chat-history-v1',
+  'home-chat-history',
+  'api-keys-by-provider',
+  'base-urls-by-provider',
+  'custom-chat-models',
+  'custom-image-models',
+  'custom-video-models',
+  'custom-chat-models-by-provider',
+  'custom-image-models-by-provider',
+  'custom-video-models-by-provider',
+  'selected-chat-model',
+  'selected-image-model',
+  'selected-video-model',
+  'api-provider',
+  'theme'
+]
+
+const getUserDataBackupPath = () => path.join(app.getPath('userData'), userDataBackupFileName)
+
+const ensureParentDir = (filePath) => {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true })
+}
+
+const readJsonFile = (filePath) => {
+  try {
+    if (!fs.existsSync(filePath)) return null
+    return JSON.parse(fs.readFileSync(filePath, 'utf8'))
+  } catch (error) {
+    console.warn('[data-backup] read failed', filePath, error?.message || error)
+    return null
+  }
+}
+
+const writeJsonFile = (filePath, data) => {
+  ensureParentDir(filePath)
+  fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8')
+}
+
+const normalizeBackupSnapshot = (snapshot = {}) => ({
+  ...snapshot,
+  kind: userDataBackupKind,
+  savedAt: new Date().toISOString(),
+  appVersion: packageJson.version
+})
+
+const parseStorageJsonValue = (value) => {
+  if (!value || typeof value !== 'string') return null
+
+  try {
+    return JSON.parse(value)
+  } catch {
+    return value.trim() ? value : null
+  }
+}
+
+const storageValueScore = (value) => {
+  const parsed = parseStorageJsonValue(value)
+  if (!parsed) return 0
+  if (Array.isArray(parsed)) return parsed.length
+  if (typeof parsed === 'object') return Object.keys(parsed).length
+  if (typeof parsed === 'string') return parsed.length > 0 ? 1 : 0
+  return 1
+}
+
+const mergeSnapshotWithExistingBackup = (incomingSnapshot) => {
+  const incoming = normalizeBackupSnapshot(incomingSnapshot)
+  const existing = readJsonFile(getUserDataBackupPath())
+
+  if (!existing || existing.kind !== userDataBackupKind) {
+    return incoming
+  }
+
+  const merged = {
+    ...existing,
+    ...incoming,
+    localStorage: {
+      ...(existing.localStorage || {}),
+      ...(incoming.localStorage || {})
+    },
+    sessionStorage: {
+      ...(existing.sessionStorage || {}),
+      ...(incoming.sessionStorage || {})
+    },
+    savedAt: incoming.savedAt,
+    appVersion: packageJson.version
+  }
+
+  protectedBackupKeys.forEach((key) => {
+    const existingValue = existing.localStorage?.[key]
+    const incomingValue = incoming.localStorage?.[key]
+    if (storageValueScore(existingValue) > storageValueScore(incomingValue)) {
+      merged.localStorage[key] = existingValue
+    }
+  })
+
+  return merged
+}
+
+const hasFiles = (targetPath) => {
+  try {
+    return fs.existsSync(targetPath) && fs.readdirSync(targetPath).length > 0
+  } catch {
+    return false
+  }
+}
+
+const copyDirIfMissing = (sourceDir, targetDir) => {
+  if (!fs.existsSync(sourceDir) || hasFiles(targetDir)) return false
+  ensureParentDir(targetDir)
+  fs.cpSync(sourceDir, targetDir, { recursive: true, force: false })
+  return true
+}
+
+const getLegacyUserDataCandidates = () => {
+  const appDataPath = app.getPath('appData')
+  const currentUserData = app.getPath('userData')
+  const currentName = path.basename(currentUserData)
+  const knownNames = [
+    'huobao-canvas',
+    'Huobao Canvas',
+    '火宝无限画布',
+    'AI Canvas',
+    'YUFENG Canvas'
+  ]
+
+  const discoveredNames = (() => {
+    try {
+      return fs.readdirSync(appDataPath)
+        .filter((name) => /huobao|yufeng|canvas|火宝|御风/i.test(name))
+    } catch {
+      return []
+    }
+  })()
+
+  return [...new Set([...knownNames, ...discoveredNames])]
+    .filter((name) => name && name !== currentName)
+    .map((name) => path.join(appDataPath, name))
+    .filter((candidate) => candidate !== currentUserData && fs.existsSync(candidate))
+}
+
+const migrateLegacyUserDataStorage = () => {
+  const currentUserData = app.getPath('userData')
+  const currentLocalStorage = path.join(currentUserData, 'Local Storage', 'leveldb')
+
+  if (hasFiles(currentLocalStorage)) return
+
+  for (const legacyDir of getLegacyUserDataCandidates()) {
+    const legacyLocalStorage = path.join(legacyDir, 'Local Storage', 'leveldb')
+    if (!hasFiles(legacyLocalStorage)) continue
+
+    const copied = [
+      copyDirIfMissing(path.join(legacyDir, 'Local Storage'), path.join(currentUserData, 'Local Storage')),
+      copyDirIfMissing(path.join(legacyDir, 'IndexedDB'), path.join(currentUserData, 'IndexedDB')),
+      copyDirIfMissing(path.join(legacyDir, 'Session Storage'), path.join(currentUserData, 'Session Storage'))
+    ].some(Boolean)
+
+    if (copied) {
+      console.log('[data-backup] migrated legacy user data from', legacyDir)
+      return
+    }
+  }
+}
+
 function createWindow() {
   const windowIcon = app.isPackaged
     ? path.join(process.resourcesPath, 'build', 'icon.png')
@@ -656,12 +826,75 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  migrateLegacyUserDataStorage()
   setupAutoUpdater()
 
   ipcMain.handle('app:get-version', () => packageJson.version)
   ipcMain.handle('app:get-update-status', () => updateState)
   ipcMain.handle('app:get-local-api-status', () => localApiState)
   ipcMain.handle('app:fetch-url-text', (_event, url) => fetchUrlText(url))
+  ipcMain.handle('app:get-user-data-path', () => app.getPath('userData'))
+
+  ipcMain.handle('app:save-user-data-backup', (_event, snapshot) => {
+    const normalized = mergeSnapshotWithExistingBackup(snapshot)
+    writeJsonFile(getUserDataBackupPath(), normalized)
+    return {
+      ok: true,
+      path: getUserDataBackupPath(),
+      savedAt: normalized.savedAt
+    }
+  })
+
+  ipcMain.handle('app:load-user-data-backup', () => readJsonFile(getUserDataBackupPath()))
+
+  ipcMain.handle('app:export-user-data', async (_event, snapshot) => {
+    const defaultPath = path.join(
+      app.getPath('documents'),
+      `YUFENG-Canvas-Data-${new Date().toISOString().slice(0, 10)}.json`
+    )
+    const result = await dialog.showSaveDialog({
+      title: '导出 YUFENG Canvas 创作与配置',
+      defaultPath,
+      filters: [
+        { name: 'YUFENG Canvas 数据包', extensions: ['json'] }
+      ]
+    })
+
+    if (result.canceled || !result.filePath) {
+      return { canceled: true }
+    }
+
+    const normalized = normalizeBackupSnapshot(snapshot)
+    writeJsonFile(result.filePath, normalized)
+    writeJsonFile(getUserDataBackupPath(), normalized)
+
+    return {
+      ok: true,
+      path: result.filePath
+    }
+  })
+
+  ipcMain.handle('app:import-user-data', async () => {
+    const result = await dialog.showOpenDialog({
+      title: '导入 YUFENG Canvas 创作与配置',
+      properties: ['openFile'],
+      filters: [
+        { name: 'YUFENG Canvas 数据包', extensions: ['json'] }
+      ]
+    })
+
+    if (result.canceled || !result.filePaths?.[0]) {
+      return { canceled: true }
+    }
+
+    const snapshot = readJsonFile(result.filePaths[0])
+    if (!snapshot || snapshot.kind !== userDataBackupKind) {
+      throw new Error('选择的文件不是有效的 YUFENG Canvas 数据包')
+    }
+
+    writeJsonFile(getUserDataBackupPath(), normalizeBackupSnapshot(snapshot))
+    return snapshot
+  })
 
   ipcMain.handle('app:check-update', async () => {
     if (!isPackagedRuntime()) {

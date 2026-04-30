@@ -67,7 +67,7 @@ export const getModelConfig = (modelKey) => {
  * Returns options based on model's sizes array and quality
  */
 export const getModelSizeOptions = (modelKey, quality = 'standard') => {
-  const model = IMAGE_MODELS.find(m => m.key === modelKey)
+  const model = getModelConfig(modelKey) || IMAGE_MODELS.find(m => m.key === modelKey)
   
   // If model has getSizesByQuality function, use it | 如果模型有 getSizesByQuality 函数，使用它
   if (model?.getSizesByQuality) {
@@ -88,7 +88,7 @@ export const getModelSizeOptions = (modelKey, quality = 'standard') => {
  * Get quality options for image model | 获取图片模型画质选项
  */
 export const getModelQualityOptions = (modelKey) => {
-  const model = IMAGE_MODELS.find(m => m.key === modelKey)
+  const model = getModelConfig(modelKey) || IMAGE_MODELS.find(m => m.key === modelKey)
   return model?.qualities || []
 }
 
@@ -97,7 +97,7 @@ export const getModelQualityOptions = (modelKey) => {
  * Returns options based on model's ratios array
  */
 export const getModelRatioOptions = (modelKey) => {
-  const model = VIDEO_MODELS.find(m => m.key === modelKey)
+  const model = getModelConfig(modelKey) || VIDEO_MODELS.find(m => m.key === modelKey)
   if (!model?.ratios) return VIDEO_RATIO_OPTIONS
   
   // Convert ratios array to dropdown options | 转换 ratios 数组为下拉选项
@@ -112,7 +112,7 @@ export const getModelRatioOptions = (modelKey) => {
  * Returns options based on model's durs array
  */
 export const getModelDurationOptions = (modelKey) => {
-  const model = VIDEO_MODELS.find(m => m.key === modelKey)
+  const model = getModelConfig(modelKey) || VIDEO_MODELS.find(m => m.key === modelKey)
   if (!model?.durs) return VIDEO_DURATION_OPTIONS
 
   // durs is already in { label, key } format | durs 已经是 { label, key } 格式
@@ -124,7 +124,7 @@ export const getModelDurationOptions = (modelKey) => {
  * Returns options based on model's resolutions array
  */
 export const getModelResolutionOptions = (modelKey) => {
-  const model = VIDEO_MODELS.find(m => m.key === modelKey)
+  const model = getModelConfig(modelKey) || VIDEO_MODELS.find(m => m.key === modelKey)
   if (!model?.resolutions) return SEEDANCE_RESOLUTION_OPTIONS
 
   return model.resolutions.map(res => {

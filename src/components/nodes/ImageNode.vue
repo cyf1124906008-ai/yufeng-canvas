@@ -41,11 +41,11 @@
               {{ isPublic ? '已公开: ' + (data.label || '图片') : '点击公开（可被 @ 引用）' }}
             </n-tooltip>
           </div>
-          <div class="flex items-center gap-1">
+          <div class="node-actions nodrag nopan flex items-center gap-1" @pointerdown.capture.stop @mousedown.capture.stop @click.stop>
             <!-- Replace button | 替换按钮 -->
             <n-tooltip trigger="hover">
               <template #trigger>
-                <button @click="showReplaceModal = true" class="p-1 hover:bg-[var(--bg-tertiary)] rounded transition-colors">
+                <button type="button" @pointerdown.stop @mousedown.stop @click.stop="showReplaceModal = true" class="node-action-button nodrag nopan p-1 hover:bg-[var(--bg-tertiary)] rounded transition-colors">
                   <n-icon :size="14">
                     <SwapHorizontalOutline />
                   </n-icon>
@@ -55,7 +55,7 @@
             </n-tooltip>
             <n-tooltip v-if="data.url" trigger="hover">
               <template #trigger>
-                <button @click="handlePreview" class="p-1 hover:bg-[var(--bg-tertiary)] rounded transition-colors">
+                <button type="button" @pointerdown.stop @mousedown.stop @click.stop="handlePreview" class="node-action-button nodrag nopan p-1 hover:bg-[var(--bg-tertiary)] rounded transition-colors">
                   <n-icon :size="14">
                     <EyeOutline />
                   </n-icon>
@@ -65,7 +65,7 @@
             </n-tooltip>
             <n-tooltip v-if="data.url" trigger="hover">
               <template #trigger>
-                <button @click="handleDownload" class="p-1 hover:bg-[var(--bg-tertiary)] rounded transition-colors">
+                <button type="button" @pointerdown.stop @mousedown.stop @click.stop="handleDownload" class="node-action-button nodrag nopan p-1 hover:bg-[var(--bg-tertiary)] rounded transition-colors">
                   <n-icon :size="14">
                     <DownloadOutline />
                   </n-icon>
@@ -75,7 +75,7 @@
             </n-tooltip>
             <n-tooltip trigger="hover">
               <template #trigger>
-                <button @click="handleDuplicate" class="p-1 hover:bg-[var(--bg-tertiary)] rounded transition-colors">
+                <button type="button" @pointerdown.stop @mousedown.stop @click.stop="handleDuplicate" class="node-action-button nodrag nopan p-1 hover:bg-[var(--bg-tertiary)] rounded transition-colors">
                   <n-icon :size="14">
                     <CopyOutline />
                   </n-icon>
@@ -85,7 +85,7 @@
             </n-tooltip>
             <n-tooltip trigger="hover">
               <template #trigger>
-                <button @click="handleDelete" class="p-1 hover:bg-[var(--bg-tertiary)] rounded transition-colors">
+                <button type="button" @pointerdown.stop @mousedown.stop @click.stop="handleDelete" class="node-action-button nodrag nopan p-1 hover:bg-[var(--bg-tertiary)] rounded transition-colors">
                   <n-icon :size="14">
                     <TrashOutline />
                   </n-icon>
@@ -256,6 +256,31 @@
               预览
             </button>
           </div>
+        </div>
+
+        <div
+          v-if="data.url && !data.loading && !data.error"
+          class="image-quick-actions nodrag nopan"
+          @pointerdown.capture.stop
+          @mousedown.capture.stop
+          @click.stop
+        >
+          <button type="button" class="image-quick-action primary" @pointerdown.stop @mousedown.stop @click.stop="createImageToImageWorkflow">
+            <n-icon :size="14"><ImageOutline /></n-icon>
+            图生图
+          </button>
+          <button type="button" class="image-quick-action" @pointerdown.stop @mousedown.stop @click.stop="createImageToVideoWorkflow">
+            <n-icon :size="14"><VideocamOutline /></n-icon>
+            图生视频
+          </button>
+          <button type="button" class="image-quick-action subtle" @pointerdown.stop @mousedown.stop @click.stop="handlePreview">
+            <n-icon :size="14"><EyeOutline /></n-icon>
+            预览
+          </button>
+          <button type="button" class="image-quick-action subtle" @pointerdown.stop @mousedown.stop @click.stop="handleDownload">
+            <n-icon :size="14"><DownloadOutline /></n-icon>
+            下载
+          </button>
         </div>
       </div>
 
@@ -454,73 +479,78 @@ const handleSelect = (item) => {
   const action = item.action
 
   if (action === 'image_imageConfig') {
-    // Image-to-image workflow | 图生图工作流
-    const currentNode = nodes.value.find(n => n.id === props.id)
-    const nodeX = currentNode?.position?.x || 0
-    const nodeY = currentNode?.position?.y || 0
-    const sourceUrl = currentNode?.data?.url
-
-    if (!sourceUrl) {
-      window.$message?.warning('当前图片节点没有图片')
-      return
-    }
-
-    // Create text node for prompt
-    const textNodeId = addNode('text', { x: nodeX + 300, y: nodeY - 100 }, {
-      content: '',
-      label: '提示词'
-    })
-
-    // Create imageConfig node
-    const configNodeId = addNode('imageConfig', { x: nodeX + 900, y: nodeY }, {
-      size: '2048x2048',
-      label: '生图配置'
-    })
-
-    // Connect edges
-    addEdge({ source: props.id, target: configNodeId, sourceHandle: 'right', targetHandle: 'left' })
-    addEdge({ source: textNodeId, target: configNodeId, sourceHandle: 'right', targetHandle: 'left' })
-
-    setTimeout(() => updateNodeInternals([textNodeId, configNodeId]), 50)
-    window.$message?.success('已创建图生图工作流')
+    createImageToImageWorkflow()
   } else if (action === 'image_videoConfig') {
-    // Video generation workflow | 视频生成工作流
-    const currentNode = nodes.value.find(n => n.id === props.id)
-    const nodeX = currentNode?.position?.x || 0
-    const nodeY = currentNode?.position?.y || 0
-
-    // Create text node for prompt
-    const textNodeId = addNode('text', { x: nodeX + 300, y: nodeY - 100 }, {
-      content: '',
-      label: '提示词'
-    })
-
-    // Create videoConfig node
-    const configNodeId = addNode('videoConfig', { x: nodeX + 600, y: nodeY }, {
-      label: '视频生成'
-    })
-
-    // Connect image to videoConfig
-    addEdge({
-      source: props.id,
-      target: configNodeId,
-      sourceHandle: 'right',
-      targetHandle: 'left',
-      type: 'imageRole',
-      data: { imageRole: 'first_frame_image' }
-    })
-
-    // Connect text to videoConfig
-    addEdge({
-      source: textNodeId,
-      target: configNodeId,
-      sourceHandle: 'right',
-      targetHandle: 'left'
-    })
-
-    setTimeout(() => updateNodeInternals([textNodeId, configNodeId]), 50)
-    window.$message?.success('已创建视频生成工作流')
+    createImageToVideoWorkflow()
   }
+}
+
+const createImageToImageWorkflow = () => {
+  const currentNode = nodes.value.find(n => n.id === props.id)
+  const nodeX = currentNode?.position?.x || 0
+  const nodeY = currentNode?.position?.y || 0
+  const sourceUrl = currentNode?.data?.url
+
+  if (!sourceUrl) {
+    window.$message?.warning('当前图片节点没有图片')
+    return
+  }
+
+  const textNodeId = addNode('text', { x: nodeX + 320, y: nodeY - 110 }, {
+    content: '',
+    label: '图生图提示词'
+  })
+
+  const configNodeId = addNode('imageConfig', { x: nodeX + 640, y: nodeY }, {
+    size: '2048x2048',
+    label: '图生图配置'
+  })
+
+  addEdge({ source: props.id, target: configNodeId, sourceHandle: 'right', targetHandle: 'left' })
+  addEdge({ source: textNodeId, target: configNodeId, sourceHandle: 'right', targetHandle: 'left' })
+
+  setTimeout(() => updateNodeInternals([textNodeId, configNodeId]), 50)
+  window.$message?.success('已创建图生图工作流')
+}
+
+const createImageToVideoWorkflow = () => {
+  const currentNode = nodes.value.find(n => n.id === props.id)
+  const nodeX = currentNode?.position?.x || 0
+  const nodeY = currentNode?.position?.y || 0
+  const sourceUrl = currentNode?.data?.url
+
+  if (!sourceUrl) {
+    window.$message?.warning('当前图片节点没有图片')
+    return
+  }
+
+  const textNodeId = addNode('text', { x: nodeX + 320, y: nodeY - 110 }, {
+    content: '',
+    label: '图生视频提示词'
+  })
+
+  const configNodeId = addNode('videoConfig', { x: nodeX + 640, y: nodeY }, {
+    label: '图生视频'
+  })
+
+  addEdge({
+    source: props.id,
+    target: configNodeId,
+    sourceHandle: 'right',
+    targetHandle: 'left',
+    type: 'imageRole',
+    data: { imageRole: 'first_frame_image' }
+  })
+
+  addEdge({
+    source: textNodeId,
+    target: configNodeId,
+    sourceHandle: 'right',
+    targetHandle: 'left'
+  })
+
+  setTimeout(() => updateNodeInternals([textNodeId, configNodeId]), 50)
+  window.$message?.success('已创建图生视频工作流')
 }
 
 // Toggle inpaint mode | 切换涂抹模式
@@ -1013,6 +1043,68 @@ const handleVideoGen = () => {
 .image-node {
   cursor: default;
   position: relative;
+}
+
+.node-actions {
+  position: relative;
+  z-index: 20;
+  pointer-events: auto;
+}
+
+.node-action-button {
+  pointer-events: auto;
+  user-select: none;
+}
+
+.image-quick-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+  pointer-events: auto;
+}
+
+.image-quick-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 32px;
+  border: 1px solid rgba(20, 184, 166, 0.28);
+  border-radius: 12px;
+  color: var(--text-primary);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.68), rgba(240, 253, 250, 0.42)),
+    radial-gradient(circle at 30% 0%, rgba(45, 212, 191, 0.18), transparent 54%);
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+  transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease;
+  user-select: none;
+}
+
+.image-quick-action:hover {
+  border-color: rgba(20, 184, 166, 0.62);
+  transform: translateY(-1px);
+}
+
+.image-quick-action.primary {
+  color: #ecfeff;
+  border-color: rgba(45, 212, 191, 0.6);
+  background: linear-gradient(135deg, #10b981, #06b6d4);
+  box-shadow: 0 14px 30px rgba(20, 184, 166, 0.28);
+}
+
+.image-quick-action.subtle {
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+:global(.dark) .image-quick-action {
+  background:
+    linear-gradient(135deg, rgba(15, 23, 42, 0.76), rgba(6, 78, 59, 0.28)),
+    radial-gradient(circle at 30% 0%, rgba(45, 212, 191, 0.16), transparent 54%);
 }
 
 /* Slider styling | 滑块样式 */

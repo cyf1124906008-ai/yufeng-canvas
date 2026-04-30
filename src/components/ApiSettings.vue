@@ -149,11 +149,62 @@
           <n-alert v-else type="success" title="已配置" class="mb-4">
             Key 已保存，可以开始使用。
           </n-alert>
+          <n-divider title-placement="left" class="!my-3">
+            <span class="text-xs text-[var(--text-secondary)]">数据迁移 / 备份</span>
+          </n-divider>
+
+          <div class="data-backup-card">
+            <div>
+              <strong>创作文件、历史记录和 API 配置不会跟着安装包丢失</strong>
+              <p>
+                当前版本会自动在本机数据目录保留备份。换电脑、重装系统或切换安装包时，也可以手动导出 / 导入完整数据包。
+              </p>
+              <p class="data-backup-warning">
+                数据包会包含 API Key，请只保存在自己的电脑或可信位置。
+              </p>
+            </div>
+            <div class="data-backup-actions">
+              <n-button secondary :loading="dataExporting" @click="handleExportData">
+                导出创作与配置
+              </n-button>
+              <n-button type="primary" secondary :loading="dataImporting" @click="handleImportData">
+                导入创作与配置
+              </n-button>
+            </div>
+          </div>
         </n-form>
       </n-tab-pane>
 
       <n-tab-pane name="models" tab="模型配置">
         <div class="model-config-section">
+          <div class="model-discovery-card">
+            <div>
+              <strong>自动获取模型</strong>
+              <p>从当前 Base URL 的 <code>/v1/models</code> 拉取模型，并自动归类到对话 / 图片 / 视频。</p>
+            </div>
+            <div class="model-discovery-actions">
+              <n-button
+                type="primary"
+                secondary
+                :loading="modelSyncLoading"
+                @click="handleSyncModels"
+              >
+                获取并自动配置
+              </n-button>
+              <n-button
+                secondary
+                :loading="dataEyesImportLoading"
+                @click="handleImportDataEyesModels"
+              >
+                导入 DataEyes 实测模型
+              </n-button>
+            </div>
+          </div>
+
+          <n-alert v-if="modelSyncSummary" type="success" class="model-sync-alert">
+            {{ modelSyncSummary }}
+          </n-alert>
+
           <div class="model-group">
             <div class="model-group-header">
               <span class="model-group-title">对话模型</span>
@@ -304,6 +355,7 @@ import {
 import { getApiKeyHelpUrl, DISTRIBUTION_CONFIG } from '../config/distribution'
 import { getProviderConfig } from '../config/providers'
 import { useModelStore } from '../stores/pinia'
+import { backupUserDataNow, exportUserDataToFile, importUserDataFromFile } from '../utils/appDataBackup'
 import { getCapabilityLabel, getModelCapabilityConflict } from '../utils/modelCapability'
 
 const props = defineProps({
@@ -334,6 +386,69 @@ const newChatModel = ref('')
 const newImageModel = ref('')
 const newImageProtocol = ref('auto')
 const newVideoModel = ref('')
+const modelSyncLoading = ref(false)
+const modelSyncSummary = ref('')
+const dataEyesImportLoading = ref(false)
+const dataExporting = ref(false)
+const dataImporting = ref(false)
+
+const DATAEYES_VERIFIED_MODELS = {
+  chat: [
+    'gpt-oss-120b',
+    'qwen3-next-80b-a3b-instruct',
+    'kimi-k2',
+    'kimi-k2.5',
+    'kimi-k2-thinking',
+    'MiniMax-M2.5',
+    'qwen3-coder-480b-a35b-instruct',
+    'grok-3',
+    'grok-3-mini',
+    'grok-4-1-fast-non-reasoning',
+    'grok-4-1-fast-reasoning',
+    'deepseek-r1-250528',
+    'deepseek-v3.1',
+    'deepseek-v3-250324',
+    'deepseek-v4-flash',
+    'deepseek-v4-pro',
+    'ByteDance-Seed-1.6',
+    'ByteDance-Seed-1.6-flash',
+    'doubao-1-5-pro-32k-250115',
+    'doubao-seed-1.6-250615',
+    'doubao-seed-1-6-vision-250815',
+    'doubao-seed-2-0-pro-260215',
+    'qwen2.5-vl-72b-instruct',
+    'gpt-4o',
+    'gpt-5',
+    'gpt-5.1',
+    'gpt-4.1-mini',
+    'gpt-5.4-mini'
+  ],
+  image: [
+    { key: 'grok-imagine-image', protocol: 'image' },
+    { key: 'grok-imagine-image-pro', protocol: 'image' },
+    { key: 'ByteDance-Seedream-4.0', protocol: 'image' },
+    { key: 'doubao-seedream-4-0-250828', protocol: 'image' },
+    { key: 'gpt-image-1.5', protocol: 'image' },
+    { key: 'gpt-image-1-mini', protocol: 'image' },
+    { key: 'gpt-image-1', protocol: 'image' },
+    { key: 'gpt-image-2', protocol: 'image' },
+    { key: 'gpt-image-2-sp', protocol: 'image' },
+    { key: 'imagen-4.0-generate-001', protocol: 'image' },
+    { key: 'qwen-image-plus', protocol: 'image' },
+    { key: 'qwen-image-max', protocol: 'image' },
+    { key: 'gemini-3.1-flash-image-preview', protocol: 'chat' },
+    { key: 'gemini-3.1-flash-image-preview-4k', protocol: 'chat' },
+    { key: 'gemini-3-pro-image-preview', protocol: 'chat' }
+  ],
+  video: [
+    'veo-3.1',
+    'ByteDance-Seedance-1.0-pro-fast',
+    'ByteDance-Seedance-1.5-pro',
+    'doubao-seedance-1-5-pro-251215',
+    'doubao-seedance-2-0-fast-260128',
+    'doubao-seedance-2-0-260128'
+  ]
+}
 
 const apiKeyHelpUrl = getApiKeyHelpUrl()
 const isConfigured = computed(() => modelStore.hasAnyApiKey)
@@ -479,7 +594,7 @@ const handleRemoveVideoModel = (modelKey) => {
   modelStore.removeCustomVideoModel(modelKey)
 }
 
-const handleSave = () => {
+const persistFormConfig = () => {
   const provider = DISTRIBUTION_CONFIG.api.lockProvider
     ? (DISTRIBUTION_CONFIG.api.defaultProvider || formData.provider)
     : formData.provider
@@ -494,6 +609,146 @@ const handleSave = () => {
   modelStore.setBaseUrlByProvider(provider, formData.imageBaseUrl, 'image')
   modelStore.setBaseUrlByProvider(provider, formData.videoBaseUrl, 'video')
 
+  return provider
+}
+
+const trimTrailingSlash = (value = '') => String(value || '').replace(/\/+$/, '')
+
+const normalizeModelPayload = (payload) => {
+  if (Array.isArray(payload)) return payload
+  if (Array.isArray(payload?.data)) return payload.data
+  if (Array.isArray(payload?.models)) return payload.models
+  if (Array.isArray(payload?.data?.models)) return payload.data.models
+  return []
+}
+
+const handleSyncModels = async () => {
+  const provider = persistFormConfig()
+  const apiKey = formData.apiKey || formData.chatApiKey || formData.imageApiKey || formData.videoApiKey
+  const baseUrl = trimTrailingSlash(formData.baseUrl || resolvedBaseUrl.value)
+
+  if (!baseUrl) {
+    window.$message?.warning('请先填写 Base URL')
+    return
+  }
+
+  if (!apiKey) {
+    window.$message?.warning('请先填写 API Key')
+    return
+  }
+
+  modelSyncLoading.value = true
+  modelSyncSummary.value = ''
+
+  try {
+    const response = await fetch(`${baseUrl}/v1/models`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${apiKey}`
+      }
+    })
+    const text = await response.text()
+    const payload = text ? JSON.parse(text) : {}
+
+    if (!response.ok) {
+      const message = payload?.error?.message || payload?.message || `获取模型失败：${response.status}`
+      throw new Error(message)
+    }
+
+    const models = normalizeModelPayload(payload)
+    const stats = modelStore.syncModelsFromProvider(provider, models)
+    modelSyncSummary.value = `已获取 ${models.length} 个模型，新增/更新：对话 ${stats.chat} 个，图片 ${stats.image} 个，视频 ${stats.video} 个，跳过 ${stats.skipped} 个。`
+    window.$message?.success('模型已自动配置')
+  } catch (error) {
+    const message = error?.message || '获取模型失败'
+    modelSyncSummary.value = ''
+    window.$message?.error(message)
+  } finally {
+    modelSyncLoading.value = false
+  }
+}
+
+const handleImportDataEyesModels = async () => {
+  dataEyesImportLoading.value = true
+  modelSyncSummary.value = ''
+
+  try {
+    formData.provider = 'dataeyes'
+    formData.baseUrl = 'https://cloud.dataeyes.ai'
+    const provider = persistFormConfig()
+
+    let chatCount = 0
+    let imageCount = 0
+    let videoCount = 0
+
+    DATAEYES_VERIFIED_MODELS.chat.forEach((modelKey) => {
+      if (modelStore.addCustomChatModelByProvider(modelKey, provider)) {
+        chatCount += 1
+      }
+    })
+
+    DATAEYES_VERIFIED_MODELS.image.forEach((model) => {
+      if (modelStore.addCustomImageModelByProvider(model.key, provider, model.key, { protocol: model.protocol })) {
+        imageCount += 1
+      }
+      modelStore.updateCustomImageModelProtocol(model.key, model.protocol)
+    })
+
+    DATAEYES_VERIFIED_MODELS.video.forEach((modelKey) => {
+      if (modelStore.addCustomVideoModelByProvider(modelKey, provider)) {
+        videoCount += 1
+      }
+    })
+
+    modelSyncSummary.value = `已导入 DataEyes 实测模型：对话 ${chatCount} 个，图片 ${imageCount} 个，视频 ${videoCount} 个。已存在的模型会保留并跳过。`
+    window.$message?.success('DataEyes 实测模型已导入')
+    void backupUserDataNow()
+  } catch (error) {
+    window.$message?.error(error?.message || '导入 DataEyes 模型失败')
+  } finally {
+    dataEyesImportLoading.value = false
+  }
+}
+
+const handleExportData = async () => {
+  dataExporting.value = true
+
+  try {
+    persistFormConfig()
+    const result = await exportUserDataToFile()
+    if (result?.canceled) return
+    window.$message?.success('已导出创作文件、历史记录和 API 配置')
+  } catch (error) {
+    window.$message?.error(error?.message || '导出失败')
+  } finally {
+    dataExporting.value = false
+  }
+}
+
+const handleImportData = async () => {
+  const confirmed = window.confirm(
+    '导入会用数据包里的项目、历史、模型和 API 配置覆盖当前本机配置。确定继续吗？'
+  )
+  if (!confirmed) return
+
+  dataImporting.value = true
+
+  try {
+    const result = await importUserDataFromFile({ overwrite: true })
+    if (result?.canceled) return
+    window.$message?.success('导入完成，正在重新载入数据')
+    window.setTimeout(() => window.location.reload(), 500)
+  } catch (error) {
+    window.$message?.error(error?.message || '导入失败')
+  } finally {
+    dataImporting.value = false
+  }
+}
+
+const handleSave = () => {
+  persistFormConfig()
+  void backupUserDataNow()
+
   showModal.value = false
   emit('saved')
 }
@@ -501,6 +756,7 @@ const handleSave = () => {
 const handleClear = () => {
   modelStore.clearApiConfigByProvider(formData.provider)
   syncForm()
+  void backupUserDataNow()
 }
 </script>
 
@@ -569,10 +825,111 @@ const handleClear = () => {
   font-size: 12px;
 }
 
+.data-backup-card {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+  padding: 14px;
+  border: 1px solid rgba(20, 184, 166, 0.24);
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(34, 255, 181, 0.14), transparent 38%),
+    linear-gradient(135deg, rgba(240, 253, 250, 0.72), rgba(255, 255, 255, 0.44));
+  box-shadow: 0 18px 46px rgba(15, 23, 42, 0.08);
+  backdrop-filter: blur(18px);
+}
+
+:global(.dark) .data-backup-card {
+  border-color: rgba(94, 234, 212, 0.18);
+  background:
+    radial-gradient(circle at 12% 0%, rgba(34, 255, 181, 0.1), transparent 38%),
+    linear-gradient(135deg, rgba(15, 23, 42, 0.7), rgba(6, 78, 59, 0.2));
+}
+
+.data-backup-card strong {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 14px;
+}
+
+.data-backup-card p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.data-backup-warning {
+  margin-top: 6px !important;
+  color: #b45309 !important;
+}
+
+:global(.dark) .data-backup-warning {
+  color: #facc15 !important;
+}
+
+.data-backup-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
 .model-config-section {
   display: flex;
   flex-direction: column;
   gap: 20px;
+}
+
+.model-discovery-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid rgba(20, 184, 166, 0.24);
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(34, 255, 181, 0.16), transparent 36%),
+    linear-gradient(135deg, rgba(240, 253, 250, 0.74), rgba(255, 255, 255, 0.42));
+}
+
+:global(.dark) .model-discovery-card {
+  background:
+    radial-gradient(circle at 12% 0%, rgba(34, 255, 181, 0.12), transparent 36%),
+    linear-gradient(135deg, rgba(15, 23, 42, 0.68), rgba(6, 78, 59, 0.22));
+}
+
+.model-discovery-card strong {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 14px;
+}
+
+.model-discovery-card p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.model-discovery-card code {
+  color: var(--accent-color);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+.model-discovery-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.model-sync-alert {
+  margin-top: -8px;
 }
 
 .model-group {
@@ -636,5 +993,20 @@ const handleClear = () => {
 
 .protocol-select.small {
   width: 118px;
+}
+
+@media (max-width: 720px) {
+  .data-backup-card {
+    flex-direction: column;
+  }
+
+  .data-backup-actions {
+    width: 100%;
+  }
+
+  .model-discovery-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
 }
 </style>

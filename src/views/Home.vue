@@ -437,14 +437,14 @@
                   @click="openProject(project)"
                 >
                   <div class="panel-project-thumb">
-                    <template v-if="project.thumbnail">
+                    <template v-if="getProjectPreview(project)">
                       <video
-                        v-if="isVideoUrl(project.thumbnail)"
-                        :src="project.thumbnail"
+                        v-if="isVideoUrl(getProjectPreview(project))"
+                        :src="getProjectPreview(project)"
                         muted
                         playsinline
                       />
-                      <img v-else :src="project.thumbnail" :alt="project.name" />
+                      <img v-else :src="getProjectPreview(project)" :alt="project.name" />
                     </template>
                     <n-icon v-else :size="26"><DocumentOutline /></n-icon>
                   </div>
@@ -539,16 +539,16 @@
         <div v-else class="project-grid">
           <div v-for="project in projects" :key="project.id" class="project-card group">
             <div class="project-thumb" @click="openProject(project)">
-              <template v-if="project.thumbnail">
+              <template v-if="getProjectPreview(project)">
                 <video
-                  v-if="isVideoUrl(project.thumbnail)"
+                  v-if="isVideoUrl(getProjectPreview(project))"
                   :ref="el => setVideoRef(project.id, el)"
-                  :src="project.thumbnail"
+                  :src="getProjectPreview(project)"
                   muted
                   loop
                   playsinline
                 />
-                <img v-else :src="project.thumbnail" :alt="project.name" />
+                <img v-else :src="getProjectPreview(project)" :alt="project.name" />
               </template>
               <div v-else class="project-placeholder">
                 <n-icon :size="34"><DocumentOutline /></n-icon>
@@ -713,7 +713,7 @@
 
 <script setup>
 import { computed, h, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { NButton, NDropdown, NIcon, NInput, NModal, NSpin, useDialog } from 'naive-ui'
 import {
   AddOutline,
@@ -742,7 +742,8 @@ import {
   updateProjectCanvas,
   deleteProject,
   duplicateProject,
-  renameProject
+  renameProject,
+  deriveProjectThumbnail
 } from '../stores/projects'
 import { runtimeLogs, clearRuntimeLogs } from '../stores/canvas'
 import { useModelStore } from '../stores/pinia'
@@ -762,6 +763,7 @@ import {
 } from '../config/promptLibrary'
 
 const router = useRouter()
+const route = useRoute()
 const dialog = useDialog()
 const modelStore = useModelStore()
 
@@ -1722,6 +1724,8 @@ const setVideoRef = (projectId, el) => {
   }
 }
 
+const getProjectPreview = (project) => deriveProjectThumbnail(project)
+
 const formatDate = (date) => {
   if (!date) return ''
   const diff = Date.now() - new Date(date).getTime()
@@ -2280,8 +2284,11 @@ const isVideoUrl = (url) => {
   return ['.mp4', '.webm', '.ogg', '.mov', '.avi', '.mkv'].some((ext) => url.toLowerCase().includes(ext))
 }
 
-const scrollToProjects = () => {
-  projectsSection.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+const scrollToProjects = async (behavior = 'smooth') => {
+  enterWorkspace()
+  await nextTick()
+  const scrollBehavior = typeof behavior === 'string' ? behavior : 'smooth'
+  projectsSection.value?.scrollIntoView({ behavior: scrollBehavior, block: 'start' })
 }
 
 const scrollToInspiration = () => {
@@ -2290,6 +2297,14 @@ const scrollToInspiration = () => {
 
 const scrollToTop = () => {
   document.querySelector('.home-shell')?.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
+const handleHomeRouteIntent = async () => {
+  if (route.query.section !== 'projects') return
+
+  enterWorkspace()
+  await nextTick()
+  projectsSection.value?.scrollIntoView({ behavior: 'auto', block: 'start' })
 }
 
 onMounted(() => {
@@ -2306,6 +2321,7 @@ onMounted(() => {
   document.addEventListener('visibilitychange', handleHeroTypewriterVisibility)
   window.addEventListener('keydown', handleWelcomeKeydown)
   startHeroTypewriter()
+  handleHomeRouteIntent()
 })
 
 onUnmounted(() => {

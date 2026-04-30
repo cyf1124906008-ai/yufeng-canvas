@@ -45,6 +45,100 @@ const inferImageProtocol = (modelKey = '') => {
   return 'image'
 }
 
+const resolveImageProtocol = (model = {}) => {
+  const inferredProtocol = inferImageProtocol(model.key)
+  const configuredProtocol = model.protocol || 'auto'
+
+  // Gemini image-preview models are served through chat-completions on many
+  // OpenAI-compatible aggregators. Older user configs may still say "image",
+  // so the safer automatic route must win here.
+  if (inferredProtocol === 'chat') {
+    return 'chat'
+  }
+
+  return configuredProtocol && configuredProtocol !== 'auto'
+    ? configuredProtocol
+    : inferredProtocol
+}
+
+const mergeModelsByKey = (...groups) => {
+  const merged = new Map()
+
+  groups.flat().filter(Boolean).forEach((model) => {
+    if (!model?.key) return
+    merged.set(model.key, {
+      ...(merged.get(model.key) || {}),
+      ...model
+    })
+  })
+
+  return [...merged.values()]
+}
+
+const normalizeEndpointTypes = (model = {}) => {
+  const endpointTypes = model.supported_endpoint_types ?? model.endpoints ?? model.endpointTypes ?? []
+  if (Array.isArray(endpointTypes)) {
+    return endpointTypes.map((item) => String(item).trim().toLowerCase()).filter(Boolean)
+  }
+  return String(endpointTypes)
+    .split(',')
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean)
+}
+
+const inferImageSizes = (modelKey = '') => {
+  const value = String(modelKey).toLowerCase()
+  if (value.includes('seedream-4-5') || value.includes('seedream-5') || value.includes('4.5')) {
+    return ['2048x2048', '2560x1440', '1440x2560', '2304x1728', '1728x2304']
+  }
+  if (value.includes('seedream') || value.includes('imagen')) {
+    return ['1024x1024', '2048x2048', '1536x1024', '1024x1536']
+  }
+  return ['1024x1024', '1536x1024', '1024x1536', '1792x1024', '1024x1792']
+}
+
+const inferImageDefaultSize = (modelKey = '') => inferImageSizes(modelKey)[0] || '1024x1024'
+
+const inferVideoEndpointFamily = (modelKey = '', endpointTypes = []) => {
+  const value = String(modelKey).toLowerCase()
+  if (value.includes('seedance') || value.includes('doubao')) return 'dataeyes-video'
+  if (value.includes('kling')) return 'kling'
+  if (value.includes('veo')) return 'veo'
+  if (value.includes('sora')) return 'openai-video'
+  if (endpointTypes.includes('openai-videos')) return 'openai-video'
+  if (endpointTypes.includes('doubao')) return 'dataeyes-video'
+  return endpointTypes.includes('videos') || endpointTypes.includes('video') ? 'openai-video' : 'auto'
+}
+
+const inferDiscoveredCapability = (model = {}) => {
+  const key = String(model.id || model.key || '').toLowerCase()
+  const endpointTypes = normalizeEndpointTypes(model)
+
+  if (
+    endpointTypes.some((type) => ['video', 'videos', 'openai-videos', 'doubao'].includes(type)) ||
+    /seedance|sora|veo|kling|wan|hailuo/.test(key)
+  ) {
+    return 'video'
+  }
+
+  if (
+    endpointTypes.includes('image-generation') ||
+    /gpt-image|chatgpt-image|seedream|imagen|flux|banana|grok-imagine|qwen-image/.test(key)
+  ) {
+    return 'image'
+  }
+
+  if (endpointTypes.includes('embeddings') || endpointTypes.includes('rerank')) {
+    return ''
+  }
+
+  if (endpointTypes.some((type) => ['openai', 'openai-response', 'anthropic', 'gemini'].includes(type))) {
+    return 'chat'
+  }
+
+  return ''
+}
+
 const getStored = (key, defaultValue = '') => {
   try {
     return localStorage.getItem(key) || defaultValue
@@ -170,9 +264,16 @@ const buildCustomImageModel = (model, provider) => ({
   key: model.key,
   isCustom: true,
   protocol: model.protocol || 'auto',
-  resolvedProtocol: model.protocol && model.protocol !== 'auto' ? model.protocol : inferImageProtocol(model.key),
-  sizes: model.sizes || ['1024x1024', '1536x1024', '1024x1536', '1792x1024', '1024x1792'],
-  defaultParams: { size: '1024x1024', quality: 'standard', style: 'vivid' },
+  resolvedProtocol: resolveImageProtocol(model),
+  sizes: model.sizes || inferImageSizes(model.key),
+  defaultParams: {
+    size: model.defaultParams?.size || inferImageDefaultSize(model.key),
+    quality: model.defaultParams?.quality || 'standard',
+    style: model.defaultParams?.style || 'vivid'
+  },
+  endpointTypes: model.endpointTypes || [],
+  ownedBy: model.ownedBy || '',
+  requiresReference: Boolean(model.requiresReference),
   ...(provider ? { provider: [provider] } : {})
 })
 
@@ -182,7 +283,16 @@ const buildCustomVideoModel = (model, provider) => ({
   isCustom: true,
   ratios: ['16:9', '9:16', '1:1', '4:3', '3:4'],
   durs: [{ label: '5 s', key: 5 }, { label: '10 s', key: 10 }],
-  defaultParams: { ratio: '16:9', duration: 5 },
+  resolutions: model.resolutions || ['720p', '1080p'],
+  defaultResolution: model.defaultResolution || '720p',
+  defaultParams: {
+    ratio: model.defaultParams?.ratio || '16:9',
+    duration: model.defaultParams?.duration || 5,
+    resolution: model.defaultParams?.resolution || model.defaultResolution || '720p'
+  },
+  endpointTypes: model.endpointTypes || [],
+  endpointFamily: model.endpointFamily || inferVideoEndpointFamily(model.key, model.endpointTypes || []),
+  ownedBy: model.ownedBy || '',
   ...(provider ? { provider: [provider] } : {})
 })
 
@@ -329,29 +439,29 @@ export const useModelStore = defineStore('model', () => {
     delete baseUrlsByProvider.value[provider]
   }
 
-  const allChatModels = computed(() => [
-    ...(REQUIRE_USER_MODELS ? [] : CHAT_MODELS.map((model) => ({ ...model, isCustom: false }))),
-    ...customChatModels.value.map((model) => buildCustomChatModel(model)),
-    ...(customChatModelsByProvider.value[currentProvider.value] || []).map((model) =>
+  const allChatModels = computed(() => mergeModelsByKey(
+    REQUIRE_USER_MODELS ? [] : CHAT_MODELS.map((model) => ({ ...model, isCustom: false })),
+    customChatModels.value.map((model) => buildCustomChatModel(model)),
+    (customChatModelsByProvider.value[currentProvider.value] || []).map((model) =>
       buildCustomChatModel(model, currentProvider.value)
     )
-  ].filter((model) => isModelAllowedForCapability(model.key, 'chat')))
+  ).filter((model) => isModelAllowedForCapability(model.key, 'chat')))
 
-  const allImageModels = computed(() => [
-    ...(REQUIRE_USER_MODELS ? [] : IMAGE_MODELS.map((model) => ({ ...model, isCustom: false }))),
-    ...customImageModels.value.map((model) => buildCustomImageModel(model)),
-    ...(customImageModelsByProvider.value[currentProvider.value] || []).map((model) =>
+  const allImageModels = computed(() => mergeModelsByKey(
+    REQUIRE_USER_MODELS ? [] : IMAGE_MODELS.map((model) => ({ ...model, isCustom: false })),
+    customImageModels.value.map((model) => buildCustomImageModel(model)),
+    (customImageModelsByProvider.value[currentProvider.value] || []).map((model) =>
       buildCustomImageModel(model, currentProvider.value)
     )
-  ].filter((model) => isModelAllowedForCapability(model.key, 'image')))
+  ).filter((model) => isModelAllowedForCapability(model.key, 'image')))
 
-  const allVideoModels = computed(() => [
-    ...(REQUIRE_USER_MODELS ? [] : VIDEO_MODELS.map((model) => ({ ...model, isCustom: false }))),
-    ...customVideoModels.value.map((model) => buildCustomVideoModel(model)),
-    ...(customVideoModelsByProvider.value[currentProvider.value] || []).map((model) =>
+  const allVideoModels = computed(() => mergeModelsByKey(
+    REQUIRE_USER_MODELS ? [] : VIDEO_MODELS.map((model) => ({ ...model, isCustom: false })),
+    customVideoModels.value.map((model) => buildCustomVideoModel(model)),
+    (customVideoModelsByProvider.value[currentProvider.value] || []).map((model) =>
       buildCustomVideoModel(model, currentProvider.value)
     )
-  ].filter((model) => isModelAllowedForCapability(model.key, 'video')))
+  ).filter((model) => isModelAllowedForCapability(model.key, 'video')))
 
   const availableChatModels = computed(() =>
     allChatModels.value.filter((model) => isModelSupported(model, currentProvider.value))
@@ -605,6 +715,91 @@ export const useModelStore = defineStore('model', () => {
     return true
   }
 
+  const upsertProviderModel = (collection, provider, model) => {
+    if (!collection.value[provider]) {
+      collection.value[provider] = []
+    }
+
+    const existingIndex = collection.value[provider].findIndex((item) => item.key === model.key)
+    if (existingIndex >= 0) {
+      collection.value[provider][existingIndex] = {
+        ...collection.value[provider][existingIndex],
+        ...model
+      }
+      return false
+    }
+
+    collection.value[provider].push(model)
+    return true
+  }
+
+  const syncModelsFromProvider = (provider, discoveredModels = []) => {
+    const stats = { chat: 0, image: 0, video: 0, skipped: 0 }
+    const models = Array.isArray(discoveredModels) ? discoveredModels : []
+
+    models.forEach((rawModel) => {
+      const key = rawModel?.id || rawModel?.key
+      if (!key) {
+        stats.skipped += 1
+        return
+      }
+
+      const endpointTypes = normalizeEndpointTypes(rawModel)
+      const baseModel = {
+        key,
+        label: rawModel.label || rawModel.name || key,
+        endpointTypes,
+        ownedBy: rawModel.owned_by || rawModel.ownedBy || ''
+      }
+      const capability = inferDiscoveredCapability(rawModel)
+
+      if (capability === 'chat') {
+        const added = upsertProviderModel(customChatModelsByProvider, provider, baseModel)
+        if (added) stats.chat += 1
+        return
+      }
+
+      if (capability === 'image') {
+        const isEditModel = /edit/i.test(key)
+        const added = upsertProviderModel(customImageModelsByProvider, provider, {
+          ...baseModel,
+          protocol: inferImageProtocol(key),
+          sizes: inferImageSizes(key),
+          defaultParams: { size: inferImageDefaultSize(key), quality: 'standard', style: 'vivid' },
+          requiresReference: isEditModel
+        })
+        if (added) stats.image += 1
+        return
+      }
+
+      if (capability === 'video') {
+        const added = upsertProviderModel(customVideoModelsByProvider, provider, {
+          ...baseModel,
+          endpointFamily: inferVideoEndpointFamily(key, endpointTypes),
+          resolutions: ['720p', '1080p'],
+          defaultResolution: '720p',
+          defaultParams: { ratio: '16:9', duration: 5, resolution: '720p' }
+        })
+        if (added) stats.video += 1
+        return
+      }
+
+      stats.skipped += 1
+    })
+
+    selectedChatModel.value = availableChatModels.value.some((model) => model.key === selectedChatModel.value)
+      ? selectedChatModel.value
+      : availableChatModels.value[0]?.key || getProviderChatFallback(provider)
+    selectedImageModel.value = availableImageModels.value.some((model) => model.key === selectedImageModel.value)
+      ? selectedImageModel.value
+      : availableImageModels.value[0]?.key || (REQUIRE_USER_MODELS ? '' : DEFAULT_IMAGE_MODEL)
+    selectedVideoModel.value = availableVideoModels.value.some((model) => model.key === selectedVideoModel.value)
+      ? selectedVideoModel.value
+      : availableVideoModels.value[0]?.key || getProviderVideoFallback(provider)
+
+    return stats
+  }
+
   const removeCustomChatModelByProvider = (modelKey, provider) => {
     const models = customChatModelsByProvider.value[provider]
     if (!models) {
@@ -738,6 +933,7 @@ export const useModelStore = defineStore('model', () => {
     addCustomChatModelByProvider,
     addCustomImageModelByProvider,
     addCustomVideoModelByProvider,
+    syncModelsFromProvider,
     removeCustomChatModelByProvider,
     removeCustomImageModelByProvider,
     removeCustomVideoModelByProvider,

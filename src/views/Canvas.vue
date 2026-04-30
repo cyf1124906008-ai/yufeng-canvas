@@ -83,6 +83,7 @@
         v-model:viewport="viewport"
         :node-types="nodeTypes"
         :edge-types="edgeTypes"
+        :default-edge-options="defaultEdgeOptions"
         :default-viewport="canvasViewport"
         :min-zoom="0.1"
         :max-zoom="2"
@@ -143,17 +144,32 @@
       <!-- Node menu popup | 节点菜单弹窗 -->
       <div 
         v-if="showNodeMenu"
-        class="node-menu-pop absolute left-20 top-1/2 -translate-y-1/2 p-2 z-20"
+        class="node-menu-pop absolute left-20 top-1/2 -translate-y-1/2 z-20"
         data-tour="node-menu"
       >
+        <div class="node-menu-head">
+          <strong>添加节点</strong>
+          <span>像 ComfyUI 一样从节点开始搭流程</span>
+        </div>
+        <input
+          v-model="nodeMenuQuery"
+          class="node-menu-search"
+          placeholder="搜索：提示词 / 生图 / 视频 / 输出"
+          @keydown.escape="showNodeMenu = false"
+        />
         <button 
-          v-for="nodeType in nodeTypeOptions" 
+          v-for="nodeType in filteredNodeTypeOptions" 
           :key="nodeType.type"
           @click="addNewNode(nodeType.type)"
-          class="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-[var(--bg-tertiary)] transition-colors text-left"
+          class="node-menu-item"
         >
-          <n-icon :size="20" :color="nodeType.color"><component :is="nodeType.icon" /></n-icon>
-          <span class="text-sm">{{ nodeType.name }}</span>
+          <span class="node-menu-icon" :style="{ '--node-color': nodeType.color }">
+            <n-icon :size="20"><component :is="nodeType.icon" /></n-icon>
+          </span>
+          <span class="node-menu-copy">
+            <strong>{{ nodeType.name }}</strong>
+            <small>{{ nodeType.description }}</small>
+          </span>
         </button>
       </div>
 
@@ -253,13 +269,21 @@
         </div>
       </aside>
 
-      <aside v-if="selectedNode" class="node-inspector-panel absolute right-4 bottom-4 z-30" data-tour="node-inspector">
+      <aside
+        v-if="selectedNode && showInspectorPanel"
+        class="node-inspector-panel absolute z-30"
+        :class="{ 'is-log-open': showRuntimeLogs }"
+        data-tour="node-inspector"
+      >
         <div class="inspector-head">
           <div>
             <p>INSPECTOR</p>
             <h3>{{ nodeTypeLabel(selectedNode.type) }}</h3>
           </div>
-          <span :class="['node-status-pill', selectedNodeStatus]">{{ selectedNodeStatus }}</span>
+          <div class="inspector-head-actions">
+            <span :class="['node-status-pill', selectedNodeStatus]">{{ selectedNodeStatus }}</span>
+            <button class="inspector-close" title="关闭检查器" @click="showInspectorPanel = false">×</button>
+          </div>
         </div>
         <div class="inspector-body">
           <label>
@@ -302,9 +326,16 @@
             <img v-if="selectedNode.type === 'image'" :src="selectedNode.data.url" alt="节点输出预览" />
             <video v-else-if="selectedNode.type === 'video'" :src="selectedNode.data.url" controls></video>
           </div>
+          <div v-if="selectedNode.type === 'image' && selectedNode.data?.url" class="inspector-output-actions">
+            <button class="primary" @click="createSelectedImageWorkflow('image')">用这张图继续生图</button>
+            <button @click="createSelectedImageWorkflow('video')">用这张图生成视频</button>
+            <button @click="copySelectedNodeOutput">复制图片链接</button>
+          </div>
           <div class="inspector-actions">
-            <button @click="markSelectedNodeRunning">运行节点</button>
-            <button @click="markSelectedNodeRunning">重新运行</button>
+            <template v-if="selectedNode.type !== 'image' || !selectedNode.data?.url">
+              <button @click="markSelectedNodeRunning">运行节点</button>
+              <button @click="markSelectedNodeRunning">重新运行</button>
+            </template>
             <button @click="duplicateSelectedNode">复制节点</button>
             <button @click="deleteSelectedNode">删除节点</button>
             <button @click="copySelectedNodeOutput">查看输出</button>
@@ -555,6 +586,14 @@ const edgeTypes = {
   imageOrder: markRaw(ImageOrderEdge)
 }
 
+const defaultEdgeOptions = {
+  animated: false,
+  style: {
+    stroke: 'rgba(45, 212, 191, 0.92)',
+    strokeWidth: 3.2
+  }
+}
+
 // UI state | UI状态
 const showNodeMenu = ref(false)
 const chatInput = ref('')
@@ -564,6 +603,7 @@ const showGrid = ref(true)
 const canvasPerfLite = ref(false)
 const showApiSettings = ref(false)
 const isProcessing = ref(false)
+const nodeMenuQuery = ref('')
 
 // Flow key for forcing re-render on project switch | 项目切换时强制重新渲染的 key
 const flowKey = ref(Date.now())
@@ -576,6 +616,7 @@ const showWorkflowPanel = ref(false)
 const showRuntimeLogs = ref(false)
 const showCanvasTour = ref(false)
 const showAgentPanel = ref(false)
+const showInspectorPanel = ref(true)
 const selectedNodeId = ref(null)
 const renameValue = ref('')
 const canvasTourStorageKey = 'yufeng-canvas-canvas-tour-v1'
@@ -697,6 +738,58 @@ const copySelectedNodeOutput = async () => {
   } catch {
     window.$message?.info(output || '当前节点暂无输出')
   }
+}
+
+const createSelectedImageWorkflow = (mode) => {
+  const sourceNode = selectedNode.value
+
+  if (!sourceNode || sourceNode.type !== 'image' || !sourceNode.data?.url) {
+    window.$message?.warning('请先选择一张已经生成的图片')
+    return
+  }
+
+  const nodeX = sourceNode.position?.x || 0
+  const nodeY = sourceNode.position?.y || 0
+  const isVideo = mode === 'video'
+
+  startBatchOperation()
+  const textNodeId = addNode('text', { x: nodeX + 320, y: nodeY - 120 }, {
+    content: '',
+    label: isVideo ? '图生视频提示词' : '图生图提示词'
+  })
+
+  const configNodeId = addNode(isVideo ? 'videoConfig' : 'imageConfig', { x: nodeX + 660, y: nodeY }, isVideo
+    ? {
+        label: '图生视频',
+        prompt: ''
+      }
+    : {
+        label: '图生图配置',
+        prompt: '',
+        size: sourceNode.data?.size || '2048x2048'
+      }
+  )
+
+  addEdge({
+    source: sourceNode.id,
+    target: configNodeId,
+    sourceHandle: 'right',
+    targetHandle: 'left',
+    ...(isVideo ? { type: 'imageRole', data: { imageRole: 'first_frame_image' } } : {})
+  })
+
+  addEdge({
+    source: textNodeId,
+    target: configNodeId,
+    sourceHandle: 'right',
+    targetHandle: 'left'
+  })
+  endBatchOperation()
+
+  selectedNodeId.value = configNodeId
+  showInspectorPanel.value = true
+  window.setTimeout(() => updateNodeInternals([textNodeId, configNodeId]), 50)
+  window.$message?.success(isVideo ? '已创建图生视频工作流' : '已创建图生图工作流')
 }
 
 const rerunAgent = (agent) => {
@@ -967,13 +1060,22 @@ const tools = [
 
 // Node type options for menu | 节点类型菜单选项
 const nodeTypeOptions = [
-  { type: 'text', name: '文本节点', icon: TextOutline, color: '#3b82f6' },
-  { type: 'llmConfig', name: 'LLM文本生成', icon: ChatbubbleOutline, color: '#a855f7' },
-  { type: 'imageConfig', name: '文生图配置', icon: ColorPaletteOutline, color: '#22c55e' },
-  { type: 'videoConfig', name: '视频生成配置', icon: VideocamOutline, color: '#f59e0b' },
-  { type: 'image', name: '图片节点', icon: ImageOutline, color: '#8b5cf6' },
-  { type: 'video', name: '视频节点', icon: VideocamOutline, color: '#ef4444' }
+  { type: 'text', name: '提示词 / 文本', description: '写 Prompt、分镜、备注，可连接生图/视频节点', icon: TextOutline, color: '#38bdf8' },
+  { type: 'llmConfig', name: '文本模型', description: '让语言模型润色提示词、拆方向、生成文案', icon: ChatbubbleOutline, color: '#a78bfa' },
+  { type: 'imageConfig', name: '图片生成', description: '文生图 / 图生图配置，支持模型、比例、数量参数', icon: ColorPaletteOutline, color: '#22c55e' },
+  { type: 'videoConfig', name: '视频生成', description: '文生视频 / 图生视频，支持首帧、尾帧、比例、时长', icon: VideocamOutline, color: '#f59e0b' },
+  { type: 'image', name: '图片输出 / 参考图', description: '承载生成结果或参考图，可继续图生图/图生视频', icon: ImageOutline, color: '#8b5cf6' },
+  { type: 'video', name: '视频输出', description: '承载视频结果，支持预览、下载、继续编排', icon: VideocamOutline, color: '#ef4444' }
 ]
+
+const filteredNodeTypeOptions = computed(() => {
+  const query = nodeMenuQuery.value.trim().toLowerCase()
+  if (!query) return nodeTypeOptions
+
+  return nodeTypeOptions.filter((nodeType) => {
+    return `${nodeType.name} ${nodeType.description} ${nodeType.type}`.toLowerCase().includes(query)
+  })
+})
 
 // Input placeholder | 输入占位符
 const inputPlaceholder = '你可以试着说"帮我生成一个二次元的卡通角色"'
@@ -1008,6 +1110,7 @@ const addNewNode = async (type) => {
   }, 50)
   
   showNodeMenu.value = false
+  nodeMenuQuery.value = ''
 }
 
 // Handle add workflow from panel | 处理从面板添加工作流
@@ -1149,6 +1252,9 @@ const onConnect = (params) => {
 }
 const onNodeClick = (event) => {
   selectedNodeId.value = event.node?.id || null
+  if (selectedNodeId.value) {
+    showInspectorPanel.value = true
+  }
   // nodes.value.forEach(node => {
   //   updateNode(node.id, { selected: false })
   // })
@@ -1222,7 +1328,7 @@ const confirmDelete = () => {
   // deleteProject(projectId) // TODO: import deleteProject
   showDeleteModal.value = false
   window.$message?.success('项目已删除')
-  router.push('/')
+  router.push({ path: '/', query: { section: 'projects' } })
 }
 
 // Handle Enter key | 处理回车键
@@ -1352,7 +1458,8 @@ const sendMessage = async () => {
 
 // Go back to home | 返回首页
 const goBack = () => {
-  router.push('/')
+  saveProject()
+  router.push({ path: '/', query: { section: 'projects' } })
 }
 
 const completeCanvasTour = () => {
@@ -1631,6 +1738,57 @@ onUnmounted(() => {
   ry: 8;
 }
 
+.canvas-flow .vue-flow__handle {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(240, 253, 250, 0.98);
+  background: linear-gradient(135deg, #5eead4, #22c55e);
+  box-shadow:
+    0 0 0 4px rgba(20, 184, 166, 0.16),
+    0 0 18px rgba(45, 212, 191, 0.72);
+  opacity: 1;
+  z-index: 8;
+}
+
+.canvas-flow .vue-flow__node {
+  overflow: visible;
+}
+
+.canvas-flow .vue-flow__node.selected,
+.canvas-flow .vue-flow__node:hover {
+  z-index: 20 !important;
+}
+
+.canvas-flow .vue-flow__edges {
+  z-index: 1;
+}
+
+.canvas-flow .vue-flow__handle:hover,
+.canvas-flow .vue-flow__handle.connecting {
+  transform: scale(1.18);
+  box-shadow:
+    0 0 0 6px rgba(20, 184, 166, 0.2),
+    0 0 28px rgba(45, 212, 191, 0.88);
+}
+
+.canvas-flow .vue-flow__edge-path {
+  stroke-width: 3.2;
+  filter: drop-shadow(0 0 5px rgba(45, 212, 191, 0.34));
+}
+
+.canvas-flow .vue-flow__edge.selected .vue-flow__edge-path,
+.canvas-flow .vue-flow__edge:hover .vue-flow__edge-path {
+  stroke-width: 4.5;
+  filter: drop-shadow(0 0 10px rgba(94, 234, 212, 0.7));
+}
+
+.canvas-flow .vue-flow__connection-path {
+  stroke: rgba(34, 211, 238, 0.95);
+  stroke-width: 4;
+  stroke-dasharray: 9 8;
+  filter: drop-shadow(0 0 10px rgba(34, 211, 238, 0.56));
+}
+
 .canvas-header {
   z-index: 30;
   width: min(1440px, calc(100vw - 24px));
@@ -1718,6 +1876,104 @@ onUnmounted(() => {
 .node-menu-pop,
 .zoom-dock {
   border-radius: 18px;
+}
+
+.node-menu-pop {
+  width: 320px;
+  padding: 12px;
+}
+
+.node-menu-head {
+  display: grid;
+  gap: 3px;
+  padding: 4px 6px 10px;
+}
+
+.node-menu-head strong {
+  color: var(--text-primary);
+  font-size: 15px;
+}
+
+.node-menu-head span {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.node-menu-search {
+  width: 100%;
+  margin-bottom: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 14px;
+  padding: 10px 12px;
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.58);
+  outline: none;
+  font-size: 13px;
+}
+
+.dark .node-menu-search {
+  border-color: rgba(148, 163, 184, 0.18);
+  background: rgba(15, 23, 42, 0.48);
+}
+
+.node-menu-search:focus {
+  border-color: rgba(94, 234, 212, 0.7);
+  box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.13);
+}
+
+.node-menu-item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid transparent;
+  border-radius: 16px;
+  padding: 10px;
+  text-align: left;
+}
+
+.node-menu-icon {
+  display: inline-flex;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--node-color) 42%, transparent);
+  border-radius: 14px;
+  color: var(--node-color);
+  background:
+    radial-gradient(circle at 30% 18%, color-mix(in srgb, var(--node-color) 22%, transparent), transparent 56%),
+    rgba(255, 255, 255, 0.46);
+}
+
+.dark .node-menu-icon {
+  background:
+    radial-gradient(circle at 30% 18%, color-mix(in srgb, var(--node-color) 26%, transparent), transparent 56%),
+    rgba(15, 23, 42, 0.48);
+}
+
+.node-menu-copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.node-menu-copy strong {
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.node-menu-copy small {
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.node-menu-item:hover {
+  border-color: rgba(94, 234, 212, 0.34);
+  background: rgba(20, 184, 166, 0.12);
 }
 
 .composer-card,
@@ -2021,6 +2277,16 @@ onUnmounted(() => {
   backdrop-filter: blur(22px);
 }
 
+.node-inspector-panel {
+  right: 24px;
+  bottom: 24px;
+  transition: right 0.22s ease, transform 0.22s ease, opacity 0.22s ease;
+}
+
+.node-inspector-panel.is-log-open {
+  right: min(430px, calc(100vw - 390px));
+}
+
 .dark .agent-task-panel,
 .dark .node-inspector-panel {
   background: rgba(15, 23, 42, 0.74);
@@ -2051,11 +2317,31 @@ onUnmounted(() => {
   font-size: 17px;
 }
 
-.agent-panel-head button {
+.agent-panel-head button,
+.inspector-close {
   width: 30px;
   height: 30px;
   border-radius: 999px;
   background: rgba(148, 163, 184, 0.16);
+}
+
+.inspector-head-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.inspector-close {
+  color: var(--text-secondary);
+  font-size: 20px;
+  line-height: 1;
+  transition: color 0.16s ease, background 0.16s ease, transform 0.16s ease;
+}
+
+.inspector-close:hover {
+  color: var(--text-primary);
+  background: rgba(20, 184, 166, 0.18);
+  transform: translateY(-1px);
 }
 
 .agent-card {
@@ -2108,6 +2394,56 @@ onUnmounted(() => {
   margin-top: 10px;
 }
 
+.inspector-output-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 10px;
+  border: 1px solid rgba(20, 184, 166, 0.24);
+  border-radius: 18px;
+  background:
+    linear-gradient(135deg, rgba(20, 184, 166, 0.12), rgba(14, 165, 233, 0.08)),
+    rgba(255, 255, 255, 0.42);
+}
+
+.inspector-output-actions button {
+  min-height: 34px;
+  border: 1px solid rgba(20, 184, 166, 0.35);
+  border-radius: 999px;
+  padding: 8px 10px;
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.66);
+  font-size: 12px;
+  font-weight: 800;
+  transition:
+    transform 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.inspector-output-actions button:first-child,
+.inspector-output-actions button:nth-child(2) {
+  grid-column: span 1;
+}
+
+.inspector-output-actions button:last-child {
+  grid-column: 1 / -1;
+}
+
+.inspector-output-actions button.primary {
+  color: #042f2e;
+  border-color: rgba(94, 234, 212, 0.76);
+  background: linear-gradient(135deg, #6ff7e8, #22d3ee);
+  box-shadow: 0 12px 30px rgba(20, 184, 166, 0.22);
+}
+
+.inspector-output-actions button:hover {
+  transform: translateY(-1px);
+  border-color: rgba(94, 234, 212, 0.72);
+  box-shadow: 0 10px 24px rgba(20, 184, 166, 0.18);
+}
+
 .agent-actions button,
 .inspector-actions button {
   border: 1px solid rgba(20, 184, 166, 0.28);
@@ -2121,6 +2457,23 @@ onUnmounted(() => {
 .dark .agent-actions button,
 .dark .inspector-actions button {
   background: rgba(15, 23, 42, 0.44);
+}
+
+.dark .inspector-output-actions {
+  border-color: rgba(94, 234, 212, 0.28);
+  background:
+    linear-gradient(135deg, rgba(20, 184, 166, 0.16), rgba(14, 165, 233, 0.1)),
+    rgba(15, 23, 42, 0.5);
+}
+
+.dark .inspector-output-actions button {
+  color: rgba(226, 252, 249, 0.92);
+  background: rgba(15, 23, 42, 0.58);
+}
+
+.dark .inspector-output-actions button.primary {
+  color: #03211f;
+  background: linear-gradient(135deg, #6ff7e8, #28d5f2);
 }
 
 .node-status-pill {

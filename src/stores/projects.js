@@ -7,6 +7,17 @@ import { ref, computed, watch } from 'vue'
 // Storage key | 存储键
 const STORAGE_KEY = 'ai-canvas-projects'
 const RUNTIME_NODE_FIELDS = ['loading', 'progress', 'attempt', 'isPolling']
+const MEDIA_URL_FIELDS = [
+  'thumbnail',
+  'cover',
+  'coverUrl',
+  'preview',
+  'previewUrl',
+  'imageUrl',
+  'url',
+  'output',
+  'result'
+]
 
 // Generate unique ID | 生成唯一ID
 const generateId = () => `project_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
@@ -22,6 +33,71 @@ export const currentProject = computed(() => {
   return projects.value.find(p => p.id === currentProjectId.value) || null
 })
 
+const isUsableMediaUrl = (value) => {
+  if (!value || typeof value !== 'string') return false
+  const url = value.trim()
+  if (!url) return false
+
+  return /^(https?:|data:image\/|data:video\/|blob:|file:)/i.test(url)
+}
+
+const normalizeMediaUrl = (value) => {
+  if (!value) return ''
+
+  if (typeof value === 'string') {
+    return isUsableMediaUrl(value) ? value.trim() : ''
+  }
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const url = normalizeMediaUrl(item)
+      if (url) return url
+    }
+    return ''
+  }
+
+  if (typeof value === 'object') {
+    for (const field of MEDIA_URL_FIELDS) {
+      const url = normalizeMediaUrl(value[field])
+      if (url) return url
+    }
+
+    if (typeof value.b64_json === 'string' && value.b64_json.trim()) {
+      return `data:image/png;base64,${value.b64_json.trim()}`
+    }
+  }
+
+  return ''
+}
+
+const getNodeTimestamp = (node) => {
+  const data = node?.data || {}
+  return Number(data.finishedAt || data.updatedAt || data.createdAt || 0)
+}
+
+const getNodeMediaUrl = (node) => {
+  const data = node?.data || {}
+  for (const field of MEDIA_URL_FIELDS) {
+    const url = normalizeMediaUrl(data[field])
+    if (url) return url
+  }
+
+  return normalizeMediaUrl(data.images || data.outputs || data.results)
+}
+
+export const deriveProjectThumbnail = (project, { preferExisting = true } = {}) => {
+  const explicitThumbnail = normalizeMediaUrl(project?.thumbnail)
+  if (preferExisting && explicitThumbnail) return explicitThumbnail
+
+  const nodes = project?.canvasData?.nodes || []
+  const mediaNodes = [...nodes]
+    .map(node => ({ url: getNodeMediaUrl(node), time: getNodeTimestamp(node) }))
+    .filter(item => item.url)
+    .sort((a, b) => b.time - a.time)
+
+  return mediaNodes[0]?.url || ''
+}
+
 /**
  * Load projects from localStorage | 从 localStorage 加载项目
  */
@@ -30,12 +106,24 @@ export const loadProjects = () => {
     const stored = localStorage.getItem(STORAGE_KEY)
     if (stored) {
       const parsed = JSON.parse(stored)
-      // Convert date strings back to Date objects | 将日期字符串转换回 Date 对象
-      projects.value = parsed.map(p => ({
-        ...p,
-        createdAt: new Date(p.createdAt),
-        updatedAt: new Date(p.updatedAt)
-      }))
+      let recoveredThumbnail = false
+      projects.value = parsed.map(p => {
+        const project = {
+          ...p,
+          createdAt: new Date(p.createdAt),
+          updatedAt: new Date(p.updatedAt)
+        }
+        const thumbnail = deriveProjectThumbnail(project)
+        if (!project.thumbnail && thumbnail) {
+          project.thumbnail = thumbnail
+          recoveredThumbnail = true
+        }
+        return project
+      })
+
+      if (recoveredThumbnail) {
+        saveProjects()
+      }
     }
   } catch (err) {
     console.error('Failed to load projects:', err)
@@ -201,25 +289,9 @@ export const updateProjectCanvas = (id, canvasData) => {
   }
   project.updatedAt = new Date()
   
-  // Auto-update thumbnail from last edited image/video node | 自动从最后编辑的图片/视频节点更新缩略图
+  // Auto-update thumbnail from the latest generated media node.
   if (canvasData.nodes) {
-    const mediaNodes = canvasData.nodes
-      .filter(node => (node.type === 'image' || node.type === 'video') && node.data?.url)
-      .sort((a, b) => {
-        // Sort by last updated time | 按最后更新时间排序
-        const aTime = a.data?.updatedAt || a.data?.createdAt || 0
-        const bTime = b.data?.updatedAt || b.data?.createdAt || 0
-        return bTime - aTime
-      })
-    if (mediaNodes.length > 0) {
-      const latestNode = mediaNodes[0]
-      // Use thumbnail for video nodes, url for image nodes | 视频节点使用缩略图，图片节点使用 URL
-      if (latestNode.type === 'video') {
-        project.thumbnail = latestNode.data.thumbnail || latestNode.data.url
-      } else {
-        project.thumbnail = latestNode.data.url
-      }
-    }
+    project.thumbnail = deriveProjectThumbnail(project, { preferExisting: false })
   }
   
   saveProjects()

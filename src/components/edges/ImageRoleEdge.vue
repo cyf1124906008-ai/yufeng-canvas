@@ -18,7 +18,7 @@
         size="small"
       >
         <button 
-          class="flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 shadow-sm hover:shadow transition-shadow"
+          class="edge-label-pill image-role-label flex items-center gap-1 text-xs px-2 py-1 rounded-full shadow-sm hover:shadow transition-shadow"
         >
           {{ currentRoleLabel }}
           <n-icon :size="10"><ChevronDownOutline /></n-icon>
@@ -88,8 +88,9 @@ const labelY = computed(() => (props.sourceY + props.targetY) / 2)
 
 // Edge style | 边样式
 const edgeStyle = computed(() => ({
-  stroke: '#6366f1',
-  strokeWidth: 2,
+  stroke: '#60a5fa',
+  strokeWidth: 3.5,
+  filter: 'drop-shadow(0 0 7px rgba(96, 165, 250, 0.55))',
   ...props.style
 }))
 
@@ -115,3 +116,15 @@ const handleRoleSelect = (role) => {
   updateEdgeData(props.id, { imageRole: role })
 }
 </script>
+
+<style scoped>
+.edge-label-pill {
+  border: 1px solid rgba(191, 219, 254, 0.72);
+  color: #dbeafe;
+  background:
+    radial-gradient(circle at 20% 0%, rgba(255, 255, 255, 0.32), transparent 42%),
+    linear-gradient(135deg, rgba(30, 64, 175, 0.92), rgba(14, 116, 144, 0.86));
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.28), 0 0 18px rgba(96, 165, 250, 0.24);
+  backdrop-filter: blur(12px);
+}
+</style>

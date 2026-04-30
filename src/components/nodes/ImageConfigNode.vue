@@ -22,13 +22,13 @@
           @keydown.escape="cancelEditLabel"
           class="text-sm font-medium bg-[var(--bg-tertiary)] text-[var(--text-secondary)] px-1 rounded outline-none border border-blue-500"
         />
-        <div class="flex items-center gap-1">
-          <button @click="handleDuplicate" class="p-1 hover:bg-[var(--bg-tertiary)] rounded transition-colors" title="复制节点">
+        <div class="node-actions nodrag nopan flex items-center gap-1" @pointerdown.stop @mousedown.stop @click.stop>
+          <button type="button" @pointerdown.stop @mousedown.stop @click.stop="handleDuplicate" class="node-action-button p-1 hover:bg-[var(--bg-tertiary)] rounded transition-colors" title="复制节点">
             <n-icon :size="14">
               <CopyOutline />
             </n-icon>
           </button>
-          <button @click="handleDelete" class="p-1 hover:bg-[var(--bg-tertiary)] rounded transition-colors" title="删除节点">
+          <button type="button" @pointerdown.stop @mousedown.stop @click.stop="handleDelete" class="node-action-button p-1 hover:bg-[var(--bg-tertiary)] rounded transition-colors" title="删除节点">
             <n-icon :size="14">
               <TrashOutline />
             </n-icon>
@@ -37,12 +37,12 @@
       </div>
 
       <!-- Config options | 配置选项 -->
-      <div class="p-3 space-y-3">
+      <div class="node-control-zone nodrag nopan p-3 space-y-3" @pointerdown.capture.stop @mousedown.capture.stop @click.stop>
         <!-- Model selector | 模型选择 -->
         <div class="flex items-center justify-between">
           <span class="text-xs text-[var(--text-secondary)]">模型</span>
-          <n-dropdown :options="modelOptions" @select="handleModelSelect">
-            <button class="flex items-center gap-1 text-sm text-[var(--text-primary)] hover:text-[var(--accent-color)]">
+          <n-dropdown trigger="click" :options="modelOptions" @select="handleModelSelect">
+            <button type="button" class="node-trigger-button nodrag nopan flex items-center gap-1 text-sm text-[var(--text-primary)] hover:text-[var(--accent-color)]" @pointerdown.stop @mousedown.stop @click.stop>
               {{ displayModelName }}
               <n-icon :size="12"><ChevronDownOutline /></n-icon>
             </button>
@@ -52,8 +52,8 @@
         <!-- Quality selector | 画质选择 -->
         <div v-if="hasQualityOptions" class="flex items-center justify-between">
           <span class="text-xs text-[var(--text-secondary)]">画质</span>
-          <n-dropdown :options="qualityOptions" @select="handleQualitySelect">
-            <button class="flex items-center gap-1 text-sm text-[var(--text-primary)] hover:text-[var(--accent-color)]">
+          <n-dropdown trigger="click" :options="qualityOptions" @select="handleQualitySelect">
+            <button type="button" class="node-trigger-button nodrag nopan flex items-center gap-1 text-sm text-[var(--text-primary)] hover:text-[var(--accent-color)]" @pointerdown.stop @mousedown.stop @click.stop>
               {{ displayQuality }}
               <n-icon :size="12"><ChevronForwardOutline /></n-icon>
             </button>
@@ -64,9 +64,13 @@
         <div v-if="hasSizeOptions" class="flex items-center justify-between">
           <span class="text-xs text-[var(--text-secondary)]">尺寸</span>
           <div class="flex items-center gap-2">
-            <n-dropdown :options="sizeOptions" @select="handleSizeSelect">
+            <n-dropdown trigger="click" :options="sizeOptions" @select="handleSizeSelect">
               <button
-                class="flex items-center gap-1 text-sm text-[var(--text-primary)] hover:text-[var(--accent-color)]">
+                type="button"
+                class="node-trigger-button nodrag nopan flex items-center gap-1 text-sm text-[var(--text-primary)] hover:text-[var(--accent-color)]"
+                @pointerdown.stop
+                @mousedown.stop
+                @click.stop>
                 {{ displaySize }}
                 <n-icon :size="12">
                   <ChevronForwardOutline />
@@ -79,8 +83,8 @@
         <!-- Count selector | 生成数量选择 -->
         <div class="flex items-center justify-between">
           <span class="text-xs text-[var(--text-secondary)]">数量</span>
-          <n-dropdown :options="countOptions" @select="handleCountSelect">
-            <button class="flex items-center gap-1 text-sm text-[var(--text-primary)] hover:text-[var(--accent-color)]">
+          <n-dropdown trigger="click" :options="countOptions" @select="handleCountSelect">
+            <button type="button" class="node-trigger-button nodrag nopan flex items-center gap-1 text-sm text-[var(--text-primary)] hover:text-[var(--accent-color)]" @pointerdown.stop @mousedown.stop @click.stop>
               {{ localCount }} 张
               <n-icon :size="12"><ChevronForwardOutline /></n-icon>
             </button>
@@ -93,7 +97,7 @@
         </div>
 
         <div class="advanced-params">
-          <button class="advanced-toggle" @click="showAdvancedParams = !showAdvancedParams">
+          <button type="button" class="advanced-toggle node-trigger-button nodrag nopan" @pointerdown.stop @mousedown.stop @click.stop="showAdvancedParams = !showAdvancedParams">
             高级参数
             <span>{{ showAdvancedParams ? '收起' : '展开' }}</span>
           </button>
@@ -125,7 +129,7 @@
         <!-- Generate button | 生成按钮 -->
         <div v-if="hasConnectedImageWithContent" class="flex gap-2">
           <!-- Create new (primary) | 新建节点（主按钮） -->
-          <button @click="handleGenerate('new')" :disabled="loading || !canGenerate"
+          <button type="button" @pointerdown.stop @mousedown.stop @click.stop="handleGenerate('new')" :disabled="loading || !canGenerate"
             class="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg bg-[var(--accent-color)] hover:bg-[var(--accent-hover)] text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
             <n-spin v-if="loading" :size="14" />
             <template v-else>
@@ -134,7 +138,7 @@
             </template>
           </button>
           <!-- Replace existing (secondary) | 替换现有（次按钮） -->
-          <button @click="handleGenerate('replace')" :disabled="loading || !canGenerate"
+          <button type="button" @pointerdown.stop @mousedown.stop @click.stop="handleGenerate('replace')" :disabled="loading || !canGenerate"
             class="flex-shrink-0 flex items-center justify-center gap-1 py-2 px-2.5 rounded-lg border border-[var(--border-color)] text-[var(--text-secondary)] hover:border-[var(--accent-color)] hover:text-[var(--accent-color)] text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
             <n-spin v-if="loading" :size="14" />
             <template v-else>
@@ -143,7 +147,7 @@
             </template>
           </button>
         </div>
-        <button v-else @click="handleGenerate('auto')" :disabled="loading || !canGenerate"
+        <button v-else type="button" @pointerdown.stop @mousedown.stop @click.stop="handleGenerate('auto')" :disabled="loading || !canGenerate"
           class="w-full flex items-center justify-center gap-2 py-2 px-4 rounded-lg bg-[var(--accent-color)] hover:bg-[var(--accent-hover)] text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
           <n-spin v-if="loading" :size="14" />
           <template v-else>
@@ -771,6 +775,7 @@ const handleGenerate = async (mode = 'auto') => {
         error: '',
         label: '文生图',
         model: localModel.value,
+        prompt,
         finishedAt: Date.now(),
         updatedAt: Date.now()
       })
@@ -895,6 +900,28 @@ watch(
 .image-config-node {
   cursor: default;
   position: relative;
+}
+
+.node-actions,
+.node-control-zone {
+  position: relative;
+  z-index: 20;
+  pointer-events: auto;
+}
+
+.node-action-button,
+.node-trigger-button,
+.node-control-zone button,
+.node-control-zone input,
+.node-control-zone :deep(.n-dropdown-trigger) {
+  pointer-events: auto;
+  user-select: none;
+}
+
+.node-trigger-button {
+  cursor: pointer;
+  position: relative;
+  z-index: 30;
 }
 
 .advanced-params {
