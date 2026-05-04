@@ -6,7 +6,6 @@ import {
 
 const state = ref(null)
 const loading = ref(false)
-const connectionResult = ref(null)
 const logs = ref([])
 
 const isDesktop = computed(() => !!window.desktopApp?.comfy)
@@ -45,23 +44,17 @@ export async function doInstall() {
 
 export async function doStart() {
   if (!isDesktop.value) return
-  return await comfyStart()
+  await comfyStart()
 }
 
 export async function doStop() {
   if (!isDesktop.value) return
-  return await comfyStop()
+  await comfyStop()
 }
 
 export async function doTestConnection(baseUrl) {
   if (!isDesktop.value) return
-  connectionResult.value = null
-  const result = await comfyTestConnection(baseUrl)
-  connectionResult.value = result
-  if (result?.ok) {
-    await refreshStatus()
-  }
-  return result
+  return await comfyTestConnection(baseUrl)
 }
 
 export async function refreshLogs() {
@@ -79,7 +72,6 @@ export function useComfyStore() {
   return {
     state,
     loading,
-    connectionResult,
     logs,
     isDesktop,
     refreshStatus,

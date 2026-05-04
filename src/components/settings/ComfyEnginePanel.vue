@@ -58,17 +58,8 @@
         </div>
 
         <!-- Connection result -->
-        <n-alert
-          v-if="connectionResult"
-          :type="connectionResult.ok ? 'success' : 'error'"
-          class="mb-4"
-        >
-          <template v-if="connectionResult.ok">
-            连接成功，检测到 {{ connectionResult.objectInfoCount }} 个节点。
-          </template>
-          <template v-else>
-            {{ connectionResult.error }}
-          </template>
+        <n-alert v-if="state.objectInfoCount > 0" type="success" class="mb-4">
+          已连接，检测到 {{ state.objectInfoCount }} 个节点。
         </n-alert>
 
         <!-- Error -->
@@ -104,7 +95,7 @@ import {
 import { useComfyStore } from '@/stores/comfy'
 
 const {
-  state, loading, connectionResult, logs, isDesktop,
+  state, loading, logs, isDesktop,
   refreshStatus, updateConfig, doInstall, doStart, doStop,
   doTestConnection, refreshLogs, openFolder
 } = useComfyStore()
@@ -133,21 +124,23 @@ async function handleInstall() {
 }
 
 async function handleStart() {
-  const result = await doStart()
-  if (result?.error) {
-    connectionResult.value = { ok: false, error: result.error }
-  }
+  await doStart()
+  await refreshStatus()
+  await refreshLogs()
 }
 
 async function handleStop() {
   await doStop()
   await refreshStatus()
+  await refreshLogs()
 }
 
 async function handleTestConnection() {
   testing.value = true
   try {
     await doTestConnection(baseUrlInput.value)
+    await refreshStatus()
+    await refreshLogs()
   } finally {
     testing.value = false
   }

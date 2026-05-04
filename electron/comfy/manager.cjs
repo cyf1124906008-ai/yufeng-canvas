@@ -37,6 +37,9 @@ function getStatus() {
     state.modelsPath = paths.getComfyModelsPath()
     state.outputsPath = paths.getComfyOutputsPath()
     state.version = config.version || ''
+    state.error = config.error || ''
+    state.objectInfoCount = config.objectInfoCount || 0
+    state.lastCheckedAt = config.lastCheckedAt || config.lastConnectedAt || 0
   }
 
   if (fs.existsSync(paths.getComfyRoot())) {
