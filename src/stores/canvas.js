@@ -405,6 +405,7 @@ export const addEdge = (params) => {
   }
   edges.value = [...edges.value, newEdge]
   saveToHistory() // Save after adding edge | 添加连线后保存
+  return newEdge.id
 }
 
 /**

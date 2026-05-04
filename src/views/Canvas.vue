@@ -582,6 +582,18 @@
       </template>
     </n-modal>
 
+    <!-- AI Command Confirm Modal | AI 命令确认弹窗 -->
+    <n-modal v-model:show="showCommandConfirmModal" preset="dialog" title="AI 指令确认" type="warning">
+      <p v-if="pendingCommandPlan" class="mb-2">{{ pendingCommandPlan.summary }}</p>
+      <p class="text-xs text-[var(--text-secondary)]">
+        共 {{ pendingCommandPlan?.commands?.length || 0 }} 条操作，包含需要确认的风险操作。
+      </p>
+      <template #action>
+        <n-button @click="cancelCommandPlan">取消</n-button>
+        <n-button type="primary" @click="confirmCommandPlan">确认执行</n-button>
+      </template>
+    </n-modal>
+
     <!-- Download Modal | 下载弹窗 -->
     <DownloadModal v-model:show="showDownloadModal" />
 
@@ -634,7 +646,7 @@ import {
   HelpCircleOutline,
   SparklesOutline
 } from '@vicons/ionicons5'
-import { nodes, edges, runtimeLogs, clearRuntimeLogs, addNode, addNodes, addEdge, addEdges, updateNode, removeNode, duplicateNode, initSampleData, loadProject, saveProject, detachCurrentProject, canvasViewport, updateViewport, undo, redo, canUndo, canRedo, manualSaveHistory, startBatchOperation, endBatchOperation } from '../stores/canvas'
+import { nodes, edges, runtimeLogs, clearRuntimeLogs, addRuntimeLog, addNode, addNodes, addEdge, addEdges, updateNode, removeNode, duplicateNode, initSampleData, loadProject, saveProject, detachCurrentProject, canvasViewport, updateViewport, undo, redo, canUndo, canRedo, manualSaveHistory, startBatchOperation, endBatchOperation } from '../stores/canvas'
 import { loadAllModels } from '../stores/models'
 import { useChat, useWorkflowOrchestrator } from '../hooks'
 import { useModelStore } from '../stores/pinia'
@@ -647,6 +659,8 @@ import WorkflowPanel from '../components/WorkflowPanel.vue'
 import AppHeader from '../components/AppHeader.vue'
 import GuidedTour from '../components/GuidedTour.vue'
 import { CANVAS_PROMPT_SUGGESTIONS } from '../config/promptLibrary'
+import { buildCanvasSnapshot, buildCanvasAgentSystemPrompt, parseAgentCommandResponse, classifyCommandRisk } from '../integrations/canvas/agentPlanner'
+import { executeCommandBatch, validateCommandBatch } from '../integrations/canvas/commands'
 
 // API Config state | API 配置状态
 const modelStore = useModelStore()
@@ -775,6 +789,8 @@ const showDownloadModal = ref(false)
 const showWorkflowPanel = ref(false)
 const showRuntimeLogs = ref(false)
 const showCanvasTour = ref(false)
+const pendingCommandPlan = ref(null)
+const showCommandConfirmModal = ref(false)
 const showAgentPanel = ref(false)
 const showInspectorPanel = ref(true)
 const inspectorCollapsed = ref(false)
@@ -1927,6 +1943,26 @@ const confirmDelete = () => {
   router.push({ path: '/', query: { section: 'projects' } })
 }
 
+const confirmCommandPlan = () => {
+  const plan = pendingCommandPlan.value
+  if (!plan) return
+  const result = executeCommandBatch(plan.commands)
+  if (result.ok) {
+    addRuntimeLog('info', `AI 已执行: ${plan.summary}`, { commands: plan.commands })
+    window.$message?.success(plan.summary)
+  } else {
+    addRuntimeLog('error', `AI 执行失败: ${result.message}`)
+    window.$message?.error(result.message)
+  }
+  showCommandConfirmModal.value = false
+  pendingCommandPlan.value = null
+}
+
+const cancelCommandPlan = () => {
+  showCommandConfirmModal.value = false
+  pendingCommandPlan.value = null
+}
+
 const duplicateCurrentProject = () => {
   const projectId = route.params.id
   if (!projectId || projectId === 'new') {
@@ -2017,33 +2053,57 @@ const sendMessage = async () => {
     const baseY = maxY + 200
 
     if (autoExecute.value) {
-      // Auto-execute mode: analyze intent and execute workflow | 自动执行模式：分析意图并执行工作流
-      window.$message?.info('正在分析工作流...')
+      // Auto-execute mode: try Canvas Agent Planner first, fallback to workflow orchestrator
+      window.$message?.info('正在分析指令...')
 
       try {
-        // Analyze user intent | 分析用户意图
-        const result = await analyzeIntent(content)
+        const snapshot = buildCanvasSnapshot()
+        const systemPrompt = buildCanvasAgentSystemPrompt(snapshot)
+        const response = await sendChat(content, true, { systemPrompt })
+        const parsed = parseAgentCommandResponse(response)
 
-        // Ensure we have valid workflow params | 确保有效的工作流参数
-        const workflowParams = {
-          workflow_type: result?.workflow_type || WORKFLOW_TYPES.TEXT_TO_IMAGE,
-          image_prompt: result?.image_prompt || content,
-          video_prompt: result?.video_prompt || content,
-          character: result?.character,
-          shots: result?.shots
+        if (parsed.ok && parsed.plan.commands.length > 0) {
+          const { plan } = parsed
+          const batchErr = validateCommandBatch(plan.commands)
+          if (batchErr) throw new Error(batchErr.message)
+
+          const { needsConfirm } = classifyCommandRisk(plan.commands)
+
+          if (needsConfirm) {
+            pendingCommandPlan.value = plan
+            showCommandConfirmModal.value = true
+          } else {
+            const result = executeCommandBatch(plan.commands)
+            if (result.ok) {
+              addRuntimeLog('info', `AI 已执行: ${plan.summary}`, { commands: plan.commands })
+              window.$message?.success(plan.summary)
+            } else {
+              addRuntimeLog('error', `AI 执行失败: ${result.message}`)
+              window.$message?.error(result.message)
+            }
+          }
+        } else {
+          // Fallback: parsed failed or no commands, use old workflow orchestrator
+          throw new Error(parsed.error || '无可执行命令')
         }
-
-        window.$message?.info(`执行工作流: ${result?.description || '文生图'}`)
-
-        // Execute the workflow | 执行工作流
-        await executeWorkflow(workflowParams, { x: baseX, y: baseY })
-
-        window.$message?.success('工作流已启动')
-      } catch (err) {
-        console.error('Workflow error:', err)
-        // Fallback to simple text-to-image | 回退到文生图
-        window.$message?.warning('使用默认文生图工作流')
-        await createTextToImageWorkflow(content, { x: baseX, y: baseY })
+      } catch (_agentErr) {
+        // Fallback to analyzeIntent + executeWorkflow
+        try {
+          const result = await analyzeIntent(content)
+          const workflowParams = {
+            workflow_type: result?.workflow_type || WORKFLOW_TYPES.TEXT_TO_IMAGE,
+            image_prompt: result?.image_prompt || content,
+            video_prompt: result?.video_prompt || content,
+            character: result?.character,
+            shots: result?.shots
+          }
+          window.$message?.info(`执行工作流: ${result?.description || '文生图'}`)
+          await executeWorkflow(workflowParams, { x: baseX, y: baseY })
+          window.$message?.success('工作流已启动')
+        } catch (err2) {
+          window.$message?.warning('使用默认文生图工作流')
+          await createTextToImageWorkflow(content, { x: baseX, y: baseY })
+        }
       }
     } else {
       // Manual mode: just create nodes | 手动模式：仅创建节点

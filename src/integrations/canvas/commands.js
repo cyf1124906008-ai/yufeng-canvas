@@ -1,6 +1,5 @@
 /**
  * Canvas command protocol for AI-driven canvas manipulation.
- * Pure function interfaces — no model integration, just the command layer.
  */
 import { addNode, addEdge, updateNode, removeNode } from '@/stores/canvas'
 
@@ -64,14 +63,14 @@ export function validateConnectNodes(params) {
 export function executeConnectNodes(params) {
   const err = validateConnectNodes(params)
   if (err) return err
-  addEdge({
+  const edgeId = addEdge({
     source: params.source,
     target: params.target,
     sourceHandle: params.sourceHandle || 'right',
     targetHandle: params.targetHandle || 'left',
     type: params.edgeType
   })
-  return ok('节点已连接', { edgeIds: [`${params.source}-${params.target}`] })
+  return ok('节点已连接', { edgeIds: [edgeId] })
 }
 
 // --- runComfyWorkflow ---
@@ -83,7 +82,6 @@ export function validateRunComfyWorkflow(params) {
 export function executeRunComfyWorkflow(params) {
   const err = validateRunComfyWorkflow(params)
   if (err) return err
-  // Actual run is async and handled by ComfyWorkflowNode — this is the protocol stub
   return ok('Comfy 工作流运行已触发', { nodeIds: [params.nodeId] })
 }
 
@@ -94,7 +92,6 @@ export function validateImportComfyWorkflowTemplate(params) {
 }
 
 export function executeImportComfyWorkflowTemplate(_params) {
-  // Will be implemented when LLM integration lands
   return ok('Comfy 工作流模板导入已预留')
 }
 
@@ -118,6 +115,39 @@ export function validateCommand(name, params) {
   const cmd = COMMAND_MAP[name]
   if (!cmd) return fail(`未知命令: ${name}`)
   return cmd.validate(params || {})
+}
+
+export function validateCommandBatch(commands) {
+  if (!Array.isArray(commands) || commands.length === 0) {
+    return fail('commands 必须是非空数组')
+  }
+  for (let i = 0; i < commands.length; i++) {
+    const cmd = commands[i]
+    if (!cmd.name) return fail(`第 ${i + 1} 条命令缺少 name`)
+    const cmdDef = COMMAND_MAP[cmd.name]
+    if (!cmdDef) return fail(`第 ${i + 1} 条: 未知命令 "${cmd.name}"`)
+    const err = cmdDef.validate(cmd.params || {})
+    if (err) return fail(`第 ${i + 1} 条: ${err.message}`)
+  }
+  return null
+}
+
+export function executeCommandBatch(commands) {
+  const results = []
+  const allNodeIds = []
+  const allEdgeIds = []
+
+  for (const cmd of commands) {
+    const result = executeCommand(cmd.name, cmd.params || {})
+    results.push({ name: cmd.name, ...result })
+    if (!result.ok) {
+      return { ok: false, results, failedAt: cmd.name, message: result.message, nodeIds: allNodeIds, edgeIds: allEdgeIds }
+    }
+    if (result.nodeIds) allNodeIds.push(...result.nodeIds)
+    if (result.edgeIds) allEdgeIds.push(...result.edgeIds)
+  }
+
+  return { ok: true, results, nodeIds: allNodeIds, edgeIds: allEdgeIds }
 }
 
 export const COMMAND_NAMES = Object.keys(COMMAND_MAP)
