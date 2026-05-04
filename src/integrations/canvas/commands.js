@@ -2,6 +2,8 @@
  * Canvas command protocol for AI-driven canvas manipulation.
  */
 import { nodes, addNode, addEdge, updateNode, removeNode } from '@/stores/canvas'
+import { currentProjectId, currentProject, updateProject } from '@/stores/projects'
+import { PROJECT_TYPES, createEmptyProjectStructure } from '@/config/projectSchema'
 
 const ALLOWED_NODE_TYPES = new Set([
   'text',
@@ -65,6 +67,13 @@ function validatePosition(position) {
     return fail('position.x / position.y 必须是数字')
   }
   return null
+}
+
+function updateCurrentProjectStructure(data) {
+  const project = currentProject.value
+  if (!project || !currentProjectId.value) return fail('当前画布还没有保存为项目')
+  updateProject(currentProjectId.value, data)
+  return ok('项目结构已更新')
 }
 
 function ok(message, extra = {}) {
@@ -184,6 +193,72 @@ export function executeImportComfyWorkflowTemplate(_params) {
   return ok('Comfy 工作流模板导入已预留')
 }
 
+// --- createDramaProject ---
+export function validateCreateDramaProject(params) {
+  if (params?.title != null && typeof params.title !== 'string') return fail('title 必须是字符串')
+  if (params?.premise != null && typeof params.premise !== 'string') return fail('premise 必须是字符串')
+  return null
+}
+
+export function executeCreateDramaProject(params) {
+  const err = validateCreateDramaProject(params)
+  if (err) return err
+  const structure = createEmptyProjectStructure(PROJECT_TYPES.DRAMA)
+  const result = updateCurrentProjectStructure({
+    type: PROJECT_TYPES.DRAMA,
+    name: params.title || currentProject.value?.name || '短剧项目',
+    drama: {
+      ...structure.drama,
+      premise: params.premise || ''
+    },
+    aiWorkspace: {
+      ...structure.aiWorkspace,
+      plans: [{
+        id: `plan_${Date.now()}`,
+        title: params.title || '短剧项目规划',
+        content: params.premise || '',
+        createdAt: Date.now()
+      }]
+    }
+  })
+  if (!result.ok) return result
+  return ok('短剧项目结构已创建')
+}
+
+// --- createShotList ---
+export function validateCreateShotList(params) {
+  if (!Array.isArray(params?.shots) || params.shots.length === 0) return fail('shots 必须是非空数组')
+  return null
+}
+
+export function executeCreateShotList(params) {
+  const err = validateCreateShotList(params)
+  if (err) return err
+  const project = currentProject.value
+  if (!project || !currentProjectId.value) return fail('当前画布还没有保存为项目')
+  const shots = params.shots.map((shot, index) => ({
+    id: shot.id || `shot_${Date.now()}_${index + 1}`,
+    index: index + 1,
+    title: shot.title || `镜头 ${index + 1}`,
+    prompt: shot.prompt || shot.description || '',
+    status: shot.status || 'pending',
+    duration: shot.duration || 5,
+    createdAt: Date.now(),
+    updatedAt: Date.now()
+  }))
+  updateProject(currentProjectId.value, {
+    type: project.type || PROJECT_TYPES.DRAMA,
+    drama: {
+      ...(project.drama || {}),
+      shots: [
+        ...((project.drama && Array.isArray(project.drama.shots)) ? project.drama.shots : []),
+        ...shots
+      ]
+    }
+  })
+  return ok('镜头表已创建', { shotIds: shots.map(shot => shot.id) })
+}
+
 // --- Command dispatch ---
 const COMMAND_MAP = {
   addNode: { validate: validateAddNode, execute: executeAddNode },
@@ -191,7 +266,9 @@ const COMMAND_MAP = {
   removeNode: { validate: validateRemoveNode, execute: executeRemoveNode },
   connectNodes: { validate: validateConnectNodes, execute: executeConnectNodes },
   runComfyWorkflow: { validate: validateRunComfyWorkflow, execute: executeRunComfyWorkflow },
-  importComfyWorkflowTemplate: { validate: validateImportComfyWorkflowTemplate, execute: executeImportComfyWorkflowTemplate }
+  importComfyWorkflowTemplate: { validate: validateImportComfyWorkflowTemplate, execute: executeImportComfyWorkflowTemplate },
+  createDramaProject: { validate: validateCreateDramaProject, execute: executeCreateDramaProject },
+  createShotList: { validate: validateCreateShotList, execute: executeCreateShotList }
 }
 
 export function executeCommand(name, params) {

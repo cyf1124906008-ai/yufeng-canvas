@@ -3,6 +3,7 @@
  * Manages projects with localStorage persistence
  */
 import { ref, computed, watch } from 'vue'
+import { PROJECT_TYPES, createEmptyProjectStructure, normalizeProjectStructure } from '../config/projectSchema'
 
 // Storage key | 存储键
 const STORAGE_KEY = 'ai-canvas-projects'
@@ -40,7 +41,7 @@ export const currentProject = computed(() => {
 })
 
 const reviveProjectDates = (project) => ({
-  ...project,
+  ...normalizeProjectStructure(project),
   createdAt: project?.createdAt ? new Date(project.createdAt) : new Date(),
   updatedAt: project?.updatedAt ? new Date(project.updatedAt) : new Date(),
   deletedAt: project?.deletedAt ? new Date(project.deletedAt) : undefined
@@ -295,11 +296,12 @@ export const saveProjects = () => {
  * @param {string} name - Project name | 项目名称
  * @returns {string} - New project ID | 新项目ID
  */
-export const createProject = (name = '未命名项目') => {
+export const createProject = (name = '未命名项目', type = PROJECT_TYPES.MIXED) => {
   const id = generateId()
   const now = new Date()
   
   const newProject = {
+    ...createEmptyProjectStructure(type),
     id,
     name,
     thumbnail: '',

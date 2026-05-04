@@ -50,6 +50,8 @@ ${JSON.stringify(snapshot, null, 2)}
 - removeNode: { id }
 - connectNodes: { source, target, sourceHandle?, targetHandle?, edgeType? }
 - runComfyWorkflow: { nodeId }
+- createDramaProject: { title?, premise? }
+- createShotList: { shots: [{ title, description?, prompt?, duration?, status? }] }
 
 updateNode 只允许修改这些用户可见字段：
 - text: content, label
@@ -114,6 +116,7 @@ export function classifyCommandRisk(commands) {
   for (const cmd of commands) {
     if (cmd.name === 'removeNode') risks.destructive.push(cmd)
     else if (cmd.name === 'runComfyWorkflow') risks.execution.push(cmd)
+    else if (cmd.name === 'createDramaProject') risks.execution.push(cmd)
     else risks.safe.push(cmd)
   }
   const needsConfirm = risks.destructive.length > 0 || risks.execution.length > 0
@@ -135,6 +138,70 @@ function findFirstNode(snapshot, type) {
   return snapshot.nodes.find(node => node.type === type) || null
 }
 
+function createDramaShotCommands(userInput, snapshot) {
+  const shotCountMatch = String(userInput).match(/(\d{1,2})\s*(个|條|条)?\s*(镜头|分镜|shot)/i)
+  const shotCount = Math.min(24, Math.max(4, Number(shotCountMatch?.[1] || 8)))
+  const commands = [
+    {
+      name: 'createDramaProject',
+      params: {
+        title: 'AI 短剧项目',
+        premise: userInput
+      }
+    },
+    {
+      name: 'createShotList',
+      params: {
+        shots: Array.from({ length: shotCount }, (_, index) => ({
+          title: `镜头 ${index + 1}`,
+          description: `根据用户设定拆分的第 ${index + 1} 个镜头`,
+          prompt: `${userInput}，镜头 ${index + 1}，电影感分镜，主体清晰，构图明确`,
+          duration: 5,
+          status: 'pending'
+        }))
+      }
+    }
+  ]
+
+  for (let i = 0; i < shotCount; i++) {
+    const textRef = `shotText${i + 1}`
+    const imageRef = `shotImage${i + 1}`
+    commands.push(
+      {
+        name: 'addNode',
+        params: {
+          ref: textRef,
+          type: 'text',
+          position: { x: 120, y: getNextPosition(snapshot, 0).y + i * 180 },
+          data: {
+            label: `镜头 ${i + 1} 提示词`,
+            content: `${userInput}，镜头 ${i + 1}，电影感分镜，主体清晰，构图明确`
+          }
+        }
+      },
+      {
+        name: 'addNode',
+        params: {
+          ref: imageRef,
+          type: 'imageConfig',
+          position: { x: 520, y: getNextPosition(snapshot, 0).y + i * 180 },
+          data: {
+            label: `镜头 ${i + 1} 首帧`,
+            prompt: `${userInput}，镜头 ${i + 1}，电影感首帧`
+          }
+        }
+      },
+      { name: 'connectNodes', params: { source: textRef, target: imageRef } }
+    )
+  }
+
+  return {
+    summary: `创建短剧项目和 ${shotCount} 个分镜首帧节点`,
+    commands,
+    requiresConfirmation: false
+  }
+}
+
 export function buildLocalCommandPlan(userInput, snapshot = buildCanvasSnapshot()) {
   const input = String(userInput || '').trim().toLowerCase()
   if (!input) return null
@@ -142,6 +209,7 @@ export function buildLocalCommandPlan(userInput, snapshot = buildCanvasSnapshot(
   const asksVideo = hasAny(input, ['视频', 'video', '短片', '短剧', 'tvc', '镜头'])
   const asksImage = hasAny(input, ['图', '图片', '照片', '海报', '广告', 'banner', '封面', 'image'])
   const asksWorkflow = hasAny(input, ['工作流', '流程', '创建', '生成', '做一个', '搭一个'])
+  const asksDrama = hasAny(input, ['短剧', '剧本', '分镜', '镜头表', '角色设定', '第一集', '剧情'])
 
   const sizeMatch = input.match(/(\d{3,4})\s*[x×*]\s*(\d{3,4})/)
   const mentionsComfy = hasAny(input, ['comfy', 'comfyui', '工作流节点'])
@@ -167,6 +235,10 @@ export function buildLocalCommandPlan(userInput, snapshot = buildCanvasSnapshot(
       commands: [{ name: 'runComfyWorkflow', params: { nodeId: comfyNode.id } }],
       requiresConfirmation: true
     }
+  }
+
+  if (asksDrama && hasAny(input, ['创建', '生成', '做', '拆', '规划', '第一集', '分镜', '镜头'])) {
+    return createDramaShotCommands(userInput, snapshot)
   }
 
   if (asksWorkflow && asksVideo && asksImage) {
