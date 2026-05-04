@@ -348,7 +348,9 @@ const getDefaultNodeData = (type) => {
         status: 'idle',
         error: '',
         startedAt: null,
-        outputNodeId: null,
+        outputNodeIds: [],
+        lastPromptId: null,
+        lastRunAt: null,
         baseUrl: 'http://127.0.0.1:8188'
       }
     default:
@@ -514,6 +516,24 @@ export const initSampleData = () => {
 }
 
 /**
+ * Restore asset-backed images whose url was lost | 恢复有 assetPath 但无 url 的图片
+ */
+const restoreAssetImages = async () => {
+  const restore = window.desktopApp?.assets?.readAsDataUrl
+  if (!restore) return
+  for (const node of nodes.value) {
+    if (node.type === 'image' && node.data?.assetPath && !node.data.url) {
+      try {
+        const result = await restore(node.data.assetPath)
+        if (result && typeof result === 'string') {
+          node.data.url = result
+        }
+      } catch { /* ignore */ }
+    }
+  }
+}
+
+/**
  * Load project data | 加载项目数据
  * @param {string} projectId - Project ID | 项目ID
  */
@@ -554,6 +574,8 @@ export const loadProject = (projectId) => {
   
   // Enable auto-save after loading | 加载后启用自动保存
   setTimeout(() => {
+    // Restore asset-backed images whose url is empty | 恢复有 assetPath 但无 url 的图片
+    restoreAssetImages()
     autoSaveEnabled = true
     isRestoring = false
   }, 100)

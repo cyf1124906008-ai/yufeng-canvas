@@ -31,5 +31,14 @@ contextBridge.exposeInMainWorld('desktopApp', {
     testConnection: (baseUrl) => ipcRenderer.invoke('app:comfy:test-connection', baseUrl),
     getLogs: () => ipcRenderer.invoke('app:comfy:get-logs'),
     openFolder: (key) => ipcRenderer.invoke('app:comfy:open-folder', key)
+  },
+  comfyRuntime: {
+    queuePrompt: (baseUrl, workflow) => ipcRenderer.invoke('app:comfy:queue-prompt', baseUrl, workflow),
+    getHistory: (baseUrl, promptId) => ipcRenderer.invoke('app:comfy:get-history', baseUrl, promptId),
+    fetchImage: (baseUrl, imageMeta) => ipcRenderer.invoke('app:comfy:fetch-image', baseUrl, imageMeta)
+  },
+  assets: {
+    saveDataUrl: (dataUrl, projectId) => ipcRenderer.invoke('app:assets:save-data-url', dataUrl, projectId),
+    readAsDataUrl: (assetPath) => ipcRenderer.invoke('app:assets:read-as-data-url', assetPath)
   }
 })

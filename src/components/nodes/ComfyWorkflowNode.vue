@@ -119,8 +119,11 @@ import { Handle, Position } from '@vue-flow/core'
 import { NIcon } from 'naive-ui'
 import { TrashOutline } from '@vicons/ionicons5'
 import { useVueFlow } from '@vue-flow/core'
-import { addNode, addEdge, updateNode, removeNode } from '@/stores/canvas'
-import { comfyQueuePrompt, comfyGetHistory, comfyFetchImageAsDataUrl, extractOutputImages, validateBaseUrl } from '@/integrations/comfy/api'
+import { addNode, addEdge, updateNode, removeNode, currentProjectId } from '@/stores/canvas'
+import {
+  comfyQueuePrompt, comfyGetHistory, comfyFetchImageAsDataUrl,
+  extractOutputImages, saveAsset
+} from '@/integrations/comfy/api'
 
 const props = defineProps({ id: String, data: Object })
 const { findNode } = useVueFlow()
@@ -177,8 +180,7 @@ function getBaseUrl() {
 async function handleRun() {
   if (props.data.status === 'running') return
 
-  const base = validateBaseUrl(getBaseUrl())
-  if (!base) {
+  if (!window.desktopApp?.comfyRuntime) {
     emitUpdate('error', '请先在设置 > Comfy 引擎测试连接')
     emitUpdate('status', 'error')
     return
@@ -190,7 +192,6 @@ async function handleRun() {
     return
   }
 
-  // Clone workflow and apply bindings
   const workflow = JSON.parse(JSON.stringify(props.data.apiWorkflow))
   const bindings = props.data.bindings || {}
   const overrides = {
@@ -210,12 +211,14 @@ async function handleRun() {
 
   emitUpdate('status', 'running')
   emitUpdate('error', '')
+  emitUpdate('outputNodeIds', [])
   startTime = Date.now()
   elapsed.value = 0
   elapsedTimer = setInterval(() => { elapsed.value = Date.now() - startTime }, 1000)
 
   try {
     const promptId = await comfyQueuePrompt(getBaseUrl(), workflow)
+    emitUpdate('lastPromptId', promptId)
     pollForResult(promptId)
   } catch (e) {
     clearInterval(elapsedTimer)
@@ -239,7 +242,6 @@ function pollForResult(promptId) {
       if (!history) return
       const images = extractOutputImages(history)
       if (images.length === 0) {
-        // Check if status indicates error
         if (history.status?.status_str === 'error') {
           clearInterval(pollTimer)
           clearInterval(elapsedTimer)
@@ -248,38 +250,52 @@ function pollForResult(promptId) {
           emitUpdate('status', 'error')
           return
         }
-        return // still running
+        return
       }
 
       clearInterval(pollTimer)
       clearInterval(elapsedTimer)
 
-      // Fetch first image as data URL
-      const dataUrl = await comfyFetchImageAsDataUrl(getBaseUrl(), images[0])
-
-      // Create image node
       const node = findNode(props.id)
       const posX = node?.position?.x ?? 100
       const posY = node?.position?.y ?? 100
+      const projectId = currentProjectId.value || 'canvas-default'
+      const outputNodeIds = []
 
-      const imageNodeId = addNode('image', { x: posX + 400, y: posY }, {
-        url: dataUrl,
-        label: 'Comfy 生成结果',
-        source: 'comfy',
-        prompt: localPrompt.value,
-        createdAt: Date.now(),
-        updatedAt: Date.now()
-      })
+      for (let i = 0; i < images.length; i++) {
+        const dataUrl = await comfyFetchImageAsDataUrl(getBaseUrl(), images[i])
 
-      addEdge({
-        source: props.id,
-        target: imageNodeId,
-        sourceHandle: 'right',
-        targetHandle: 'left'
-      })
+        // Save to local asset
+        const asset = await saveAsset(dataUrl, projectId)
+        const imageData = {
+          label: `Comfy 生成结果 ${images.length > 1 ? i + 1 : ''}`.trim(),
+          source: 'comfy',
+          prompt: localPrompt.value,
+          createdAt: Date.now(),
+          updatedAt: Date.now()
+        }
+        if (asset?.assetPath) {
+          imageData.assetPath = asset.assetPath
+          imageData.url = dataUrl
+        } else {
+          imageData.url = dataUrl
+        }
+
+        const yOffset = i * 280
+        const imageNodeId = addNode('image', { x: posX + 400, y: posY + yOffset }, imageData)
+        outputNodeIds.push(imageNodeId)
+
+        addEdge({
+          source: props.id,
+          target: imageNodeId,
+          sourceHandle: 'right',
+          targetHandle: 'left'
+        })
+      }
 
       emitUpdate('status', 'success')
-      emitUpdate('outputNodeId', imageNodeId)
+      emitUpdate('outputNodeIds', outputNodeIds)
+      emitUpdate('lastRunAt', Date.now())
       emitUpdate('error', '')
     } catch (e) {
       clearInterval(pollTimer)

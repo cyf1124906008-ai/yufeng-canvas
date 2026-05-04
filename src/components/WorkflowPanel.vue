@@ -307,6 +307,8 @@ const buildComfyBindings = (apiWorkflow) => {
 
 const createComfyWorkflowTemplate = (apiWorkflow, fileName) => {
   const bindings = buildComfyBindings(apiWorkflow)
+  const nodeCount = Object.keys(apiWorkflow).length
+  const detectedKeys = Object.keys(bindings)
   const defaults = {
     prompt: '',
     negativePrompt: '',
@@ -322,12 +324,16 @@ const createComfyWorkflowTemplate = (apiWorkflow, fileName) => {
     if (val != null && typeof val !== 'object') defaults[key] = val
   }
 
+  const descriptionParts = [`${nodeCount} 个节点`]
+  if (detectedKeys.length > 0) descriptionParts.push(`参数: ${detectedKeys.join(', ')}`)
+
   return {
     id: `comfy_${Date.now()}`,
     name: fileName.replace(/\.json$/i, ''),
-    description: 'Comfy API workflow',
+    description: `Comfy API workflow — ${descriptionParts.join('，')}`,
     category: 'custom',
     createNodes(startPosition = { x: 180, y: 160 }) {
+      const hasNoPrompt = !bindings.prompt
       return {
         nodes: [{
           id: `comfy_node_${Date.now()}`,
@@ -345,9 +351,11 @@ const createComfyWorkflowTemplate = (apiWorkflow, fileName) => {
             steps: defaults.steps,
             cfg: defaults.cfg,
             status: 'idle',
-            error: '',
+            error: hasNoPrompt ? '没有识别到可编辑 Prompt，可在高级模式后续编辑。' : '',
             startedAt: null,
-            outputNodeId: null,
+            outputNodeIds: [],
+            lastPromptId: null,
+            lastRunAt: null,
             baseUrl: 'http://127.0.0.1:8188'
           }
         }],

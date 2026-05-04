@@ -13,6 +13,8 @@ const comfyManager = require('./comfy/manager.cjs')
 const comfyInstaller = require('./comfy/installer.cjs')
 const comfyProcess = require('./comfy/process.cjs')
 const comfyPaths = require('./comfy/paths.cjs')
+const comfyExecutor = require('./comfy/executor.cjs')
+const assetManager = require('./assets/manager.cjs')
 
 const rendererUrl = process.env.ELECTRON_RENDERER_URL
 const repo = 'cyf1124906008-ai/yufeng-canvas'
@@ -967,6 +969,15 @@ app.whenReady().then(() => {
     shell.openPath(folder)
     return { ok: true, path: folder }
   })
+
+  // Comfy Runtime IPC
+  ipcMain.handle('app:comfy:queue-prompt', (_event, baseUrl, workflow) => comfyExecutor.queuePrompt(baseUrl, workflow))
+  ipcMain.handle('app:comfy:get-history', (_event, baseUrl, promptId) => comfyExecutor.getHistory(baseUrl, promptId))
+  ipcMain.handle('app:comfy:fetch-image', (_event, baseUrl, imageMeta) => comfyExecutor.fetchImage(baseUrl, imageMeta))
+
+  // Asset Persistence IPC
+  ipcMain.handle('app:assets:save-data-url', (_event, dataUrl, projectId) => assetManager.saveDataUrl(dataUrl, projectId))
+  ipcMain.handle('app:assets:read-as-data-url', (_event, assetPath) => assetManager.readAsDataUrl(assetPath))
 
   createWindow()
   startLocalApiServer()
