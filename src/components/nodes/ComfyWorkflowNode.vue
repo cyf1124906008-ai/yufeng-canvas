@@ -114,7 +114,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { Handle, Position } from '@vue-flow/core'
 import { NIcon } from 'naive-ui'
 import { TrashOutline } from '@vicons/ionicons5'
@@ -127,6 +127,7 @@ import {
 
 const props = defineProps({ id: String, data: Object })
 const { findNode } = useVueFlow()
+const RUN_COMFY_WORKFLOW_EVENT = 'yufeng:run-comfy-workflow'
 
 const localPrompt = ref(props.data.prompt ?? '')
 const localNegPrompt = ref(props.data.negativePrompt ?? '')
@@ -175,6 +176,12 @@ function handleDelete() {
 
 function getBaseUrl() {
   return props.data.baseUrl || 'http://127.0.0.1:8188'
+}
+
+function handleRunCommand(event) {
+  if (event?.detail?.nodeId === props.id) {
+    handleRun()
+  }
 }
 
 async function handleRun() {
@@ -314,9 +321,14 @@ function pollForResult(promptId) {
   }, 1000)
 }
 
+onMounted(() => {
+  window.addEventListener(RUN_COMFY_WORKFLOW_EVENT, handleRunCommand)
+})
+
 onBeforeUnmount(() => {
   if (pollTimer) clearInterval(pollTimer)
   if (elapsedTimer) clearInterval(elapsedTimer)
+  window.removeEventListener(RUN_COMFY_WORKFLOW_EVENT, handleRunCommand)
 })
 </script>
 

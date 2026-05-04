@@ -3,11 +3,17 @@ import { nodes, edges } from '@/stores/canvas'
 const NODE_DATA_KEYS = {
   text: ['content', 'label'],
   imageConfig: ['label', 'model', 'size', 'quality', 'prompt'],
-  image: ['label', 'url', 'source', 'prompt'],
-  videoConfig: ['label', 'model', 'ratio', 'dur', 'prompt'],
-  video: ['label', 'url', 'source'],
+  image: ['label', 'source', 'prompt'],
+  videoConfig: ['label', 'model', 'ratio', 'duration', 'prompt'],
+  video: ['label', 'source', 'duration'],
   llmConfig: ['label', 'systemPrompt', 'outputFormat'],
-  comfyWorkflow: ['label', 'prompt', 'negativePrompt', 'width', 'height', 'seed', 'steps', 'cfg', 'status', 'baseUrl', 'bindings']
+  comfyWorkflow: ['label', 'prompt', 'negativePrompt', 'width', 'height', 'seed', 'steps', 'cfg', 'status']
+}
+
+function summarizeValue(value) {
+  if (typeof value !== 'string') return value
+  if (/^(data:|blob:|file:|https?:)/i.test(value)) return '[media-url-hidden]'
+  return value.length > 300 ? `${value.slice(0, 300)}...` : value
 }
 
 export function buildCanvasSnapshot() {
@@ -16,7 +22,7 @@ export function buildCanvasSnapshot() {
     const dataSummary = {}
     for (const k of dataKeys) {
       const v = n.data?.[k]
-      if (v != null && v !== '' && typeof v !== 'object') dataSummary[k] = v
+      if (v != null && v !== '' && typeof v !== 'object') dataSummary[k] = summarizeValue(v)
       else if (typeof v === 'object' && v !== null && !Array.isArray(v) && Object.keys(v).length <= 5) dataSummary[k] = v
     }
     return { id: n.id, type: n.type, position: n.position, data: dataSummary }
@@ -39,10 +45,19 @@ ${JSON.stringify(snapshot, null, 2)}
 可用命令：
 - addNode: { type, position: {x,y}, data: {...} }
   type 可选：text | imageConfig | image | videoConfig | video | llmConfig | comfyWorkflow
+  新建节点后要连接时，可以给 addNode 增加 ref，例如 { "ref": "promptNode" }，后续 connectNodes.source/target 可直接使用这个 ref。
 - updateNode: { id, data: {...} }
 - removeNode: { id }
 - connectNodes: { source, target, sourceHandle?, targetHandle?, edgeType? }
 - runComfyWorkflow: { nodeId }
+
+updateNode 只允许修改这些用户可见字段：
+- text: content, label
+- imageConfig: prompt, label, model, size, quality
+- videoConfig: prompt, label, model, ratio, duration
+- llmConfig: systemPrompt, label, model, outputFormat
+- comfyWorkflow: prompt, negativePrompt, width, height, seed, steps, cfg, label
+禁止修改 apiWorkflow / baseUrl / bindings / url / assetPath / status / outputNodeIds 等内部字段。
 
 规则：
 1. 你必须只返回 JSON，不要返回其他内容。
