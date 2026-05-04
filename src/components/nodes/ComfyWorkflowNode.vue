@@ -167,7 +167,7 @@ function emitUpdate(key, value) {
 function handleDelete() {
   if (pollTimer) clearInterval(pollTimer)
   if (elapsedTimer) clearInterval(elapsedTimer)
-  removeNode({ id: props.id })
+  removeNode(props.id)
 }
 
 function getBaseUrl() {
