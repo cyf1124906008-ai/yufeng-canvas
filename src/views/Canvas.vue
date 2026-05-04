@@ -575,10 +575,10 @@
 
     <!-- Delete Confirm Modal | 删除确认弹窗 -->
     <n-modal v-model:show="showDeleteModal" preset="dialog" title="删除项目" type="warning">
-      <p>确定要删除项目「{{ projectName }}」吗？此操作不可恢复。</p>
+      <p>确定要将项目「{{ projectName }}」移到回收站吗？30 天内可以在首页回收站恢复。</p>
       <template #action>
         <n-button @click="showDeleteModal = false">取消</n-button>
-        <n-button type="error" @click="confirmDelete">删除</n-button>
+        <n-button type="error" @click="confirmDelete">移到回收站</n-button>
       </template>
     </n-modal>
 
@@ -634,11 +634,11 @@ import {
   HelpCircleOutline,
   SparklesOutline
 } from '@vicons/ionicons5'
-import { nodes, edges, runtimeLogs, clearRuntimeLogs, addNode, addNodes, addEdge, addEdges, updateNode, removeNode, duplicateNode, initSampleData, loadProject, saveProject, clearCanvas, canvasViewport, updateViewport, undo, redo, canUndo, canRedo, manualSaveHistory, startBatchOperation, endBatchOperation } from '../stores/canvas'
+import { nodes, edges, runtimeLogs, clearRuntimeLogs, addNode, addNodes, addEdge, addEdges, updateNode, removeNode, duplicateNode, initSampleData, loadProject, saveProject, detachCurrentProject, canvasViewport, updateViewport, undo, redo, canUndo, canRedo, manualSaveHistory, startBatchOperation, endBatchOperation } from '../stores/canvas'
 import { loadAllModels } from '../stores/models'
 import { useChat, useWorkflowOrchestrator } from '../hooks'
 import { useModelStore } from '../stores/pinia'
-import { projects, initProjectsStore, updateProject, renameProject, currentProject } from '../stores/projects'
+import { projects, initProjectsStore, updateProject, renameProject, deleteProject, duplicateProject, currentProject } from '../stores/projects'
 
 // API Settings component | API 设置组件
 import ApiSettings from '../components/ApiSettings.vue'
@@ -1884,8 +1884,7 @@ const handleProjectAction = (key) => {
       showRenameModal.value = true
       break
     case 'duplicate':
-      // TODO: Implement duplicate
-      window.$message?.info('复制功能开发中')
+      duplicateCurrentProject()
       break
     case 'delete':
       showDeleteModal.value = true
@@ -1906,10 +1905,42 @@ const confirmRename = () => {
 // Confirm delete | 确认删除
 const confirmDelete = () => {
   const projectId = route.params.id
-  // deleteProject(projectId) // TODO: import deleteProject
+  if (!projectId || projectId === 'new') {
+    detachCurrentProject()
+    showDeleteModal.value = false
+    window.$message?.success('未保存画布已清空')
+    router.push({ path: '/', query: { section: 'projects' } })
+    return
+  }
+
+  saveProject()
+  const deleted = deleteProject(projectId)
   showDeleteModal.value = false
-  window.$message?.success('项目已删除')
+  if (deleted) {
+    detachCurrentProject()
+    window.$message?.success('已移到回收站，可在 30 天内恢复')
+  } else {
+    window.$message?.warning('项目不存在或已被删除')
+  }
   router.push({ path: '/', query: { section: 'projects' } })
+}
+
+const duplicateCurrentProject = () => {
+  const projectId = route.params.id
+  if (!projectId || projectId === 'new') {
+    window.$message?.warning('当前画布还未保存，暂不能复制项目')
+    return
+  }
+
+  saveProject()
+  const newProjectId = duplicateProject(projectId)
+  if (!newProjectId) {
+    window.$message?.warning('项目不存在或已被删除')
+    return
+  }
+
+  window.$message?.success('已复制项目')
+  router.push(`/canvas/${newProjectId}`)
 }
 
 // Handle Enter key | 处理回车键
@@ -2074,8 +2105,8 @@ const loadProjectById = (projectId) => {
   if (projectId && projectId !== 'new') {
     loadProject(projectId)
   } else {
-    // New project - clear canvas | 新项目 - 清空画布
-    clearCanvas()
+    // New project - clear canvas and detach from previous project | 新项目 - 清空画布并断开旧项目自动保存
+    detachCurrentProject()
   }
 }
 

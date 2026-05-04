@@ -443,6 +443,32 @@ export const clearCanvas = () => {
   edgeId = 0
 }
 
+/**
+ * Detach the canvas from any persisted project | 断开画布与当前持久化项目的关联
+ * Used after deleting a project or entering a brand-new unsaved canvas.
+ */
+export const detachCurrentProject = ({ clear = true } = {}) => {
+  autoSaveEnabled = false
+  isRestoring = false
+
+  if (saveTimeout) {
+    clearTimeout(saveTimeout)
+    saveTimeout = null
+  }
+
+  currentProjectId.value = null
+
+  if (clear) {
+    clearCanvas()
+  }
+
+  history.value = [{
+    nodes: JSON.parse(JSON.stringify(nodes.value)),
+    edges: JSON.parse(JSON.stringify(edges.value))
+  }]
+  historyIndex.value = 0
+}
+
 // Initialize with sample data | 使用示例数据初始化
 export const initSampleData = () => {
   clearCanvas()

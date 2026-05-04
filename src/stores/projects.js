@@ -206,7 +206,8 @@ export const loadDeletedProjects = () => {
 
 /**
  * Clean node data for storage | 清理节点数据用于存储
- * Removes base64 data URLs to reduce storage size | 移除 base64 数据减小存储大小
+ * Keep node url fields intact so generated images do not disappear after reload.
+ * 大多数图片接口会返回 data:image 或临时 URL；如果这里把 url 清掉，画布重开后图片节点会变空。
  */
 const cleanNodeForStorage = (node) => {
   if (!node.data) return node
@@ -219,12 +220,6 @@ const cleanNodeForStorage = (node) => {
   // Remove base64 data | 移除 base64 数据
   if (cleanedData.base64) {
     delete cleanedData.base64
-  }
-  
-  // If url is a base64 data URL, keep it only if it's from external source | 如果 url 是 base64，只有外部来源才保留
-  if (cleanedData.url?.startsWith?.('data:')) {
-    // For uploaded images, we can't persist them in localStorage | 上传的图片无法持久化到 localStorage
-    delete cleanedData.url
   }
   
   // Remove mask data | 移除蒙版数据
