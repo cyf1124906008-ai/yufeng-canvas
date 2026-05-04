@@ -58,7 +58,7 @@
         </div>
 
         <!-- Connection result -->
-        <n-alert v-if="state.objectInfoCount > 0" type="success" class="mb-4">
+        <n-alert v-if="state.objectInfoCount > 0 && !state.error" type="success" class="mb-4">
           已连接，检测到 {{ state.objectInfoCount }} 个节点。
         </n-alert>
 
