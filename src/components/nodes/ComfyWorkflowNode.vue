@@ -119,11 +119,11 @@ import { Handle, Position } from '@vue-flow/core'
 import { NIcon } from 'naive-ui'
 import { TrashOutline } from '@vicons/ionicons5'
 import { useVueFlow } from '@vue-flow/core'
-import { addNode, addEdge, updateNode } from '@/stores/canvas'
+import { addNode, addEdge, updateNode, removeNode } from '@/stores/canvas'
 import { comfyQueuePrompt, comfyGetHistory, comfyFetchImageAsDataUrl, extractOutputImages, validateBaseUrl } from '@/integrations/comfy/api'
 
 const props = defineProps({ id: String, data: Object })
-const { removeNode, findNode } = useVueFlow()
+const { findNode } = useVueFlow()
 
 const localPrompt = ref(props.data.prompt ?? '')
 const localNegPrompt = ref(props.data.negativePrompt ?? '')
@@ -161,8 +161,7 @@ const elapsedText = computed(() => {
 })
 
 function emitUpdate(key, value) {
-  const node = findNode(props.id)
-  if (node) node.data[key] = value
+  updateNode(props.id, { [key]: value, updatedAt: Date.now() })
 }
 
 function handleDelete() {
