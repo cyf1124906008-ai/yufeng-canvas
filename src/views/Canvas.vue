@@ -659,7 +659,7 @@ import WorkflowPanel from '../components/WorkflowPanel.vue'
 import AppHeader from '../components/AppHeader.vue'
 import GuidedTour from '../components/GuidedTour.vue'
 import { CANVAS_PROMPT_SUGGESTIONS } from '../config/promptLibrary'
-import { buildCanvasSnapshot, buildCanvasAgentSystemPrompt, parseAgentCommandResponse, classifyCommandRisk } from '../integrations/canvas/agentPlanner'
+import { buildCanvasSnapshot, buildCanvasAgentSystemPrompt, parseAgentCommandResponse, classifyCommandRisk, buildLocalCommandPlan } from '../integrations/canvas/agentPlanner'
 import { executeCommandBatch, validateCommandBatch } from '../integrations/canvas/commands'
 
 // API Config state | API 配置状态
@@ -1946,6 +1946,14 @@ const confirmDelete = () => {
 const confirmCommandPlan = () => {
   const plan = pendingCommandPlan.value
   if (!plan) return
+  const batchErr = validateCommandBatch(plan.commands)
+  if (batchErr) {
+    window.$message?.error(batchErr.message)
+    addRuntimeLog('error', `AI 指令确认前校验失败: ${batchErr.message}`, { commands: plan.commands })
+    showCommandConfirmModal.value = false
+    pendingCommandPlan.value = null
+    return
+  }
   const result = executeCommandBatch(plan.commands)
   if (result.ok) {
     addRuntimeLog('info', `AI 已执行: ${plan.summary}`, { commands: plan.commands })
@@ -2032,13 +2040,6 @@ const sendMessage = async () => {
   const input = chatInput.value.trim()
   if (!input) return
 
-  // Check API configuration | 检查 API 配置
-  if (!isChatConfigured.value) {
-    window.$message?.warning('请先配置 API Key')
-    showApiSettings.value = true
-    return
-  }
-
   isProcessing.value = true
   const content = chatInput.value
   chatInput.value = ''
@@ -2058,9 +2059,19 @@ const sendMessage = async () => {
 
       try {
         const snapshot = buildCanvasSnapshot()
-        const systemPrompt = buildCanvasAgentSystemPrompt(snapshot)
-        const response = await sendChat(content, true, { systemPrompt })
-        const parsed = parseAgentCommandResponse(response)
+        const localPlan = buildLocalCommandPlan(content, snapshot)
+        let parsed
+
+        if (localPlan) {
+          parsed = { ok: true, plan: localPlan }
+        } else {
+          if (!isChatConfigured.value) {
+            throw new Error('请先配置 API Key')
+          }
+          const systemPrompt = buildCanvasAgentSystemPrompt(snapshot)
+          const response = await sendChat(content, true, { systemPrompt })
+          parsed = parseAgentCommandResponse(response)
+        }
 
         if (parsed.ok && parsed.plan.commands.length > 0) {
           const { plan } = parsed
