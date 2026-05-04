@@ -46,14 +46,24 @@ function saveDataUrl(dataUrl, projectId) {
 }
 
 function readAsDataUrl(assetPath) {
-  if (!assetPath || !fs.existsSync(assetPath)) {
+  if (!assetPath || typeof assetPath !== 'string') {
+    return { ok: false, error: '非法资产路径' }
+  }
+
+  const resolved = path.resolve(assetPath)
+  const root = getAssetsRoot()
+  if (!resolved.startsWith(root + path.sep) && resolved !== root) {
+    return { ok: false, error: '非法资产路径' }
+  }
+
+  if (!fs.existsSync(resolved)) {
     return { ok: false, error: '资产文件不存在' }
   }
 
-  const ext = path.extname(assetPath).toLowerCase().replace('.', '')
+  const ext = path.extname(resolved).toLowerCase().replace('.', '')
   const mimeMap = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif' }
   const mime = mimeMap[ext] || 'image/png'
-  const buffer = fs.readFileSync(assetPath)
+  const buffer = fs.readFileSync(resolved)
   const base64 = buffer.toString('base64')
 
   return {

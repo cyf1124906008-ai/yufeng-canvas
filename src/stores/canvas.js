@@ -525,8 +525,8 @@ const restoreAssetImages = async () => {
     if (node.type === 'image' && node.data?.assetPath && !node.data.url) {
       try {
         const result = await restore(node.data.assetPath)
-        if (result && typeof result === 'string') {
-          node.data.url = result
+        if (result?.ok && result.dataUrl) {
+          updateNode(node.id, { url: result.dataUrl, updatedAt: Date.now() })
         }
       } catch { /* ignore */ }
     }

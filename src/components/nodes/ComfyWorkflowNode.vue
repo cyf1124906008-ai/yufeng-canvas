@@ -250,6 +250,14 @@ function pollForResult(promptId) {
           emitUpdate('status', 'error')
           return
         }
+        // Task completed successfully but no images — stop polling immediately
+        if (history.status?.completed || history.status?.status_str === 'success') {
+          clearInterval(pollTimer)
+          clearInterval(elapsedTimer)
+          emitUpdate('error', '任务完成，但没有找到图片输出。请检查 SaveImage / PreviewImage 节点。')
+          emitUpdate('status', 'error')
+          return
+        }
         return
       }
 
