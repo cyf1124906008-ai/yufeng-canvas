@@ -9,6 +9,10 @@ const path = require('path')
 const http = require('http')
 const fs = require('fs')
 const packageJson = require('../package.json')
+const comfyManager = require('./comfy/manager.cjs')
+const comfyInstaller = require('./comfy/installer.cjs')
+const comfyProcess = require('./comfy/process.cjs')
+const comfyPaths = require('./comfy/paths.cjs')
 
 const rendererUrl = process.env.ELECTRON_RENDERER_URL
 const repo = 'cyf1124906008-ai/yufeng-canvas'
@@ -625,6 +629,7 @@ const userDataBackupFileName = 'yufeng-canvas-data-backup.json'
 const userDataBackupKind = 'yufeng-canvas.user-data'
 const protectedBackupKeys = [
   'ai-canvas-projects',
+  'ai-canvas-deleted-projects',
   'yufeng-image-expert-history',
   'image-expert-history',
   'yufeng-canvas-chat-history-v1',
@@ -939,6 +944,28 @@ app.whenReady().then(() => {
     if (typeof url === 'string' && /^https?:\/\//i.test(url)) {
       shell.openExternal(url)
     }
+  })
+
+  // Comfy Engine IPC
+  ipcMain.handle('app:comfy:get-status', () => comfyManager.getStatus())
+  ipcMain.handle('app:comfy:set-config', (_event, config) => comfyManager.setConfig(config))
+  ipcMain.handle('app:comfy:install', () => comfyInstaller.install())
+  ipcMain.handle('app:comfy:start', () => comfyProcess.start())
+  ipcMain.handle('app:comfy:stop', () => comfyProcess.stop())
+  ipcMain.handle('app:comfy:test-connection', (_event, baseUrl) => comfyProcess.testConnection(baseUrl))
+  ipcMain.handle('app:comfy:get-logs', () => comfyManager.getLogs())
+  ipcMain.handle('app:comfy:open-folder', (_event, key) => {
+    const folderMap = {
+      root: comfyPaths.getComfyRoot(),
+      engine: comfyPaths.getComfyEnginePath(),
+      models: comfyPaths.getComfyModelsPath(),
+      outputs: comfyPaths.getComfyOutputsPath()
+    }
+    const folder = folderMap[key] || folderMap.root
+    const fs = require('fs')
+    if (!fs.existsSync(folder)) fs.mkdirSync(folder, { recursive: true })
+    shell.openPath(folder)
+    return { ok: true, path: folder }
   })
 
   createWindow()

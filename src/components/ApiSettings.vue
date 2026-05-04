@@ -315,6 +315,10 @@
           </div>
         </div>
       </n-tab-pane>
+
+      <n-tab-pane name="comfy" tab="Comfy 引擎">
+        <ComfyEnginePanel />
+      </n-tab-pane>
     </n-tabs>
 
     <template #footer>
@@ -357,6 +361,7 @@ import { getProviderConfig } from '../config/providers'
 import { useModelStore } from '../stores/pinia'
 import { backupUserDataNow, exportUserDataToFile, importUserDataFromFile } from '../utils/appDataBackup'
 import { getCapabilityLabel, getModelCapabilityConflict } from '../utils/modelCapability'
+import ComfyEnginePanel from './settings/ComfyEnginePanel.vue'
 
 const props = defineProps({
   show: {

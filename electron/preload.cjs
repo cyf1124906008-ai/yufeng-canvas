@@ -21,5 +21,15 @@ contextBridge.exposeInMainWorld('desktopApp', {
     ipcRenderer.on('app:update-status', listener)
     return () => ipcRenderer.removeListener('app:update-status', listener)
   },
-  openExternal: (url) => ipcRenderer.invoke('app:open-external', url)
+  openExternal: (url) => ipcRenderer.invoke('app:open-external', url),
+  comfy: {
+    getStatus: () => ipcRenderer.invoke('app:comfy:get-status'),
+    setConfig: (config) => ipcRenderer.invoke('app:comfy:set-config', config),
+    install: () => ipcRenderer.invoke('app:comfy:install'),
+    start: () => ipcRenderer.invoke('app:comfy:start'),
+    stop: () => ipcRenderer.invoke('app:comfy:stop'),
+    testConnection: (baseUrl) => ipcRenderer.invoke('app:comfy:test-connection', baseUrl),
+    getLogs: () => ipcRenderer.invoke('app:comfy:get-logs'),
+    openFolder: (key) => ipcRenderer.invoke('app:comfy:open-folder', key)
+  }
 })
