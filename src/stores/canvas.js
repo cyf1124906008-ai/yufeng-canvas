@@ -333,6 +333,24 @@ const getDefaultNodeData = (type) => {
         label: 'LLM文本生成',
         publicProps: {}  // 公共属性（可被 @ 引用）
       }
+    case 'comfyWorkflow':
+      return {
+        label: 'Comfy 工作流',
+        apiWorkflow: null,
+        bindings: {},
+        prompt: '',
+        negativePrompt: '',
+        width: 512,
+        height: 512,
+        seed: -1,
+        steps: 20,
+        cfg: 7,
+        status: 'idle',
+        error: '',
+        startedAt: null,
+        outputNodeId: null,
+        baseUrl: 'http://127.0.0.1:8188'
+      }
     default:
       return {}
   }

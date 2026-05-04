@@ -250,12 +250,110 @@ const importWorkflowFile = async (file) => {
   try {
     const text = await file.text()
     const payload = JSON.parse(text)
+
+    if (isComfyApiWorkflow(payload)) {
+      const workflow = createComfyWorkflowTemplate(payload, file.name)
+      emit('add-workflow', { workflow, options: {} })
+      visible.value = false
+      window.$message?.success('Comfy 工作流已导入画布')
+      return
+    }
+
     const workflow = createImportedTemplate(payload, file.name)
     emit('add-workflow', { workflow, options: {} })
     visible.value = false
     window.$message?.success('工作流已导入画布')
   } catch (err) {
     window.$message?.error(err.message || '工作流导入失败，请确认是 YUFENG Canvas JSON 文件')
+  }
+}
+
+const isComfyApiWorkflow = (json) => {
+  if (!json || typeof json !== 'object' || Array.isArray(json)) return false
+  const keys = Object.keys(json)
+  if (keys.length === 0) return false
+  let nodeCount = 0
+  for (const key of keys) {
+    if (!/^\d+$/.test(key)) return false
+    const node = json[key]
+    if (!node || typeof node !== 'object') return false
+    if (!node.class_type || typeof node.inputs !== 'object') return false
+    nodeCount++
+  }
+  return nodeCount > 0
+}
+
+const buildComfyBindings = (apiWorkflow) => {
+  const bindings = {}
+  let clipCount = 0
+  for (const [nodeId, node] of Object.entries(apiWorkflow)) {
+    if (node.class_type === 'CLIPTextEncode') {
+      if (clipCount === 0 && node.inputs?.text != null) bindings.prompt = { nodeId, input: 'text' }
+      else if (clipCount === 1 && node.inputs?.text != null) bindings.negativePrompt = { nodeId, input: 'text' }
+      clipCount++
+    }
+    if (node.class_type === 'EmptyLatentImage') {
+      if (node.inputs?.width != null) bindings.width = { nodeId, input: 'width' }
+      if (node.inputs?.height != null) bindings.height = { nodeId, input: 'height' }
+    }
+    if (node.class_type === 'KSampler' || node.class_type === 'KSamplerAdvanced') {
+      if (node.inputs?.seed != null) bindings.seed = { nodeId, input: 'seed' }
+      if (node.inputs?.steps != null) bindings.steps = { nodeId, input: 'steps' }
+      if (node.inputs?.cfg != null) bindings.cfg = { nodeId, input: 'cfg' }
+    }
+  }
+  return bindings
+}
+
+const createComfyWorkflowTemplate = (apiWorkflow, fileName) => {
+  const bindings = buildComfyBindings(apiWorkflow)
+  const defaults = {
+    prompt: '',
+    negativePrompt: '',
+    width: 512,
+    height: 512,
+    seed: -1,
+    steps: 20,
+    cfg: 7
+  }
+  // Extract defaults from workflow values
+  for (const [key, binding] of Object.entries(bindings)) {
+    const val = apiWorkflow[binding.nodeId]?.inputs?.[binding.input]
+    if (val != null && typeof val !== 'object') defaults[key] = val
+  }
+
+  return {
+    id: `comfy_${Date.now()}`,
+    name: fileName.replace(/\.json$/i, ''),
+    description: 'Comfy API workflow',
+    category: 'custom',
+    createNodes(startPosition = { x: 180, y: 160 }) {
+      return {
+        nodes: [{
+          id: `comfy_node_${Date.now()}`,
+          type: 'comfyWorkflow',
+          position: startPosition,
+          data: {
+            label: fileName.replace(/\.json$/i, ''),
+            apiWorkflow,
+            bindings,
+            prompt: defaults.prompt,
+            negativePrompt: defaults.negativePrompt,
+            width: defaults.width,
+            height: defaults.height,
+            seed: defaults.seed,
+            steps: defaults.steps,
+            cfg: defaults.cfg,
+            status: 'idle',
+            error: '',
+            startedAt: null,
+            outputNodeId: null,
+            baseUrl: 'http://127.0.0.1:8188'
+          }
+        }],
+        edges: []
+      }
+    }
   }
 }
 

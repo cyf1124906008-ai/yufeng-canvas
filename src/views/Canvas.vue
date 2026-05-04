@@ -704,6 +704,7 @@ import VideoNode from '../components/nodes/VideoNode.vue'
 import ImageNode from '../components/nodes/ImageNode.vue'
 import VideoConfigNode from '../components/nodes/VideoConfigNode.vue'
 import LLMConfigNode from '../components/nodes/LLMConfigNode.vue'
+import ComfyWorkflowNode from '../components/nodes/ComfyWorkflowNode.vue'
 import ImageRoleEdge from '../components/edges/ImageRoleEdge.vue'
 import PromptOrderEdge from '../components/edges/PromptOrderEdge.vue'
 import ImageOrderEdge from '../components/edges/ImageOrderEdge.vue'
@@ -721,7 +722,8 @@ const nodeTypes = {
   video: markRaw(VideoNode),
   image: markRaw(ImageNode),
   videoConfig: markRaw(VideoConfigNode),
-  llmConfig: markRaw(LLMConfigNode)
+  llmConfig: markRaw(LLMConfigNode),
+  comfyWorkflow: markRaw(ComfyWorkflowNode)
 }
 
 // Register custom edge types | 注册自定义边类型
