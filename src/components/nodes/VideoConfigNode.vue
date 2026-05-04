@@ -22,12 +22,12 @@
           class="text-sm font-medium bg-[var(--bg-tertiary)] text-[var(--text-secondary)] px-1 rounded outline-none border border-blue-500"
         />
         <div class="node-actions nodrag nopan flex items-center gap-1" @pointerdown.stop @mousedown.stop @click.stop>
-          <button type="button" @pointerdown.stop @mousedown.stop @click.stop="handleDuplicate" class="node-action-button p-1 hover:bg-[var(--bg-tertiary)] rounded transition-colors" title="复制节点">
+          <button type="button" @pointerdown.stop @mousedown.stop @click.stop="handleDuplicate" class="node-action-button nodrag nopan p-1 hover:bg-[var(--bg-tertiary)] rounded transition-colors" title="复制节点">
             <n-icon :size="14">
               <CopyOutline />
             </n-icon>
           </button>
-          <button type="button" @pointerdown.stop @mousedown.stop @click.stop="handleDelete" class="node-action-button p-1 hover:bg-[var(--bg-tertiary)] rounded transition-colors" title="删除节点">
+          <button type="button" @pointerdown.stop @mousedown.stop @click.stop="handleDelete" class="node-action-button nodrag nopan p-1 hover:bg-[var(--bg-tertiary)] rounded transition-colors" title="删除节点">
             <n-icon :size="14">
               <TrashOutline />
             </n-icon>
@@ -165,8 +165,9 @@
       </div>
 
       <!-- Handles | 连接点 -->
+      <span class="node-port-label node-port-label-in">Prompt / 首尾帧</span>
       <Handle type="target" :position="Position.Left" id="left" class="!bg-[var(--accent-color)]" />
-      <NodeHandleMenu :nodeId="id" nodeType="videoConfig" :visible="showHandleMenu" :operations="[]" />
+      <NodeHandleMenu :nodeId="id" nodeType="videoConfig" output-label="视频" :visible="showHandleMenu" :operations="[]" />
     </div>
 
   </div>
@@ -591,7 +592,7 @@ const handleGenerate = async () => {
         finishedAt: Date.now(),
         updatedAt: Date.now()
       })
-      window.$message?.success('视频生成成功')
+      window.$message?.success('视频生成完成')
       // Mark this config node as executed | 标记配置节点已执行
       updateNode(props.id, { executed: true, outputNodeId: videoNodeId })
     } else if (newTaskId) {
@@ -607,7 +608,7 @@ const handleGenerate = async () => {
         videoProtocol,
         updatedAt: Date.now()
       })
-      window.$message?.success('视频任务已创建')
+      window.$message?.info('视频任务已创建，正在排队...')
       // Mark this config node as executed | 标记配置节点已执行
       updateNode(props.id, { executed: true, outputNodeId: videoNodeId })
     }
@@ -620,7 +621,7 @@ const handleGenerate = async () => {
       finishedAt: Date.now(),
       updatedAt: Date.now()
     })
-    window.$message?.error(err.message || '视频生成失败')
+    // Error already shown by useApi showBubble - just update node state here
   } finally {
     isGenerating.value = false
   }
@@ -680,8 +681,22 @@ onMounted(() => {
 
 // Watch for model changes from props | 监听 props 中模型变化
 watch(() => props.data?.model, (newModel) => {
-  if (newModel && newModel !== localModel.value) {
-    localModel.value = newModel
+  const resolvedModel = newModel || modelStore.selectedVideoModel || modelStore.availableVideoModels[0]?.key || ''
+  if (resolvedModel && resolvedModel !== localModel.value) {
+    localModel.value = resolvedModel
+  }
+})
+
+watch(() => props.data?.ratio, (value) => {
+  if (value && value !== localRatio.value) {
+    localRatio.value = value
+  }
+})
+
+watch(() => props.data?.dur, (value) => {
+  const normalized = Number(value || 5)
+  if (normalized !== localDuration.value) {
+    localDuration.value = normalized
   }
 })
 

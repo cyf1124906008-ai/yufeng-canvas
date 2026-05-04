@@ -1,26 +1,18 @@
 <template>
-  <!-- Custom edge with prompt order selector | 带提示词顺序选择器的自定义边 -->
   <BaseEdge :path="path" :style="edgeStyle" />
-  
-  <!-- Edge label with order selector | 带顺序选择器的边标签 -->
+
   <EdgeLabelRenderer>
-    <div 
-      :style="{ 
-        position: 'absolute', 
+    <div
+      :style="{
+        position: 'absolute',
         transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
         pointerEvents: 'all'
       }"
       class="nodrag nopan"
     >
-      <n-dropdown 
-        :options="orderOptions" 
-        @select="handleOrderSelect"
-        size="small"
-      >
-        <button 
-          class="edge-order-badge flex items-center justify-center w-7 h-7 text-xs font-bold rounded-full text-white shadow-md hover:scale-110 transition-transform"
-        >
-          {{ currentOrder }}
+      <n-dropdown :options="orderOptions" @select="handleOrderSelect" size="small">
+        <button class="edge-order-badge">
+          Prompt {{ currentOrder }}
         </button>
       </n-dropdown>
     </div>
@@ -33,7 +25,6 @@ import { BaseEdge, EdgeLabelRenderer, getBezierPath, useVueFlow } from '@vue-flo
 import { NDropdown } from 'naive-ui'
 import { edges } from '../../stores/canvas'
 
-// Get VueFlow instance | 获取 VueFlow 实例
 const { updateEdgeData } = useVueFlow()
 
 const props = defineProps({
@@ -51,30 +42,25 @@ const props = defineProps({
   style: Object
 })
 
-// Order labels | 顺序标签
 const orderLabels = [
-  { label: '① 第一个', key: 1 },
-  { label: '② 第二个', key: 2 },
-  { label: '③ 第三个', key: 3 },
-  { label: '④ 第四个', key: 4 },
-  { label: '⑤ 第五个', key: 5 }
+  { label: 'Prompt 1', key: 1 },
+  { label: 'Prompt 2', key: 2 },
+  { label: 'Prompt 3', key: 3 },
+  { label: 'Prompt 4', key: 4 },
+  { label: 'Prompt 5', key: 5 }
 ]
 
-// Dynamic order options based on connected edges count | 基于连接边数量的动态顺序选项
 const orderOptions = computed(() => {
-  // Get all promptOrder edges connected to the same target | 获取连接到同一目标的所有文本边
-  const sameTargetTextEdges = edges.value.filter(edge => 
-    edge.target === props.target && 
+  const sameTargetTextEdges = edges.value.filter(edge =>
+    edge.target === props.target &&
     edge.type === 'promptOrder'
   )
   const count = sameTargetTextEdges.length || 1
   return orderLabels.slice(0, count)
 })
 
-// Current order from edge data | 从边数据获取当前顺序
 const currentOrder = computed(() => props.data?.promptOrder || 1)
 
-// Calculate bezier path | 计算贝塞尔路径
 const path = computed(() => {
   const [edgePath] = getBezierPath({
     sourceX: props.sourceX,
@@ -87,48 +73,59 @@ const path = computed(() => {
   return edgePath
 })
 
-// Label position (center of edge) | 标签位置（边的中心）
 const labelX = computed(() => (props.sourceX + props.targetX) / 2)
-const labelY = computed(() => (props.sourceY + props.targetY) / 2)
+const labelY = computed(() => (props.sourceY + props.targetY) / 2 + (currentOrder.value - 1) * 18)
 
-// Edge style | 边样式
 const edgeStyle = computed(() => ({
   stroke: '#34d399',
-  strokeWidth: 3.5,
-  filter: 'drop-shadow(0 0 7px rgba(52, 211, 153, 0.55))',
+  strokeWidth: 4.2,
+  strokeLinecap: 'round',
+  filter: 'drop-shadow(0 0 8px rgba(52, 211, 153, 0.58))',
   ...props.style
 }))
 
-// Handle order selection | 处理顺序选择
 const handleOrderSelect = (newOrder) => {
-  // Get all text edges connected to the same target | 获取连接到同一目标的所有文本边
-  const sameTargetTextEdges = edges.value.filter(edge => 
-    edge.target === props.target && 
+  const sameTargetTextEdges = edges.value.filter(edge =>
+    edge.target === props.target &&
     edge.type === 'promptOrder'
   )
-  
-  // Find edge currently using this order | 查找当前使用此顺序的边
-  const edgeWithSameOrder = sameTargetTextEdges.find(edge => 
-    edge.id !== props.id && 
+
+  const edgeWithSameOrder = sameTargetTextEdges.find(edge =>
+    edge.id !== props.id &&
     edge.data?.promptOrder === newOrder
   )
-  
-  // If another edge has this order, swap with current | 如果另一条边有此顺序，则交换
+
   if (edgeWithSameOrder) {
     updateEdgeData(edgeWithSameOrder.id, { promptOrder: currentOrder.value })
   }
-  
-  // Update current edge order | 更新当前边顺序
+
   updateEdgeData(props.id, { promptOrder: newOrder })
 }
 </script>
 
 <style scoped>
 .edge-order-badge {
-  border: 2px solid rgba(240, 253, 250, 0.92);
+  min-width: 76px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(240, 253, 250, 0.94);
+  border-radius: 999px;
+  padding: 0 11px;
+  color: #f0fdf4;
   background:
     radial-gradient(circle at 30% 18%, rgba(255, 255, 255, 0.5), transparent 38%),
     linear-gradient(135deg, #5eead4, #10b981);
   box-shadow: 0 12px 30px rgba(15, 23, 42, 0.32), 0 0 20px rgba(52, 211, 153, 0.38);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  transition: transform 0.16s ease, box-shadow 0.16s ease;
+}
+
+.edge-order-badge:hover {
+  transform: scale(1.04);
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.34), 0 0 26px rgba(52, 211, 153, 0.48);
 }
 </style>

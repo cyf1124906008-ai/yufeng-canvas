@@ -135,7 +135,13 @@ const requestImageEdit = async (endpoint, formData) => {
 
   if (!response.ok) {
     const message = payload?.message || payload?.error?.message || `Request failed with status ${response.status}`
-    throw new Error(message)
+    const error = new Error(message)
+    error.status = response.status
+    error.response = {
+      status: response.status,
+      data: payload
+    }
+    throw error
   }
 
   return payload

@@ -1458,6 +1458,101 @@ export const WORKFLOW_TEMPLATES = [
   }
 ]
 
+
+
+const createBriefToImageSetPreset = ({
+  briefLabel = '创作简报',
+  brief,
+  outputs = [],
+  rowSpacing = 260,
+  size = '1440x2560'
+}) => (startPosition) => {
+  const getNodeId = createIdFactory()
+  const nodes = []
+  const edges = []
+  const briefId = getNodeId()
+
+  nodes.push({
+    id: briefId,
+    type: 'text',
+    position: { x: startPosition.x, y: startPosition.y + Math.max(0, outputs.length - 1) * rowSpacing * 0.35 },
+    data: { label: briefLabel, content: brief }
+  })
+
+  outputs.forEach((output, index) => {
+    const promptId = getNodeId()
+    const configId = getNodeId()
+    const imageId = getNodeId()
+    const y = startPosition.y + index * rowSpacing
+
+    nodes.push({
+      id: promptId,
+      type: 'text',
+      position: { x: startPosition.x + 420, y },
+      data: { label: output.promptLabel || output.label || ('提示词 ' + (index + 1)), content: output.prompt }
+    })
+
+    nodes.push({
+      id: configId,
+      type: 'imageConfig',
+      position: { x: startPosition.x + 840, y },
+      data: { label: output.configLabel || output.label || ('生成图 ' + (index + 1)), size: output.size || size }
+    })
+
+    nodes.push({
+      id: imageId,
+      type: 'image',
+      position: { x: startPosition.x + 1220, y },
+      data: { label: output.resultLabel || ((output.label || '结果') + ' · 输出'), url: '' }
+    })
+
+    edges.push(connect(briefId, configId, { type: 'promptOrder', data: { promptOrder: 1 } }))
+    edges.push(connect(promptId, configId, { type: 'promptOrder', data: { promptOrder: 2 } }))
+    edges.push(connect(configId, imageId))
+  })
+
+  return { nodes, edges }
+}
+
+const createImageToVideoCampaignPreset = ({
+  brief,
+  imagePrompt,
+  videoPrompt,
+  imageSize = '1440x2560',
+  ratio = '9:16',
+  dur = 5
+}) => (startPosition) => {
+  const getNodeId = createIdFactory()
+  const briefId = getNodeId()
+  const imagePromptId = getNodeId()
+  const imageConfigId = getNodeId()
+  const imageResultId = getNodeId()
+  const videoPromptId = getNodeId()
+  const videoConfigId = getNodeId()
+  const videoResultId = getNodeId()
+
+  const nodes = [
+    { id: briefId, type: 'text', position: { x: startPosition.x, y: startPosition.y + 140 }, data: { label: '项目简报', content: brief } },
+    { id: imagePromptId, type: 'text', position: { x: startPosition.x + 420, y: startPosition.y }, data: { label: '首帧 / 主视觉提示词', content: imagePrompt } },
+    { id: imageConfigId, type: 'imageConfig', position: { x: startPosition.x + 840, y: startPosition.y }, data: { label: '生成首帧主视觉', size: imageSize } },
+    { id: imageResultId, type: 'image', position: { x: startPosition.x + 1220, y: startPosition.y }, data: { label: '首帧 / 主视觉结果', url: '' } },
+    { id: videoPromptId, type: 'text', position: { x: startPosition.x + 420, y: startPosition.y + 300 }, data: { label: '视频运镜提示词', content: videoPrompt } },
+    { id: videoConfigId, type: 'videoConfig', position: { x: startPosition.x + 840, y: startPosition.y + 300 }, data: { label: '图生视频配置', ratio, dur } },
+    { id: videoResultId, type: 'video', position: { x: startPosition.x + 1220, y: startPosition.y + 300 }, data: { label: '视频结果', url: '' } }
+  ]
+
+  const edges = [
+    connect(briefId, imageConfigId, { type: 'promptOrder', data: { promptOrder: 1 } }),
+    connect(imagePromptId, imageConfigId, { type: 'promptOrder', data: { promptOrder: 2 } }),
+    connect(imageConfigId, imageResultId),
+    connect(imageResultId, videoConfigId, { type: 'imageRole', data: { imageRole: 'first_frame_image' } }),
+    connect(videoPromptId, videoConfigId, { type: 'promptOrder', data: { promptOrder: 1 } }),
+    connect(videoConfigId, videoResultId)
+  ]
+
+  return { nodes, edges }
+}
+
 WORKFLOW_TEMPLATES.push(
   {
     id: 'ai-video-app-ui',
@@ -1547,6 +1642,190 @@ WORKFLOW_TEMPLATES.push(
       resultLabel: '长卷结果',
       size: '2560x1440',
       prompt: '横向超宽古代城市元宵灯会长卷，河道穿城而过，宫殿、桥梁、楼阁、船只和密集人群铺满画面，天空漂浮大量孔明灯，暖金夜景，历史画卷质感，细节极丰富但层级清晰，适合作为视频首帧或文化海报背景。'
+    })
+  }
+)
+
+
+
+WORKFLOW_TEMPLATES.push(
+  {
+    id: 'evolink-ad-banner-grid',
+    name: '四宫格广告 Banner',
+    description: '简单：把一个产品拆成旅行/美妆/美食/教育式广告四宫格，适合快速测风格',
+    icon: 'GridOutline',
+    category: 'brand',
+    cover: coverLiveCommerce,
+    createNodes: createTextToImagePreset({
+      promptLabel: '广告 Banner 提示词',
+      configLabel: '四宫格广告图',
+      resultLabel: '广告图结果',
+      size: '2048x2048',
+      prompt: '生成 2x2 数字广告 Banner 网格，四个象限分别展示同一品牌的不同营销卖点：主视觉、产品特写、优惠信息、用户场景。每个象限有清晰标题、价格/权益标签、图标和行动按钮；整体统一品牌色，中文排版清楚，商业广告质感，无水印。'
+    })
+  },
+  {
+    id: 'evolink-portrait-lighting-pack',
+    name: '人像光影实验',
+    description: '简单：一条提示词生成电影人像，可替换人物、服装、地点和灯光',
+    icon: 'PersonOutline',
+    category: 'creative',
+    cover: coverSocialPoster,
+    createNodes: createTextToImagePreset({
+      promptLabel: '人像提示词',
+      configLabel: '电影人像图',
+      resultLabel: '人像结果',
+      size: '1440x2560',
+      prompt: '电影级街头人像摄影：原创人物站在夜晚便利店门口，冷白荧光灯与粉蓝霓虹混合照明，玻璃反射、真实皮肤纹理、轻微胶片颗粒、35mm 镜头、浅景深、杂志编辑大片感。无水印，无乱码文字。'
+    })
+  },
+  {
+    id: 'evolink-poster-typography-pack',
+    name: '海报字体版式包',
+    description: '简单：生成带主标题、信息层级和视觉主体的竖版海报',
+    icon: 'ImageOutline',
+    category: 'creative',
+    cover: coverLanternPanorama,
+    createNodes: createTextToImagePreset({
+      promptLabel: '海报提示词',
+      configLabel: '竖版海报',
+      resultLabel: '海报结果',
+      size: '1440x2560',
+      prompt: '生成一张高完成度竖版主题海报，主题为“未来城市文化节”。画面包含强主视觉、中文大标题区、日期地点、嘉宾/活动模块、票务按钮样式、底部赞助信息。风格为电影概念艺术 + 瑞士平面设计排版，层级清楚，文字区域留白明确。'
+    })
+  },
+  {
+    id: 'evolink-ui-social-mockup',
+    name: 'App + 社媒 Mockup',
+    description: '简单：生成移动端 App 首页或社交媒体截图，适合产品展示',
+    icon: 'ImageOutline',
+    category: 'ui',
+    cover: coverAiVideoAppUi,
+    createNodes: createTextToImagePreset({
+      promptLabel: 'UI Mockup 提示词',
+      configLabel: 'UI 截图',
+      resultLabel: 'UI 结果',
+      size: '1440x2560',
+      prompt: '设计一张真实可上线的 iOS App 首页截图，主题为 AI 创意工作台。包含顶部欢迎语、Hero 功能卡、文本生图/图生视频/工作流模板入口、最近项目列表、底部导航和 Pro 标识。深色玻璃拟态界面，中文 UI 清晰，产品截图质感。'
+    })
+  },
+  {
+    id: 'evolink-before-after-remix',
+    name: '前后对比重绘',
+    description: '简单：把参考图改造成高级商业稿，并输出 before/after 对比版式',
+    icon: 'GridOutline',
+    category: 'creative',
+    cover: coverCameraExplodedView,
+    createNodes: createTextToImagePreset({
+      promptLabel: '对比重绘提示词',
+      configLabel: '对比图',
+      resultLabel: '对比结果',
+      size: '2048x2048',
+      prompt: '根据参考图生成 before/after 对比海报：左侧保留原始构图的朴素版本，右侧升级为高级商业摄影版本。中间用细线分割，底部加简洁说明标签，突出光影、材质、构图、色彩和排版升级。不要真实品牌商标。'
+    })
+  },
+  {
+    id: 'evolink-product-launch-kit',
+    name: '产品发布全套物料',
+    description: '复杂：从产品简报生成主视觉、白底图、详情页、社媒图和发布会横幅',
+    icon: 'ShoppingOutline',
+    category: 'ecommerce',
+    cover: coverEcommerce,
+    createNodes: createBriefToImageSetPreset({
+      brief: '产品：一款透明无线降噪耳机\n品牌关键词：轻盈、未来感、清澈声音、年轻专业\n品牌色：冰蓝、银白、深空灰\n目标：生成一套电商和发布会都能使用的视觉物料。',
+      outputs: [
+        { label: '主视觉 Hero', size: '1440x2560', prompt: '透明无线降噪耳机悬浮在冰蓝光场中，玻璃、金属、微型声波粒子，中央构图，标题区留白，高级科技发布海报质感。' },
+        { label: '白底电商主图', size: '2048x2048', prompt: '白底电商主图，耳机与充电盒 45 度摆放，阴影柔和，材质真实，周围用小图标标注降噪、续航、低延迟、高清通话，中文标签清晰。' },
+        { label: '详情页长图', size: '1440x2560', prompt: '电商详情页长图，分屏展示卖点：主动降噪、空间音频、透明机身、佩戴舒适、续航参数，包含产品微距和生活方式场景，排版清爽。' },
+        { label: '社媒方图', size: '1024x1024', prompt: '社交媒体方形海报，耳机漂浮在渐变冰蓝背景，主标题“清澈入耳”，短卖点三条，年轻科技品牌视觉。' },
+        { label: '发布会横幅', size: '1920x1080', prompt: '产品发布会 16:9 横幅，深空背景、巨大发光耳机轮廓、演示舞台光束、标题区留白，适合作为官网首屏。' }
+      ]
+    })
+  },
+  {
+    id: 'evolink-character-ip-kit',
+    name: '角色 IP 商业套装',
+    description: '复杂：角色设定、表情、周边、社媒头像和品牌板一次铺开',
+    icon: 'PersonOutline',
+    category: 'brand',
+    cover: coverCharacter,
+    createNodes: createBriefToImageSetPreset({
+      brief: '原创角色：云朵邮差小狐狸\n关键词：温柔、治愈、轻幻想、浅蓝白、手账感\n目标：发展成可用于表情包、头像、周边和品牌合作的 IP 视觉套装。',
+      outputs: [
+        { label: '角色设定表', size: '2048x2048', prompt: '生成原创角色设定表：正面、侧面、背面、三种表情、服装道具拆解、色板和简短世界观说明，治愈系手绘风。' },
+        { label: '表情包九宫格', size: '2048x2048', prompt: '同一角色九宫格表情包，开心、疑惑、努力、困倦、惊喜、委屈、加油、收到、晚安；动作夸张但可爱，背景透明感。' },
+        { label: '周边品牌板', size: '2048x2048', prompt: '角色 IP 周边品牌板，展示贴纸、徽章、帆布袋、钥匙扣、包装盒、明信片，统一浅蓝白品牌系统，像商业提案页。' },
+        { label: '社媒头像', size: '1024x1024', prompt: '角色头像特写，圆形头像构图，柔和光线，浅蓝云朵背景，清晰可识别，适合社交媒体。' },
+        { label: '故事海报', size: '1440x2560', prompt: '角色故事竖版海报，云朵邮局、漂浮信件、夕阳天空和小狐狸主角，标题区留白，温柔绘本电影感。' }
+      ]
+    })
+  },
+  {
+    id: 'evolink-commerce-tvc-storyboard-video',
+    name: '电商 TVC 首帧到视频',
+    description: '复杂：先生成商品 9 宫格分镜/首帧，再接图生视频运镜',
+    icon: 'VideocamOutline',
+    category: 'video',
+    cover: coverFashionCampaign,
+    createNodes: createImageToVideoCampaignPreset({
+      brief: '商品：手工青花瓷香薰\n目标：做 15 秒竖屏电商广告，先生成专业分镜板，再用首帧转视频。',
+      imagePrompt: '把手工青花瓷香薰生成 9 宫格 TVC 分镜板，包含环境建立、产品英雄镜头、纹样微距、点燃香薰、烟雾升起、居家使用、包装展示、夜晚氛围、品牌收尾。每格有中文镜头标题和时间码，高级商业摄影。',
+      videoPrompt: '镜头从产品微距缓慢后拉，香薰烟雾自然上升，青花瓷纹样在暖光中闪烁，桌面环境柔和，最后定格到品牌主视觉。运动平稳、真实、5 秒竖屏广告质感。',
+      ratio: '9:16',
+      dur: 5
+    })
+  },
+  {
+    id: 'evolink-cinematic-trailer-first-frame',
+    name: '电影预告首帧链路',
+    description: '复杂：先做电影首帧，再转成 5 秒预告片镜头',
+    icon: 'VideocamOutline',
+    category: 'video',
+    cover: coverScene,
+    createNodes: createImageToVideoCampaignPreset({
+      brief: '短片主题：雨夜未来城的信使\n目标：生成电影级首帧并延展成 5 秒镜头，可作为短片开场。',
+      imagePrompt: '电影级首帧：雨夜未来城市，年轻信使站在高架桥边，远处霓虹塔楼、无人机灯光、湿润路面反射，红蓝对比光，强叙事留白，宽银幕构图。',
+      videoPrompt: '镜头缓慢向前推进，雨滴划过镜头，远处霓虹闪烁，无人机穿过画面，人物披风轻动但主体结构保持一致，电影预告片开场氛围。',
+      imageSize: '1920x1080',
+      ratio: '16:9',
+      dur: 5
+    })
+  },
+  {
+    id: 'evolink-worldbuilding-map-pack',
+    name: '世界观地图资产包',
+    description: '复杂：地图、城市、阵营、道具和宣传海报一起生成',
+    icon: 'BookOutline',
+    category: 'creative',
+    cover: coverLanternPanorama,
+    createNodes: createBriefToImageSetPreset({
+      brief: '世界观：漂浮岛群与风帆列车\n关键词：奇幻、蒸汽机械、手绘地图、冒险、温暖金色\n目标：为游戏/小说项目生成可继续扩展的视觉资产。',
+      outputs: [
+        { label: '世界地图', size: '2048x2048', prompt: '手绘奇幻世界地图，漂浮岛群、风帆列车航线、港口城市、瀑布云海、地名标签和路线标记，羊皮纸质感。' },
+        { label: '主城概念图', size: '1920x1080', prompt: '漂浮岛主城概念艺术，层叠屋顶、空中码头、风帆列车进站、云海金光，宽幅场景图。' },
+        { label: '阵营信息图', size: '1440x2560', prompt: '三大阵营信息图，徽章、代表角色、领地、信念、颜色系统和短说明，游戏设定集排版。' },
+        { label: '道具设定', size: '2048x2048', prompt: '冒险道具设定板，风向罗盘、机械钥匙、云晶能源瓶、列车票据，材质拆解和编号标注。' },
+        { label: '宣传海报', size: '1440x2560', prompt: '冒险主题竖版宣传海报，主角站在风帆列车前，天空岛与云海背景，标题区留白，温暖史诗感。' }
+      ]
+    })
+  },
+  {
+    id: 'evolink-social-content-calendar',
+    name: '社媒内容日历套装',
+    description: '复杂：为品牌一次生成 6 个平台内容方向和配图结构',
+    icon: 'ChatbubbleOutline',
+    category: 'brand',
+    cover: coverBrandKit,
+    createNodes: createBriefToImageSetPreset({
+      brief: '品牌：新中式茶饮「山月青」\n目标：生成一周社媒内容视觉，兼顾小红书、抖音封面、公众号头图和电商活动。',
+      outputs: [
+        { label: '品牌故事', size: '1440x2560', prompt: '小红书品牌故事图，山间茶园、手写标题、茶饮杯、创始人短句，温润新中式排版。' },
+        { label: '新品上市', size: '1440x2560', prompt: '新品上市竖版海报，青梅冷萃茶，冰块、青梅、茶叶和水珠，标题“初夏一口山月青”，商业摄影。' },
+        { label: '制作过程', size: '2048x2048', prompt: '四宫格制作过程图，采茶、冷萃、调饮、封杯，每格有简短中文说明和统一品牌色。' },
+        { label: '门店打卡', size: '1440x2560', prompt: '门店打卡海报，新中式空间、竹影、年轻人拿茶拍照，适合朋友圈和小红书。' },
+        { label: '抖音封面', size: '1440x2560', prompt: '抖音短视频封面，大字标题“这杯青梅茶太会了”，强对比、产品特写、人物反应，留出标题区。' },
+        { label: '电商活动', size: '1440x2560', prompt: '电商促销活动图，组合套餐、优惠券、限时文案、商品卡片和购买按钮，中文 UI 清晰，真实平台感。' }
+      ]
     })
   }
 )

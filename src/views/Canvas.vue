@@ -7,7 +7,7 @@
     <!-- Header | 顶部导航 -->
     <AppHeader class="canvas-header">
       <template #left>
-        <button 
+        <button
           @click="goBack"
           class="p-2 hover:bg-[var(--bg-tertiary)] rounded-lg transition-colors"
         >
@@ -33,14 +33,14 @@
         >
           <n-icon :size="20"><SparklesOutline /></n-icon>
         </button>
-        <button 
+        <button
           @click="startCanvasTour"
           class="p-2 hover:bg-[var(--bg-tertiary)] rounded-lg transition-colors"
           title="使用指引"
         >
           <n-icon :size="20"><HelpCircleOutline /></n-icon>
         </button>
-        <button 
+        <button
           @click="showRuntimeLogs = !showRuntimeLogs"
           class="relative p-2 hover:bg-[var(--bg-tertiary)] rounded-lg transition-colors"
           :class="{ 'text-[var(--accent-color)]': runtimeLogs.length > 0 }"
@@ -50,7 +50,7 @@
           <n-icon :size="20"><DocumentTextOutline /></n-icon>
           <span v-if="runtimeErrorCount" class="log-error-dot">{{ runtimeErrorCount }}</span>
         </button>
-        <button 
+        <button
           @click="showDownloadModal = true"
           class="p-2 hover:bg-[var(--bg-tertiary)] rounded-lg transition-colors"
           :class="{ 'text-[var(--accent-color)]': hasDownloadableAssets }"
@@ -59,7 +59,7 @@
         >
           <n-icon :size="20"><DownloadOutline /></n-icon>
         </button>
-        <button 
+        <button
           @click="showApiSettings = true"
           class="p-2 hover:bg-[var(--bg-tertiary)] rounded-lg transition-colors"
           :class="{ 'text-[var(--accent-color)]': hasAnyApiConfigured }"
@@ -72,7 +72,7 @@
     </AppHeader>
 
     <!-- Main canvas area | 主画布区域 -->
-    <div class="flex-1 relative overflow-hidden">
+    <div ref="canvasAreaRef" class="flex-1 relative overflow-hidden">
       <div class="canvas-ambient one"></div>
       <div class="canvas-ambient two"></div>
       <!-- Vue Flow canvas | Vue Flow 画布 -->
@@ -92,13 +92,15 @@
         :only-render-visible-elements="true"
         @connect="onConnect"
         @node-click="onNodeClick"
+        @node-context-menu="onNodeContextMenu"
         @pane-click="onPaneClick"
+        @pane-context-menu="onPaneContextMenu"
         @viewport-change="handleViewportChange"
         @edges-change="onEdgesChange"
         class="canvas-flow"
       >
         <Background v-if="showCanvasBackground" :gap="20" :size="1" />
-        <MiniMap 
+        <MiniMap
           v-if="showMiniMap"
           position="bottom-right"
           :pannable="true"
@@ -112,15 +114,15 @@
 
       <!-- Left toolbar | 左侧工具栏 -->
       <aside class="canvas-toolbar absolute left-4 top-1/2 -translate-y-1/2 flex flex-col gap-1 p-2 z-10" data-tour="canvas-toolbar">
-        <button 
-          @click="showNodeMenu = !showNodeMenu"
+        <button
+          @click="openNodeMenuFromToolbar"
           class="w-10 h-10 flex items-center justify-center rounded-xl bg-[var(--accent-color)] text-white hover:bg-[var(--accent-hover)] transition-colors"
           title="添加节点"
           data-tour="add-node"
         >
           <n-icon :size="20"><AddOutline /></n-icon>
         </button>
-        <button 
+        <button
           @click="showWorkflowPanel = true"
           class="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-[var(--bg-tertiary)] transition-colors"
           title="工作流模板"
@@ -129,8 +131,8 @@
           <n-icon :size="20"><AppsOutline /></n-icon>
         </button>
         <div class="w-full h-px bg-[var(--border-color)] my-1"></div>
-        <button 
-          v-for="tool in tools" 
+        <button
+          v-for="tool in tools"
           :key="tool.id"
           @click="tool.action"
           :disabled="tool.disabled && tool.disabled()"
@@ -142,14 +144,15 @@
       </aside>
 
       <!-- Node menu popup | 节点菜单弹窗 -->
-      <div 
+      <div
         v-if="showNodeMenu"
-        class="node-menu-pop absolute left-20 top-1/2 -translate-y-1/2 z-20"
+        class="node-menu-pop absolute z-40"
+        :style="nodeMenuStyle"
         data-tour="node-menu"
       >
         <div class="node-menu-head">
-          <strong>添加节点</strong>
-          <span>像 ComfyUI 一样从节点开始搭流程</span>
+          <strong>{{ nodeMenuTitle }}</strong>
+          <span>搜索、分类、最近使用，像 ComfyUI 一样快速搭流程</span>
         </div>
         <input
           v-model="nodeMenuQuery"
@@ -157,8 +160,35 @@
           placeholder="搜索：提示词 / 生图 / 视频 / 输出"
           @keydown.escape="showNodeMenu = false"
         />
-        <button 
-          v-for="nodeType in filteredNodeTypeOptions" 
+        <div class="node-menu-tabs">
+          <button
+            v-for="category in nodeMenuCategories"
+            :key="category.key"
+            type="button"
+            :class="{ active: selectedNodeCategory === category.key }"
+            @click="selectedNodeCategory = category.key"
+          >
+            {{ category.label }}
+            <span>{{ getNodeCategoryCount(category.key) }}</span>
+          </button>
+        </div>
+        <div v-if="recentNodeTypes.length && !nodeMenuQuery.trim()" class="node-menu-section">
+          <p>最近使用</p>
+          <div class="recent-node-row">
+            <button
+              v-for="nodeType in recentNodeTypeOptions"
+              :key="nodeType.type"
+              type="button"
+              class="recent-node-chip"
+              :style="{ '--node-color': nodeType.color }"
+              @click="addNewNode(nodeType.type)"
+            >
+              {{ nodeType.name }}
+            </button>
+          </div>
+        </div>
+        <button
+          v-for="nodeType in filteredNodeTypeOptions"
           :key="nodeType.type"
           @click="addNewNode(nodeType.type)"
           class="node-menu-item"
@@ -173,18 +203,58 @@
         </button>
       </div>
 
+      <div
+        v-if="showCanvasContextMenu"
+        class="canvas-context-menu absolute z-50"
+        :style="canvasContextMenuStyle"
+        @pointerdown.stop
+        @mousedown.stop
+        @click.stop
+      >
+        <button type="button" @click="openNodeMenuAtContext">添加节点</button>
+        <button type="button" @click="pasteFromClipboard">粘贴</button>
+        <button type="button" @click="autoLayoutNodes">整理布局</button>
+        <button type="button" @click="fitCanvasFromContext">适应视图</button>
+      </div>
+
+      <div
+        v-if="showNodeContextMenu"
+        class="canvas-context-menu node-context-menu absolute z-50"
+        :style="nodeContextMenuStyle"
+        @pointerdown.stop
+        @mousedown.stop
+        @click.stop
+      >
+        <p>{{ contextNode?.data?.label || nodeTypeLabel(contextNode?.type) }}</p>
+        <button v-if="contextNode?.data?.error" type="button" @click="retryContextNodeWithFallback">
+          自动修复参数并重试
+        </button>
+        <button type="button" :disabled="!contextNodeCanRun" @click="runContextNode">
+          {{ contextNodeCanRun ? '运行 / 重新运行' : '此节点无运行入口' }}
+        </button>
+        <button type="button" @click="duplicateContextNode">复制节点</button>
+        <button type="button" @click="deleteContextNode">删除节点</button>
+        <button type="button" @click="copyContextNodeOutput">查看 / 复制输出</button>
+        <button v-if="contextNode?.type === 'image' && contextNode?.data?.url" type="button" @click="createContextImageWorkflow('image')">
+          从此图继续生图
+        </button>
+        <button v-if="contextNode?.type === 'image' && contextNode?.data?.url" type="button" @click="createContextImageWorkflow('video')">
+          从此图生成视频
+        </button>
+      </div>
+
       <!-- Bottom controls | 底部控制 -->
       <div class="zoom-dock absolute bottom-4 left-4 flex items-center gap-2 p-1" data-tour="zoom-dock">
-        <!-- <button 
-          @click="showGrid = !showGrid" 
+        <!-- <button
+          @click="showGrid = !showGrid"
           :class="showGrid ? 'bg-[var(--accent-color)] text-white' : 'hover:bg-[var(--bg-tertiary)]'"
           class="p-2 rounded transition-colors"
           title="切换网格"
         >
           <n-icon :size="16"><GridOutline /></n-icon>
         </button> -->
-        <button 
-          @click="fitView({ padding: 0.2 })" 
+        <button
+          @click="fitView({ padding: 0.2 })"
           class="p-2 hover:bg-[var(--bg-tertiary)] rounded transition-colors"
           title="适应视图"
         >
@@ -272,7 +342,7 @@
       <aside
         v-if="selectedNode && showInspectorPanel"
         class="node-inspector-panel absolute z-30"
-        :class="{ 'is-log-open': showRuntimeLogs }"
+        :class="{ 'is-log-open': showRuntimeLogs, 'is-collapsed': inspectorCollapsed }"
         data-tour="node-inspector"
       >
         <div class="inspector-head">
@@ -282,10 +352,13 @@
           </div>
           <div class="inspector-head-actions">
             <span :class="['node-status-pill', selectedNodeStatus]">{{ selectedNodeStatus }}</span>
+            <button class="inspector-close" :title="inspectorCollapsed ? '展开检查器' : '折叠检查器'" @click="inspectorCollapsed = !inspectorCollapsed">
+              {{ inspectorCollapsed ? '▣' : '—' }}
+            </button>
             <button class="inspector-close" title="关闭检查器" @click="showInspectorPanel = false">×</button>
           </div>
         </div>
-        <div class="inspector-body">
+        <div v-if="!inspectorCollapsed" class="inspector-body">
           <label>
             <span>节点名称</span>
             <input :value="selectedNode.data?.label || ''" @input="updateSelectedNodeField('label', $event.target.value)" />
@@ -296,16 +369,33 @@
           </label>
           <label v-if="selectedNode.type === 'imageConfig' || selectedNode.type === 'videoConfig'">
             <span>Negative Prompt</span>
-            <textarea :value="selectedNode.data?.negativePrompt || ''" @input="updateSelectedNodeField('negativePrompt', $event.target.value)"></textarea>
+            <textarea :value="selectedNode.data?.negative_prompt || selectedNode.data?.negativePrompt || ''" @input="updateSelectedNodeField('negative_prompt', $event.target.value)"></textarea>
           </label>
           <div class="inspector-grid">
             <label>
               <span>模型</span>
-              <input :value="selectedNode.data?.model || ''" @input="updateSelectedNodeField('model', $event.target.value)" />
+              <select :value="selectedNode.data?.model || ''" @change="updateSelectedNodeField('model', $event.target.value)">
+                <option value="">使用默认模型</option>
+                <option
+                  v-for="model in selectedNodeModelOptions"
+                  :key="model.key"
+                  :value="model.key"
+                >
+                  {{ model.label || model.key }}
+                </option>
+              </select>
             </label>
             <label>
               <span>尺寸 / 比例</span>
-              <input :value="selectedNode.data?.size || selectedNode.data?.ratio || ''" @input="updateSelectedSize($event.target.value)" />
+              <select :value="selectedNode.data?.size || selectedNode.data?.ratio || ''" @change="updateSelectedSize($event.target.value)">
+                <option
+                  v-for="option in selectedNodeSizeOptions"
+                  :key="option.key"
+                  :value="option.key"
+                >
+                  {{ option.label }}
+                </option>
+              </select>
             </label>
             <label>
               <span>Seed</span>
@@ -319,6 +409,32 @@
                 <option value="success">success</option>
                 <option value="error">error</option>
                 <option value="disabled">disabled</option>
+              </select>
+            </label>
+            <label v-if="selectedNode.type === 'imageConfig'">
+              <span>画质</span>
+              <select :value="selectedNode.data?.quality || 'standard'" @change="updateSelectedNodeField('quality', $event.target.value)">
+                <option value="auto">自动</option>
+                <option value="standard">标准画质</option>
+                <option value="hd">高清</option>
+                <option value="high">高质量</option>
+              </select>
+            </label>
+            <label v-if="selectedNode.type === 'imageConfig'">
+              <span>数量</span>
+              <select :value="selectedNode.data?.n || selectedNode.data?.count || 1" @change="updateSelectedCount(Number($event.target.value))">
+                <option :value="1">1 张</option>
+                <option :value="2">2 张</option>
+                <option :value="3">3 张</option>
+                <option :value="4">4 张</option>
+              </select>
+            </label>
+            <label v-if="selectedNode.type === 'videoConfig'">
+              <span>时长</span>
+              <select :value="selectedNode.data?.dur || selectedNode.data?.duration || 5" @change="updateSelectedDuration(Number($event.target.value))">
+                <option :value="5">5 秒</option>
+                <option :value="8">8 秒</option>
+                <option :value="10">10 秒</option>
               </select>
             </label>
           </div>
@@ -344,11 +460,27 @@
         </div>
       </aside>
 
-      <!-- Bottom input panel (floating) | 底部输入面板（悬浮） -->
-      <div class="composer-dock absolute bottom-4 left-1/2 -translate-x-1/2 w-full max-w-3xl px-4 z-20" data-tour="canvas-composer">
+      <!-- Bottom AI composer | 底部 AI 输入：默认收起，按 Ctrl/⌘+K 呼出 -->
+      <div
+        class="composer-dock absolute bottom-4 left-1/2 -translate-x-1/2 z-20"
+        :class="{ 'is-open': showCanvasComposer || isProcessing }"
+        data-tour="canvas-composer"
+      >
+        <button
+          v-if="!showCanvasComposer && !isProcessing"
+          type="button"
+          class="composer-trigger"
+          title="打开 AI 输入（Ctrl/⌘ + K）"
+          @click="openCanvasComposer"
+        >
+          <span class="composer-trigger-orb">AI</span>
+          <span>AI 创作</span>
+          <kbd>Ctrl K</kbd>
+        </button>
+
         <!-- Processing indicator | 处理中指示器 -->
-        <div 
-          v-if="isProcessing" 
+        <div
+          v-if="isProcessing"
           class="processing-card mb-3 p-3 animate-pulse"
         >
           <div class="flex items-center gap-2 text-sm text-[var(--accent-color)] mb-2">
@@ -360,59 +492,72 @@
           </div>
         </div>
 
-        <div class="composer-card p-3">
-          <textarea
-            v-model="chatInput"
-            :placeholder="inputPlaceholder"
-            :disabled="isProcessing"
-            class="w-full bg-transparent resize-none outline-none text-[var(--text-primary)] placeholder:text-[var(--text-secondary)] min-h-[40px] max-h-[120px] disabled:opacity-50"
-            rows="1"
-            @keydown.enter.exact="handleEnterKey"
-            @keydown.enter.ctrl="sendMessage"
-          />
-          <div class="flex items-center justify-between mt-2">
-            <div class="flex items-center gap-2">
-              <button 
-                @click="handlePolish"
-                :disabled="isProcessing || !chatInput.trim()"
-                class="px-3 py-1.5 text-xs rounded-lg bg-[var(--bg-secondary)] hover:bg-[var(--bg-tertiary)] border border-[var(--border-color)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                title="AI 润色提示词"
-              >
-                ✨ AI 润色
-              </button>
-            </div>
-            <div class="flex items-center gap-3">
-              <label class="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
-                <n-switch v-model:value="autoExecute" size="small" />
-                自动执行
-              </label>
-              <button 
-                @click="sendMessage"
-                :disabled="isProcessing"
-                class="w-8 h-8 rounded-xl bg-[var(--accent-color)] hover:bg-[var(--accent-hover)] flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <n-spin v-if="isProcessing" :size="16" />
-                <n-icon v-else :size="20" color="white"><SendOutline /></n-icon>
-              </button>
+        <template v-if="showCanvasComposer">
+          <div class="composer-card p-3">
+            <textarea
+              ref="composerTextareaRef"
+              v-model="chatInput"
+              :placeholder="inputPlaceholder"
+              :disabled="isProcessing"
+              class="w-full bg-transparent resize-none outline-none text-[var(--text-primary)] placeholder:text-[var(--text-secondary)] min-h-[40px] max-h-[120px] disabled:opacity-50"
+              rows="1"
+              @keydown.enter.exact="handleEnterKey"
+              @keydown.enter.ctrl="sendMessage"
+              @keydown.meta.enter="sendMessage"
+              @keydown.escape.stop.prevent="closeCanvasComposer"
+            />
+            <div class="flex items-center justify-between mt-2">
+              <div class="flex items-center gap-2">
+                <button
+                  @click="handlePolish"
+                  :disabled="isProcessing || !chatInput.trim()"
+                  class="px-3 py-1.5 text-xs rounded-lg bg-[var(--bg-secondary)] hover:bg-[var(--bg-tertiary)] border border-[var(--border-color)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="AI 润色提示词"
+                >
+                  ✨ AI 润色
+                </button>
+                <button
+                  type="button"
+                  class="px-3 py-1.5 text-xs rounded-lg bg-[var(--bg-secondary)] hover:bg-[var(--bg-tertiary)] border border-[var(--border-color)] transition-colors"
+                  title="关闭输入条（Esc）"
+                  @click="closeCanvasComposer"
+                >
+                  收起
+                </button>
+              </div>
+              <div class="flex items-center gap-3">
+                <label class="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
+                  <n-switch v-model:value="autoExecute" size="small" />
+                  自动执行
+                </label>
+                <button
+                  @click="sendMessage"
+                  :disabled="isProcessing"
+                  class="w-8 h-8 rounded-xl bg-[var(--accent-color)] hover:bg-[var(--accent-hover)] flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <n-spin v-if="isProcessing" :size="16" />
+                  <n-icon v-else :size="20" color="white"><SendOutline /></n-icon>
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-        
-        <!-- Quick suggestions | 快捷建议 -->
-        <div class="canvas-suggestions flex flex-wrap items-center justify-center gap-2 mt-2">
-          <span class="text-xs text-[var(--text-secondary)]">推荐：</span>
-          <button 
-            v-for="tag in suggestions" 
-            :key="tag"
-            @click="chatInput = tag"
-            class="px-2 py-0.5 text-xs rounded-full bg-[var(--bg-secondary)]/80 border border-[var(--border-color)] hover:border-[var(--accent-color)] transition-colors"
-          >
-            {{ tag }}
-          </button>
-          <button class="p-1 hover:bg-[var(--bg-tertiary)] rounded-lg transition-colors" @click="refreshSuggestions" title="换一批">
-            <n-icon :size="14"><RefreshOutline /></n-icon>
-          </button>
-        </div>
+
+          <!-- Quick suggestions | 快捷建议 -->
+          <div class="canvas-suggestions flex flex-wrap items-center justify-center gap-2 mt-2">
+            <span class="text-xs text-[var(--text-secondary)]">推荐：</span>
+            <button
+              v-for="tag in suggestions"
+              :key="tag"
+              @click="applyComposerSuggestion(tag)"
+              class="px-2 py-0.5 text-xs rounded-full bg-[var(--bg-secondary)]/80 border border-[var(--border-color)] hover:border-[var(--accent-color)] transition-colors"
+            >
+              {{ tag }}
+            </button>
+            <button class="p-1 hover:bg-[var(--bg-tertiary)] rounded-lg transition-colors" @click="refreshSuggestions" title="换一批">
+              <n-icon :size="14"><RefreshOutline /></n-icon>
+            </button>
+          </div>
+        </template>
       </div>
     </div>
 
@@ -465,7 +610,7 @@ import { VueFlow, useVueFlow } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
 import { MiniMap } from '@vue-flow/minimap'
 import { NIcon, NSwitch, NDropdown, NMessageProvider, NSpin, NModal, NInput, NButton } from 'naive-ui'
-import { 
+import {
   ChevronBackOutline,
   ChevronDownOutline,
   SettingsOutline,
@@ -529,11 +674,11 @@ const CHAT_TEMPLATES = {
 const currentTemplate = ref('imagePrompt')
 
 // Chat hook with image prompt template | 问答 hook
-const { 
-  loading: chatLoading, 
-  status: chatStatus, 
-  currentResponse, 
-  send: sendChat 
+const {
+  loading: chatLoading,
+  status: chatStatus,
+  currentResponse,
+  send: sendChat
 } = useChat({
   systemPrompt: CHAT_TEMPLATES.imagePrompt.systemPrompt
 })
@@ -598,12 +743,25 @@ const defaultEdgeOptions = {
 const showNodeMenu = ref(false)
 const chatInput = ref('')
 const autoExecute = ref(false)
+const showCanvasComposer = ref(false)
+const composerTextareaRef = ref(null)
 const isMobile = ref(false)
 const showGrid = ref(true)
 const canvasPerfLite = ref(false)
 const showApiSettings = ref(false)
 const isProcessing = ref(false)
 const nodeMenuQuery = ref('')
+const canvasAreaRef = ref(null)
+const nodeMenuScreenPosition = ref({ x: 80, y: 120 })
+const nodeMenuCanvasPosition = ref(null)
+const selectedNodeCategory = ref('all')
+const recentNodeTypes = ref([])
+const showCanvasContextMenu = ref(false)
+const canvasContextMenuPosition = ref({ x: 0, y: 0 })
+const canvasContextCanvasPosition = ref(null)
+const showNodeContextMenu = ref(false)
+const nodeContextMenuPosition = ref({ x: 0, y: 0 })
+const contextNodeId = ref(null)
 
 // Flow key for forcing re-render on project switch | 项目切换时强制重新渲染的 key
 const flowKey = ref(Date.now())
@@ -617,6 +775,7 @@ const showRuntimeLogs = ref(false)
 const showCanvasTour = ref(false)
 const showAgentPanel = ref(false)
 const showInspectorPanel = ref(true)
+const inspectorCollapsed = ref(false)
 const selectedNodeId = ref(null)
 const renameValue = ref('')
 const canvasTourStorageKey = 'yufeng-canvas-canvas-tour-v1'
@@ -671,6 +830,16 @@ const selectedNode = computed(() =>
   nodes.value.find((node) => node.id === selectedNodeId.value) || null
 )
 
+const contextNode = computed(() =>
+  nodes.value.find((node) => node.id === contextNodeId.value) || null
+)
+
+const executableNodeTypes = new Set(['llmConfig', 'imageConfig', 'videoConfig'])
+
+const contextNodeCanRun = computed(() =>
+  executableNodeTypes.has(contextNode.value?.type)
+)
+
 const selectedNodeStatus = computed(() => {
   if (!selectedNode.value) return 'idle'
   if (selectedNode.value.data?.disabled) return 'disabled'
@@ -686,6 +855,37 @@ const nodeTypeLabel = (type) => ({
   video: 'Video Output Node',
   videoConfig: 'Video Generation Node'
 }[type] || '节点')
+
+const commonImageSizes = [
+  { label: '1:1 1024x1024', key: '1024x1024' },
+  { label: '4:3 1440x1080', key: '1440x1080' },
+  { label: '3:4 1080x1440', key: '1080x1440' },
+  { label: '16:9 1920x1080', key: '1920x1080' },
+  { label: '9:16 1080x1920', key: '1080x1920' },
+  { label: '2K 2048x2048', key: '2048x2048' },
+  { label: '4K 4096x4096', key: '4096x4096' }
+]
+
+const commonVideoRatios = [
+  { label: '16:9 横屏', key: '16:9' },
+  { label: '9:16 竖屏', key: '9:16' },
+  { label: '1:1 方图', key: '1:1' },
+  { label: '4:3 横图', key: '4:3' },
+  { label: '3:4 竖图', key: '3:4' }
+]
+
+const selectedNodeModelOptions = computed(() => {
+  if (!selectedNode.value) return []
+  if (selectedNode.value.type === 'videoConfig') return modelStore.allVideoModels
+  if (selectedNode.value.type === 'imageConfig' || selectedNode.value.type === 'image') return modelStore.allImageModels
+  if (selectedNode.value.type === 'text' || selectedNode.value.type === 'llmConfig') return modelStore.allChatModels
+  return []
+})
+
+const selectedNodeSizeOptions = computed(() => {
+  if (selectedNode.value?.type === 'videoConfig') return commonVideoRatios
+  return commonImageSizes
+})
 
 const hasNodeField = (field) => {
   if (!selectedNode.value) return false
@@ -709,10 +909,36 @@ const updateSelectedSize = (value) => {
   updateSelectedNodeField(field, value)
 }
 
-const markSelectedNodeRunning = () => {
+const updateSelectedCount = (value) => {
   if (!selectedNode.value) return
-  updateNode(selectedNode.value.id, { status: 'running', loading: true, updatedAt: Date.now() })
-  window.$message?.info('已标记为运行中。实际执行仍使用节点自身的生成按钮。')
+  updateSelectedNodeField('n', Number(value) || 1)
+}
+
+const updateSelectedDuration = (value) => {
+  if (!selectedNode.value) return
+  updateSelectedNodeField('dur', Number(value) || 5)
+}
+
+const markNodeRunning = (node) => {
+  if (!node) return
+  if (!executableNodeTypes.has(node.type)) {
+    window.$message?.info('这个节点没有独立运行入口，可以运行它连接的生成节点。')
+    return
+  }
+
+  updateNode(node.id, {
+    autoExecute: true,
+    status: 'running',
+    loading: false,
+    error: '',
+    startedAt: Date.now(),
+    updatedAt: Date.now()
+  })
+  window.$message?.info('已触发节点重新运行')
+}
+
+const markSelectedNodeRunning = () => {
+  markNodeRunning(selectedNode.value)
 }
 
 const duplicateSelectedNode = () => {
@@ -729,15 +955,19 @@ const deleteSelectedNode = () => {
   window.$message?.success('已删除节点')
 }
 
-const copySelectedNodeOutput = async () => {
-  if (!selectedNode.value) return
-  const output = selectedNode.value.data?.url || selectedNode.value.data?.outputContent || selectedNode.value.data?.content || selectedNode.value.data?.prompt || ''
+const copyNodeOutput = async (node) => {
+  if (!node) return
+  const output = node.data?.url || node.data?.outputContent || node.data?.content || node.data?.prompt || ''
   try {
     await navigator.clipboard?.writeText(output)
     window.$message?.success('已复制节点输出')
   } catch {
     window.$message?.info(output || '当前节点暂无输出')
   }
+}
+
+const copySelectedNodeOutput = async () => {
+  await copyNodeOutput(selectedNode.value)
 }
 
 const createSelectedImageWorkflow = (mode) => {
@@ -919,7 +1149,7 @@ const canvasTourSteps = [
 
 // Check if has downloadable assets | 检查是否有可下载素材
 const hasDownloadableAssets = computed(() => {
-  return nodes.value.some(n => 
+  return nodes.value.some(n =>
     (n.type === 'image' || n.type === 'video') && n.data?.url
   )
 })
@@ -1060,19 +1290,60 @@ const tools = [
 
 // Node type options for menu | 节点类型菜单选项
 const nodeTypeOptions = [
-  { type: 'text', name: '提示词 / 文本', description: '写 Prompt、分镜、备注，可连接生图/视频节点', icon: TextOutline, color: '#38bdf8' },
-  { type: 'llmConfig', name: '文本模型', description: '让语言模型润色提示词、拆方向、生成文案', icon: ChatbubbleOutline, color: '#a78bfa' },
-  { type: 'imageConfig', name: '图片生成', description: '文生图 / 图生图配置，支持模型、比例、数量参数', icon: ColorPaletteOutline, color: '#22c55e' },
-  { type: 'videoConfig', name: '视频生成', description: '文生视频 / 图生视频，支持首帧、尾帧、比例、时长', icon: VideocamOutline, color: '#f59e0b' },
-  { type: 'image', name: '图片输出 / 参考图', description: '承载生成结果或参考图，可继续图生图/图生视频', icon: ImageOutline, color: '#8b5cf6' },
-  { type: 'video', name: '视频输出', description: '承载视频结果，支持预览、下载、继续编排', icon: VideocamOutline, color: '#ef4444' }
+  { type: 'text', category: 'prompt', name: '提示词 / 文本', description: '写 Prompt、分镜、备注，可连接生图/视频节点', icon: TextOutline, color: '#38bdf8' },
+  { type: 'llmConfig', category: 'agent', name: '文本模型', description: '让语言模型润色提示词、拆方向、生成文案', icon: ChatbubbleOutline, color: '#a78bfa' },
+  { type: 'imageConfig', category: 'generate', name: '图片生成', description: '文生图 / 图生图配置，支持模型、比例、数量参数', icon: ColorPaletteOutline, color: '#22c55e' },
+  { type: 'videoConfig', category: 'generate', name: '视频生成', description: '文生视频 / 图生视频，支持首帧、尾帧、比例、时长', icon: VideocamOutline, color: '#f59e0b' },
+  { type: 'image', category: 'output', name: '图片输出 / 参考图', description: '承载生成结果或参考图，可继续图生图/图生视频', icon: ImageOutline, color: '#8b5cf6' },
+  { type: 'video', category: 'output', name: '视频输出', description: '承载视频结果，支持预览、下载、继续编排', icon: VideocamOutline, color: '#ef4444' }
 ]
+
+const nodeMenuCategories = [
+  { key: 'all', label: '全部' },
+  { key: 'prompt', label: '提示词' },
+  { key: 'generate', label: '生成' },
+  { key: 'output', label: '输出' },
+  { key: 'agent', label: 'Agent' }
+]
+
+const nodeMenuTitle = computed(() => nodeMenuCanvasPosition.value ? '在这里添加节点' : '添加节点')
+
+const nodeMenuStyle = computed(() => ({
+  left: `${nodeMenuScreenPosition.value.x}px`,
+  top: `${nodeMenuScreenPosition.value.y}px`
+}))
+
+const canvasContextMenuStyle = computed(() => ({
+  left: `${canvasContextMenuPosition.value.x}px`,
+  top: `${canvasContextMenuPosition.value.y}px`
+}))
+
+const nodeContextMenuStyle = computed(() => ({
+  left: `${nodeContextMenuPosition.value.x}px`,
+  top: `${nodeContextMenuPosition.value.y}px`
+}))
+
+const getNodeCategoryCount = (category) => {
+  if (category === 'all') return nodeTypeOptions.length
+  return nodeTypeOptions.filter((nodeType) => nodeType.category === category).length
+}
+
+const recentNodeTypeOptions = computed(() =>
+  recentNodeTypes.value
+    .map((type) => nodeTypeOptions.find((nodeType) => nodeType.type === type))
+    .filter(Boolean)
+)
 
 const filteredNodeTypeOptions = computed(() => {
   const query = nodeMenuQuery.value.trim().toLowerCase()
-  if (!query) return nodeTypeOptions
+  const category = selectedNodeCategory.value
+  const scopedOptions = category === 'all'
+    ? nodeTypeOptions
+    : nodeTypeOptions.filter((nodeType) => nodeType.category === category)
 
-  return nodeTypeOptions.filter((nodeType) => {
+  if (!query) return scopedOptions
+
+  return scopedOptions.filter((nodeType) => {
     return `${nodeType.name} ${nodeType.description} ${nodeType.type}`.toLowerCase().includes(query)
   })
 })
@@ -1092,25 +1363,328 @@ const refreshSuggestions = () => {
   suggestions.value = [...suggestionPool].sort(() => Math.random() - 0.5).slice(0, 5)
 }
 
-const addNewNode = async (type) => {
-  // Calculate viewport center position | 计算视口中心位置
-  const viewportCenterX = -viewport.value.x / viewport.value.zoom + (window.innerWidth / 2) / viewport.value.zoom
-  const viewportCenterY = -viewport.value.y / viewport.value.zoom + (window.innerHeight / 2) / viewport.value.zoom
-  
-  // Add node at viewport center | 在视口中心添加节点
-  const nodeId = addNode(type, { x: viewportCenterX - 100, y: viewportCenterY - 100 })
-  
+const focusCanvasComposer = () => {
+  nextTick(() => {
+    composerTextareaRef.value?.focus?.()
+  })
+}
+
+const openCanvasComposer = () => {
+  showCanvasComposer.value = true
+  focusCanvasComposer()
+}
+
+const closeCanvasComposer = () => {
+  showCanvasComposer.value = false
+}
+
+const toggleCanvasComposer = () => {
+  showCanvasComposer.value = !showCanvasComposer.value
+  if (showCanvasComposer.value) {
+    focusCanvasComposer()
+  }
+}
+
+const applyComposerSuggestion = (tag) => {
+  chatInput.value = tag
+  openCanvasComposer()
+}
+
+const isEditableShortcutTarget = (target) => {
+  if (!target) return false
+  const element = target.nodeType === Node.ELEMENT_NODE ? target : target.parentElement
+  if (!element) return false
+  const tagName = element.tagName?.toLowerCase?.()
+  return ['input', 'textarea', 'select'].includes(tagName)
+    || element.isContentEditable
+    || !!element.closest?.('[contenteditable="true"], input, textarea, select')
+}
+
+const handleCanvasKeydown = (event) => {
+  if (isEditableShortcutTarget(event.target)) return
+
+  const key = event.key?.toLowerCase?.()
+  if ((event.ctrlKey || event.metaKey) && key === 'k') {
+    event.preventDefault()
+    toggleCanvasComposer()
+    return
+  }
+
+  if (event.key === 'Escape') {
+    if (showNodeContextMenu.value) {
+      showNodeContextMenu.value = false
+      event.preventDefault()
+      return
+    }
+    if (showCanvasContextMenu.value) {
+      showCanvasContextMenu.value = false
+      event.preventDefault()
+      return
+    }
+    if (showNodeMenu.value) {
+      showNodeMenu.value = false
+      event.preventDefault()
+      return
+    }
+    if (showCanvasComposer.value) {
+      closeCanvasComposer()
+      event.preventDefault()
+    }
+  }
+}
+
+const clampMenuPosition = (clientX, clientY, width = 340, height = 460) => {
+  const padding = 12
+  const rect = canvasAreaRef.value?.getBoundingClientRect?.()
+  const maxWidth = rect?.width || window.innerWidth
+  const maxHeight = rect?.height || window.innerHeight
+  return {
+    x: Math.min(Math.max(clientX, padding), maxWidth - width - padding),
+    y: Math.min(Math.max(clientY, padding), maxHeight - height - padding)
+  }
+}
+
+const clientToCanvasPanelPoint = (clientX, clientY) => {
+  const rect = canvasAreaRef.value?.getBoundingClientRect?.()
+  return {
+    x: clientX - (rect?.left || 0),
+    y: clientY - (rect?.top || 0)
+  }
+}
+
+const screenToCanvasPosition = (clientX, clientY) => {
+  const rect = canvasAreaRef.value?.getBoundingClientRect?.()
+  const offsetX = rect ? clientX - rect.left : clientX
+  const offsetY = rect ? clientY - rect.top : clientY
+
+  return {
+    x: (offsetX - viewport.value.x) / viewport.value.zoom,
+    y: (offsetY - viewport.value.y) / viewport.value.zoom
+  }
+}
+
+const getViewportCenterPosition = () => {
+  const rect = canvasAreaRef.value?.getBoundingClientRect?.()
+  const centerX = (rect?.left || 0) + (rect?.width || window.innerWidth) / 2
+  const centerY = (rect?.top || 0) + (rect?.height || window.innerHeight) / 2
+  return screenToCanvasPosition(centerX, centerY)
+}
+
+const rememberNodeType = (type) => {
+  recentNodeTypes.value = [type, ...recentNodeTypes.value.filter((item) => item !== type)].slice(0, 4)
+  try {
+    localStorage.setItem('yufeng-canvas-recent-node-types', JSON.stringify(recentNodeTypes.value))
+  } catch {
+    // Recent nodes are a UI convenience only.
+  }
+}
+
+const openNodeMenu = ({ clientX, clientY, canvasPosition = null } = {}) => {
+  const fallback = clampMenuPosition(80, window.innerHeight / 2 - 220)
+  const panelPoint = clientX == null || clientY == null ? null : clientToCanvasPanelPoint(clientX, clientY)
+  nodeMenuScreenPosition.value = !panelPoint
+    ? fallback
+    : clampMenuPosition(panelPoint.x, panelPoint.y)
+  nodeMenuCanvasPosition.value = canvasPosition
+  showNodeMenu.value = true
+  showCanvasContextMenu.value = false
+  showNodeContextMenu.value = false
+}
+
+const openNodeMenuFromToolbar = (event) => {
+  if (showNodeMenu.value && !nodeMenuCanvasPosition.value) {
+    showNodeMenu.value = false
+    return
+  }
+
+  openNodeMenu({
+    clientX: 80,
+    clientY: Math.max(96, Math.min(window.innerHeight - 480, event?.clientY ? event.clientY - 40 : window.innerHeight / 2 - 220)),
+    canvasPosition: null
+  })
+}
+
+const addNewNode = async (type, position = nodeMenuCanvasPosition.value) => {
+  const targetPosition = position || getViewportCenterPosition()
+  const normalizedPosition = {
+    x: Math.round(targetPosition.x - 120),
+    y: Math.round(targetPosition.y - 80)
+  }
+
+  // Add node at chosen viewport/pointer position | 在鼠标或视口位置添加节点
+  const nodeId = addNode(type, normalizedPosition)
+
   // Set highest z-index | 设置最高层级
   const maxZIndex = Math.max(0, ...nodes.value.map(n => n.zIndex || 0))
-  updateNode(nodeId, { zIndex: maxZIndex + 1 })
-  
+  nodes.value = nodes.value.map((node) => node.id === nodeId ? { ...node, zIndex: maxZIndex + 1 } : node)
+
   // Force Vue Flow to recalculate node dimensions | 强制 Vue Flow 重新计算节点尺寸
   setTimeout(() => {
     updateNodeInternals(nodeId)
   }, 50)
-  
+
   showNodeMenu.value = false
+  showCanvasContextMenu.value = false
   nodeMenuQuery.value = ''
+  nodeMenuCanvasPosition.value = null
+  selectedNodeId.value = nodeId
+  showInspectorPanel.value = true
+  inspectorCollapsed.value = false
+  rememberNodeType(type)
+}
+
+const onPaneContextMenu = (event) => {
+  const nativeEvent = event?.event || event
+  if (!nativeEvent) return
+  nativeEvent.preventDefault?.()
+  nativeEvent.stopPropagation?.()
+  const panelPoint = clientToCanvasPanelPoint(nativeEvent.clientX, nativeEvent.clientY)
+  const position = clampMenuPosition(panelPoint.x, panelPoint.y, 190, 190)
+  canvasContextMenuPosition.value = position
+  canvasContextCanvasPosition.value = screenToCanvasPosition(nativeEvent.clientX, nativeEvent.clientY)
+  showCanvasContextMenu.value = true
+  showNodeContextMenu.value = false
+  showNodeMenu.value = false
+}
+
+const onNodeContextMenu = (event) => {
+  const nativeEvent = event?.event || event
+  const node = event?.node
+  if (!nativeEvent || !node) return
+  nativeEvent.preventDefault?.()
+  nativeEvent.stopPropagation?.()
+  contextNodeId.value = node.id
+  selectedNodeId.value = node.id
+  const panelPoint = clientToCanvasPanelPoint(nativeEvent.clientX, nativeEvent.clientY)
+  const position = clampMenuPosition(panelPoint.x, panelPoint.y, 220, 280)
+  nodeContextMenuPosition.value = position
+  showNodeContextMenu.value = true
+  showCanvasContextMenu.value = false
+  showNodeMenu.value = false
+}
+
+const openNodeMenuAtContext = () => {
+  nodeMenuScreenPosition.value = clampMenuPosition(canvasContextMenuPosition.value.x, canvasContextMenuPosition.value.y)
+  nodeMenuCanvasPosition.value = canvasContextCanvasPosition.value
+  showNodeMenu.value = true
+  showCanvasContextMenu.value = false
+  showNodeContextMenu.value = false
+}
+
+const fitCanvasFromContext = () => {
+  fitView({ padding: 0.2 })
+  showCanvasContextMenu.value = false
+}
+
+const pasteFromClipboard = async () => {
+  showCanvasContextMenu.value = false
+  try {
+    const text = await navigator.clipboard?.readText?.()
+    if (!text?.trim()) {
+      window.$message?.info('剪贴板没有可粘贴的文本')
+      return
+    }
+    const nodeId = addNode('text', canvasContextCanvasPosition.value || getViewportCenterPosition(), {
+      content: text,
+      label: '粘贴文本'
+    })
+    selectedNodeId.value = nodeId
+    showInspectorPanel.value = true
+    window.setTimeout(() => updateNodeInternals(nodeId), 50)
+  } catch {
+    window.$message?.warning('无法读取剪贴板')
+  }
+}
+
+const autoLayoutNodes = () => {
+  showCanvasContextMenu.value = false
+  if (!nodes.value.length) return
+  const columns = 3
+  nodes.value = nodes.value.map((node, index) => ({
+    ...node,
+    position: {
+      x: 80 + (index % columns) * 380,
+      y: 80 + Math.floor(index / columns) * 260
+    },
+    data: {
+      ...node.data,
+      updatedAt: Date.now()
+    }
+  }))
+  window.$message?.success('已整理节点布局')
+  nextTick(() => fitView({ padding: 0.2 }))
+}
+
+const runContextNode = () => {
+  if (!contextNode.value) return
+  markNodeRunning(contextNode.value)
+  showNodeContextMenu.value = false
+}
+
+const duplicateContextNode = () => {
+  if (!contextNode.value) return
+  const id = duplicateNode(contextNode.value.id)
+  selectedNodeId.value = id || contextNode.value.id
+  showNodeContextMenu.value = false
+  window.$message?.success('已复制节点')
+}
+
+const deleteContextNode = () => {
+  if (!contextNode.value) return
+  removeNode(contextNode.value.id)
+  selectedNodeId.value = null
+  showNodeContextMenu.value = false
+  window.$message?.success('已删除节点')
+}
+
+const retryContextNodeWithFallback = () => {
+  if (!contextNode.value) return
+  const node = contextNode.value
+  showNodeContextMenu.value = false
+
+  // Clear error state and mark for auto-retry
+  updateNode(node.id, {
+    error: '',
+    loading: false,
+    status: 'idle',
+    updatedAt: Date.now()
+  })
+
+  // Find the connected config node and trigger its run
+  const configEdge = edges.value.find((e) => e.target === node.id || e.source === node.id)
+  if (!configEdge) {
+    markNodeRunning(node)
+    return
+  }
+
+  const configNodeId = node.type === 'image' || node.type === 'video'
+    ? edges.value
+        .filter((e) => e.target === node.id || (e.target === node.type + 'Config' && e.source === node.id))
+        .map((e) => nodes.value.find((n) => n.id === e.source || n.id === e.target))
+        .find((n) => n && (n.type === 'imageConfig' || n.type === 'videoConfig'))
+    : null
+
+  if (configNodeId) {
+    markNodeRunning(configNodeId)
+  } else {
+    markNodeRunning(node)
+  }
+
+  window.$message?.info('已清除错误状态，请通过配置节点重新运行。')
+}
+
+const copyContextNodeOutput = async () => {
+  if (!contextNode.value) return
+  selectedNodeId.value = contextNode.value.id
+  await copyNodeOutput(contextNode.value)
+  showNodeContextMenu.value = false
+}
+
+const createContextImageWorkflow = (mode) => {
+  if (!contextNode.value) return
+  selectedNodeId.value = contextNode.value.id
+  createSelectedImageWorkflow(mode)
+  showNodeContextMenu.value = false
 }
 
 // Handle add workflow from panel | 处理从面板添加工作流
@@ -1172,26 +1746,31 @@ const onConnect = (params) => {
   // Check connection types | 检查连接类型
   const sourceNode = nodes.value.find(n => n.id === params.source)
   const targetNode = nodes.value.find(n => n.id === params.target)
-  
+
+  if (!sourceNode || !targetNode || sourceNode.id === targetNode.id) {
+    window.$message?.warning('不能连接到同一个节点')
+    return
+  }
+
   if (sourceNode?.type === 'image' && targetNode?.type === 'videoConfig') {
     // Use imageRole edge type | 使用图片角色边类型
     addEdge({
       ...params,
       type: 'imageRole',
-      data: { imageRole: 'first_frame_image' } // Default to first frame | 默认首帧
+      data: { imageRole: 'first_frame_image', edgeKind: 'image-role' } // Default to first frame | 默认首帧
     })
-  } else if (sourceNode?.type === 'text' && targetNode?.type === 'imageConfig') {
+  } else if (sourceNode?.type === 'text' && (targetNode?.type === 'imageConfig' || targetNode?.type === 'videoConfig')) {
     // Use promptOrder edge type | 使用提示词顺序边类型
     // Calculate next order number | 计算下一个顺序号
-    const existingTextEdges = edges.value.filter(e => 
+    const existingTextEdges = edges.value.filter(e =>
       e.target === params.target && e.type === 'promptOrder'
     )
     const nextOrder = existingTextEdges.length + 1
-    
+
     addEdge({
       ...params,
       type: 'promptOrder',
-      data: { promptOrder: nextOrder }
+      data: { promptOrder: nextOrder, edgeKind: 'prompt' }
     })
   } else if (sourceNode?.type === 'image' && targetNode?.type === 'imageConfig') {
     // Use imageOrder edge type | 使用图片顺序边类型
@@ -1225,7 +1804,7 @@ const onConnect = (params) => {
     addEdge({
       ...params,
       type: 'imageOrder',
-      data: { imageOrder: nextOrder }
+      data: { imageOrder: nextOrder, edgeKind: 'image-reference' }
     })
   } else if (sourceNode?.type === 'llmConfig' && targetNode?.type === 'imageConfig') {
     // LLM output as prompt for image generation | LLM 输出作为图片生成提示词
@@ -1237,14 +1816,14 @@ const onConnect = (params) => {
     addEdge({
       ...params,
       type: 'promptOrder',
-      data: { promptOrder: nextOrder }
+      data: { promptOrder: nextOrder, edgeKind: 'prompt' }
     })
   } else if (sourceNode?.type === 'llmConfig' && targetNode?.type === 'videoConfig') {
     // LLM output as prompt for video generation | LLM 输出作为视频生成提示词
     addEdge({
       ...params,
       type: 'promptOrder',
-      data: { promptOrder: 1 }
+      data: { promptOrder: 1, edgeKind: 'prompt' }
     })
   } else {
     addEdge(params)
@@ -1258,7 +1837,7 @@ const onNodeClick = (event) => {
   // nodes.value.forEach(node => {
   //   updateNode(node.id, { selected: false })
   // })
-  
+
   // // Select clicked node | 选中的节点
   // const clickedNode = nodes.value.find(n => n.id === event.node.id)
   // if (clickedNode) {
@@ -1275,7 +1854,7 @@ const handleViewportChange = (newViewport) => {
 const onEdgesChange = (changes) => {
   // Check if any edge is being removed | 检查是否有边被删除
   const hasRemoval = changes.some(change => change.type === 'remove')
-  
+
   if (hasRemoval) {
     // Trigger history save after edge removal | 边删除后触发历史保存
     nextTick(() => {
@@ -1287,6 +1866,8 @@ const onEdgesChange = (changes) => {
 // Handle pane click | 处理画布点击
 const onPaneClick = () => {
   showNodeMenu.value = false
+  showCanvasContextMenu.value = false
+  showNodeContextMenu.value = false
   selectedNodeId.value = null
   // Clear all selections | 清除所有选中
   // nodes.value = nodes.value.map(node => ({
@@ -1341,7 +1922,7 @@ const handleEnterKey = (e) => {
 const handlePolish = async () => {
   const input = chatInput.value.trim()
   if (!input) return
-  
+
   // Check API configuration | 检查 API 配置
   if (!isChatConfigured.value) {
     window.$message?.warning('请先配置 API Key')
@@ -1364,7 +1945,7 @@ const handlePolish = async () => {
       model: modelStore.selectedChatModel,
       systemPrompt: CHAT_TEMPLATES[currentTemplate.value]?.systemPrompt || CHAT_TEMPLATES.imagePrompt.systemPrompt
     })
-    
+
     if (result) {
       chatInput.value = result
       window.$message?.success('提示词已润色')
@@ -1405,11 +1986,11 @@ const sendMessage = async () => {
     if (autoExecute.value) {
       // Auto-execute mode: analyze intent and execute workflow | 自动执行模式：分析意图并执行工作流
       window.$message?.info('正在分析工作流...')
-      
+
       try {
         // Analyze user intent | 分析用户意图
         const result = await analyzeIntent(content)
-        
+
         // Ensure we have valid workflow params | 确保有效的工作流参数
         const workflowParams = {
           workflow_type: result?.workflow_type || WORKFLOW_TYPES.TEXT_TO_IMAGE,
@@ -1418,12 +1999,12 @@ const sendMessage = async () => {
           character: result?.character,
           shots: result?.shots
         }
-        
+
         window.$message?.info(`执行工作流: ${result?.description || '文生图'}`)
-        
+
         // Execute the workflow | 执行工作流
         await executeWorkflow(workflowParams, { x: baseX, y: baseY })
-        
+
         window.$message?.success('工作流已启动')
       } catch (err) {
         console.error('Workflow error:', err)
@@ -1433,15 +2014,15 @@ const sendMessage = async () => {
       }
     } else {
       // Manual mode: just create nodes | 手动模式：仅创建节点
-      const textNodeId = addNode('text', { x: baseX, y: baseY }, { 
-        content: content, 
-        label: '提示词' 
+      const textNodeId = addNode('text', { x: baseX, y: baseY }, {
+        content: content,
+        label: '提示词'
       })
-      
+
       const imageConfigNodeId = addNode('imageConfig', { x: baseX + 400, y: baseY }, {
         label: '文生图'
       })
-      
+
       addEdge({
         source: textNodeId,
         target: imageConfigNodeId,
@@ -1449,6 +2030,7 @@ const sendMessage = async () => {
         targetHandle: 'left'
       })
     }
+    closeCanvasComposer()
   } catch (err) {
     window.$message?.error(err.message || '创建失败')
   } finally {
@@ -1488,7 +2070,7 @@ const checkMobile = () => {
 const loadProjectById = (projectId) => {
   // Update flow key to force VueFlow re-render | 更新 key 强制 VueFlow 重新渲染
   flowKey.value = Date.now()
-  
+
   if (projectId && projectId !== 'new') {
     loadProject(projectId)
   } else {
@@ -1517,14 +2099,21 @@ onMounted(() => {
   canvasPerfLite.value = detectCanvasPerfLite()
   checkMobile()
   refreshSuggestions()
+  try {
+    const storedRecent = JSON.parse(localStorage.getItem('yufeng-canvas-recent-node-types') || '[]')
+    recentNodeTypes.value = Array.isArray(storedRecent) ? storedRecent.slice(0, 4) : []
+  } catch {
+    recentNodeTypes.value = []
+  }
   window.addEventListener('resize', checkMobile)
-  
+  window.addEventListener('keydown', handleCanvasKeydown)
+
   // Initialize projects store | 初始化项目存储
   initProjectsStore()
-  
+
   // Load project data | 加载项目数据
   loadProjectById(route.params.id)
-  
+
   // Check for initial prompt from home page | 检查来自首页的初始提示词
   const initialPrompt = sessionStorage.getItem('ai-canvas-initial-prompt')
   if (initialPrompt) {
@@ -1550,6 +2139,7 @@ onMounted(() => {
 onUnmounted(() => {
   stopRuntimeTicker()
   window.removeEventListener('resize', checkMobile)
+  window.removeEventListener('keydown', handleCanvasKeydown)
   // Save project before leaving | 离开前保存项目
   saveProject()
 })
@@ -1739,8 +2329,8 @@ onUnmounted(() => {
 }
 
 .canvas-flow .vue-flow__handle {
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   border: 2px solid rgba(240, 253, 250, 0.98);
   background: linear-gradient(135deg, #5eead4, #22c55e);
   box-shadow:
@@ -1750,8 +2340,56 @@ onUnmounted(() => {
   z-index: 8;
 }
 
+.node-port-label {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid rgba(94, 234, 212, 0.32);
+  border-radius: 999px;
+  color: #047857;
+  background: rgba(240, 253, 250, 0.88);
+  box-shadow: 0 8px 18px rgba(20, 184, 166, 0.12);
+  font-size: 10px;
+  font-weight: 900;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 9;
+}
+
+.node-port-label-in {
+  left: -10px;
+  top: 50%;
+  transform: translate(-100%, -50%);
+}
+
+.dark .node-port-label {
+  color: #a7f3d0;
+  border-color: rgba(94, 234, 212, 0.22);
+  background: rgba(15, 23, 42, 0.88);
+}
+
 .canvas-flow .vue-flow__node {
   overflow: visible;
+}
+
+.canvas-flow .vue-flow__node button,
+.canvas-flow .vue-flow__node input,
+.canvas-flow .vue-flow__node textarea,
+.canvas-flow .vue-flow__node select,
+.canvas-flow .vue-flow__node .n-base-selection,
+.canvas-flow .vue-flow__node .n-switch,
+.canvas-flow .vue-flow__node .node-action,
+.canvas-flow .vue-flow__node .node-card-toolbar {
+  pointer-events: auto;
+}
+
+.canvas-flow .vue-flow__node button,
+.canvas-flow .vue-flow__node select,
+.canvas-flow .vue-flow__node input,
+.canvas-flow .vue-flow__node textarea {
+  touch-action: manipulation;
 }
 
 .canvas-flow .vue-flow__node.selected,
@@ -1881,6 +2519,8 @@ onUnmounted(() => {
 .node-menu-pop {
   width: 320px;
   padding: 12px;
+  max-height: min(560px, calc(100vh - 140px));
+  overflow-y: auto;
 }
 
 .node-menu-head {
@@ -1919,6 +2559,76 @@ onUnmounted(() => {
 .node-menu-search:focus {
   border-color: rgba(94, 234, 212, 0.7);
   box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.13);
+}
+
+.node-menu-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.node-menu-tabs button,
+.recent-node-chip {
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 999px;
+  padding: 6px 9px;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.48);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.node-menu-tabs button.active {
+  border-color: rgba(94, 234, 212, 0.66);
+  color: #064e3b;
+  background: linear-gradient(135deg, rgba(94, 234, 212, 0.42), rgba(56, 189, 248, 0.22));
+  box-shadow: 0 10px 24px rgba(20, 184, 166, 0.16);
+}
+
+.dark .node-menu-tabs button,
+.dark .recent-node-chip {
+  background: rgba(15, 23, 42, 0.48);
+}
+
+.dark .node-menu-tabs button.active {
+  color: #ccfbf1;
+}
+
+.node-menu-tabs span {
+  margin-left: 4px;
+  opacity: 0.68;
+}
+
+.node-menu-section {
+  margin-bottom: 10px;
+  padding: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.34);
+}
+
+.dark .node-menu-section {
+  background: rgba(15, 23, 42, 0.34);
+}
+
+.node-menu-section p {
+  margin: 0 0 7px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+}
+
+.recent-node-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.recent-node-chip {
+  color: var(--node-color);
+  border-color: color-mix(in srgb, var(--node-color) 35%, transparent);
 }
 
 .node-menu-item {
@@ -1974,6 +2684,145 @@ onUnmounted(() => {
 .node-menu-item:hover {
   border-color: rgba(94, 234, 212, 0.34);
   background: rgba(20, 184, 166, 0.12);
+}
+
+.canvas-context-menu {
+  width: 190px;
+  padding: 8px;
+  border: 1px solid rgba(203, 255, 239, 0.26);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 15% 0%, rgba(94, 234, 212, 0.18), transparent 38%),
+    rgba(248, 250, 252, 0.92);
+  box-shadow: 0 24px 68px rgba(15, 23, 42, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.74);
+  backdrop-filter: blur(24px) saturate(1.25);
+}
+
+.dark .canvas-context-menu {
+  border-color: rgba(203, 255, 239, 0.14);
+  background:
+    radial-gradient(circle at 15% 0%, rgba(94, 234, 212, 0.12), transparent 38%),
+    rgba(15, 23, 42, 0.9);
+}
+
+.canvas-context-menu p {
+  margin: 2px 8px 8px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.canvas-context-menu button {
+  display: block;
+  width: 100%;
+  border-radius: 12px;
+  padding: 9px 10px;
+  color: var(--text-primary);
+  text-align: left;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.canvas-context-menu button:hover {
+  color: #064e3b;
+  background: rgba(20, 184, 166, 0.16);
+}
+
+.canvas-context-menu button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.canvas-context-menu button:disabled:hover {
+  color: var(--text-primary);
+  background: transparent;
+}
+
+.dark .canvas-context-menu button:hover {
+  color: #ccfbf1;
+}
+
+
+.composer-dock {
+  width: auto;
+  max-width: calc(100vw - 32px);
+  pointer-events: none;
+}
+
+.composer-dock.is-open {
+  width: min(768px, calc(100vw - 32px));
+}
+
+.composer-dock > * {
+  pointer-events: auto;
+}
+
+.composer-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 8px 10px 8px 8px;
+  border: 1px solid rgba(203, 255, 239, 0.52);
+  border-radius: 999px;
+  color: #064e3b;
+  background:
+    radial-gradient(circle at 18% 8%, rgba(255, 255, 255, 0.92), transparent 36%),
+    linear-gradient(135deg, rgba(236, 253, 245, 0.9), rgba(207, 250, 254, 0.74));
+  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(18px) saturate(1.24);
+  font-size: 13px;
+  font-weight: 900;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.composer-trigger:hover {
+  transform: translateY(-2px);
+  border-color: rgba(45, 212, 191, 0.82);
+  box-shadow: 0 24px 62px rgba(20, 184, 166, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.78);
+}
+
+.composer-trigger-orb {
+  display: inline-grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border-radius: 999px;
+  color: #042f2e;
+  background: linear-gradient(135deg, #6ff7e8, #22d3ee);
+  box-shadow: 0 10px 24px rgba(20, 184, 166, 0.28);
+  font-size: 11px;
+  letter-spacing: -0.02em;
+}
+
+.composer-trigger kbd {
+  border: 1px solid rgba(15, 118, 110, 0.18);
+  border-radius: 999px;
+  padding: 4px 7px;
+  color: rgba(6, 78, 59, 0.82);
+  background: rgba(255, 255, 255, 0.64);
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.dark .composer-trigger {
+  color: #ccfbf1;
+  border-color: rgba(203, 255, 239, 0.16);
+  background:
+    radial-gradient(circle at 18% 8%, rgba(255, 255, 255, 0.1), transparent 36%),
+    linear-gradient(135deg, rgba(15, 23, 42, 0.88), rgba(6, 78, 59, 0.42));
+}
+
+.dark .composer-trigger kbd {
+  color: rgba(204, 251, 241, 0.86);
+  border-color: rgba(203, 255, 239, 0.16);
+  background: rgba(15, 23, 42, 0.58);
+}
+
+.canvas-shell.is-perf-lite .composer-trigger {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: 0 12px 34px rgba(15, 23, 42, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.46);
 }
 
 .composer-card,
@@ -2280,11 +3129,19 @@ onUnmounted(() => {
 .node-inspector-panel {
   right: 24px;
   bottom: 24px;
-  transition: right 0.22s ease, transform 0.22s ease, opacity 0.22s ease;
+  max-height: min(620px, calc(100vh - 150px));
+  transition: right 0.22s ease, width 0.22s ease, transform 0.22s ease, opacity 0.22s ease;
 }
 
 .node-inspector-panel.is-log-open {
   right: min(430px, calc(100vw - 390px));
+  width: min(340px, max(260px, calc(100vw - 452px)));
+}
+
+.node-inspector-panel.is-collapsed {
+  width: 260px;
+  max-height: 88px;
+  overflow: hidden;
 }
 
 .dark .agent-task-panel,
@@ -2528,6 +3385,13 @@ onUnmounted(() => {
   color: var(--text-primary);
   background: rgba(255, 255, 255, 0.58);
   outline: none;
+}
+
+.inspector-body input:focus,
+.inspector-body textarea:focus,
+.inspector-body select:focus {
+  border-color: rgba(94, 234, 212, 0.72);
+  box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.12);
 }
 
 .dark .inspector-body input,

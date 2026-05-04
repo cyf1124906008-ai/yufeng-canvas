@@ -4,8 +4,9 @@
 
 import { createMemoryHistory, createRouter, createWebHistory } from 'vue-router'
 import Home from '../views/Home.vue'
-import Canvas from '../views/Canvas.vue'
-import ImageExpert from '../views/ImageExpert.vue'
+
+const Canvas = () => import('../views/Canvas.vue')
+const ImageExpert = () => import('../views/ImageExpert.vue')
 
 const routes = [
   {

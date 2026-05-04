@@ -1,5 +1,10 @@
 const { app, BrowserWindow, shell, ipcMain, dialog } = require('electron')
-const { autoUpdater } = require('electron-updater')
+let autoUpdater
+try {
+  autoUpdater = require('electron-updater').autoUpdater
+} catch {
+  autoUpdater = null
+}
 const path = require('path')
 const http = require('http')
 const fs = require('fs')
@@ -62,6 +67,7 @@ const isPackagedRuntime = () => app.isPackaged && !rendererUrl
 const getCurrentUpdateSource = () => updateSources[updateSourceIndex] || githubUpdateSource
 
 const setUpdaterSource = (source = getCurrentUpdateSource()) => {
+  if (!autoUpdater) return source
   autoUpdater.setFeedURL(source.feed)
   return source
 }
@@ -209,6 +215,7 @@ const checkLatestReleaseManually = async () => {
 }
 
 const setupAutoUpdater = () => {
+  if (!autoUpdater) return
   autoUpdater.autoDownload = true
   autoUpdater.autoInstallOnAppQuit = true
   autoUpdater.allowPrerelease = false
@@ -315,7 +322,7 @@ const tryNextUpdateSource = (error) => {
     error: ''
   })
 
-  autoUpdater.checkForUpdates().catch((nextError) => {
+  autoUpdater?.checkForUpdates().catch((nextError) => {
     if (tryNextUpdateSource(nextError)) return
     setUpdateState({
       status: 'error',
@@ -904,7 +911,7 @@ app.whenReady().then(() => {
     updateCheckMode = 'manual'
     updateSourceIndex = 0
     setUpdaterSource()
-    await autoUpdater.checkForUpdates()
+    await autoUpdater?.checkForUpdates()
     return updateState
   })
 
@@ -915,7 +922,7 @@ app.whenReady().then(() => {
 
     updateCheckMode = 'manual'
     setUpdateState({ status: 'downloading', manual: false, error: '' })
-    await autoUpdater.downloadUpdate()
+    await autoUpdater?.downloadUpdate()
     return updateState
   })
 
@@ -924,7 +931,7 @@ app.whenReady().then(() => {
       throw new Error('更新尚未下载完成')
     }
 
-    autoUpdater.quitAndInstall(true, true)
+    autoUpdater?.quitAndInstall(true, true)
     return { ok: true }
   })
 

@@ -23,12 +23,12 @@
           class="text-sm font-medium bg-[var(--bg-tertiary)] text-[var(--text-secondary)] px-1 rounded outline-none border border-blue-500"
         />
         <div class="flex items-center gap-1">
-          <button @click="handleDuplicate" class="p-1 hover:bg-[var(--bg-tertiary)] rounded transition-colors" title="复制节点">
+          <button @pointerdown.stop @mousedown.stop @click.stop="handleDuplicate" class="nodrag nopan p-1 hover:bg-[var(--bg-tertiary)] rounded transition-colors" title="复制节点">
             <n-icon :size="14">
               <CopyOutline />
             </n-icon>
           </button>
-          <button @click="handleDelete" class="p-1 hover:bg-[var(--bg-tertiary)] rounded transition-colors" title="删除节点">
+          <button @pointerdown.stop @mousedown.stop @click.stop="handleDelete" class="nodrag nopan p-1 hover:bg-[var(--bg-tertiary)] rounded transition-colors" title="删除节点">
             <n-icon :size="14">
               <TrashOutline />
             </n-icon>
@@ -71,7 +71,8 @@
       </div>
 
       <!-- Handles | 连接点 -->
-      <NodeHandleMenu :nodeId="id" nodeType="text" :visible="showHandleMenu" :operations="operations" @select="handleSelect" />
+      <span class="node-port-label node-port-label-in">输入</span>
+      <NodeHandleMenu :nodeId="id" nodeType="text" output-label="Prompt" :visible="showHandleMenu" :operations="operations" @select="handleSelect" />
       <Handle type="target" :position="Position.Left" id="left" class="!bg-[var(--accent-color)]" />
 
     </div>

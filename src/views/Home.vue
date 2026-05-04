@@ -192,6 +192,16 @@
               </button>
             </div>
 
+            <div class="quick-canvas-actions">
+              <button class="primary-action small" @click.stop="enterBlankCanvas">
+                <n-icon :size="16"><AddOutline /></n-icon>
+                直接进入空白画布
+              </button>
+              <button class="secondary-action small" @click.stop="scrollToProjects">
+                我的项目
+              </button>
+            </div>
+
             <div v-if="activeMode === 'chat'" class="chat-home">
               <div class="entry-copy">
                 <p>DIRECT CHAT</p>
@@ -494,7 +504,7 @@
             <p class="eyebrow">GPT IMAGE 2 PROMPT LIBRARY</p>
             <h2>灵感案例库</h2>
             <p class="section-desc">
-              精选并改编自开源提示词案例，点击卡片就能把提示词带入画布继续创作。
+              已整合 {{ awesomeCaseCount }} 个去重后的 GPT Image 2 开源案例，并加了 YUFENG Canvas 可执行优化说明；可搜索、分类筛选，点击卡片直接进画布。
             </p>
           </div>
           <button class="source-link" @click="openPromptSource">
@@ -502,22 +512,63 @@
           </button>
         </div>
 
+        <div class="inspiration-toolbar">
+          <div class="inspiration-search">
+            <n-icon :size="16"><SearchOutline /></n-icon>
+            <input
+              v-model="inspirationSearch"
+              placeholder="搜索电商、海报、人像、UI、Case 编号或关键词..."
+              aria-label="搜索灵感案例"
+            />
+            <button v-if="inspirationSearch || inspirationCategory !== 'all'" @click="resetInspirationFilters">清空</button>
+          </div>
+          <div class="inspiration-category-row">
+            <button
+              v-for="category in inspirationCategories"
+              :key="category.key"
+              :class="{ active: inspirationCategory === category.key }"
+              @click="inspirationCategory = category.key"
+            >
+              {{ category.label }}
+              <span>{{ category.count }}</span>
+            </button>
+          </div>
+          <p class="inspiration-count">
+            当前显示 {{ visibleInspirationCases.length }} / {{ filteredInspirationCases.length }} 个案例
+          </p>
+        </div>
+
         <div class="inspiration-grid">
           <button
-            v-for="item in inspirationCases"
-            :key="item.title"
+            v-for="item in visibleInspirationCases"
+            :key="item.id || item.title"
             class="inspiration-card"
+            :class="{ 'is-awesome-case': item.caseNumber || item.source }"
             @click="createFromTemplate(item.prompt)"
           >
             <div class="inspiration-image">
-              <img :src="item.image" :alt="item.title" />
+              <img v-if="item.image" :src="item.image" :alt="item.title" loading="lazy" />
+              <div v-else class="inspiration-image-placeholder">Y</div>
+              <span v-if="item.caseNumber" class="case-badge">Case {{ item.caseNumber }}</span>
             </div>
             <div class="inspiration-body">
-              <span>{{ item.category }}</span>
-              <h3>{{ item.title }}</h3>
-              <p>{{ item.prompt }}</p>
+              <span class="inspiration-category-pill">{{ item.category }}</span>
+              <h3>{{ item.displayTitle || item.shortTitle || item.title }}</h3>
+              <p>{{ item.displayExcerpt || item.excerpt || item.prompt }}</p>
+              <div v-if="item.promptTags?.length" class="inspiration-tags">
+                <i v-for="tag in item.promptTags.slice(0, 4)" :key="tag">{{ tag }}</i>
+              </div>
+              <small v-if="item.source" class="inspiration-meta">
+                <b v-if="item.difficulty">{{ item.difficulty }}</b>
+                <em v-if="item.aspectHint">{{ item.aspectHint }}</em>
+                <span>开源案例 · Case {{ item.caseNumber }}</span>
+              </small>
             </div>
           </button>
+        </div>
+
+        <div v-if="visibleInspirationCases.length < filteredInspirationCases.length" class="inspiration-more-row">
+          <button @click="loadMoreInspiration">再加载 48 个案例</button>
         </div>
       </section>
 
@@ -527,6 +578,10 @@
             <p class="eyebrow">LOCAL WORKSPACE</p>
             <h2>我的项目</h2>
           </div>
+          <button class="new-project-button" @click="enterBlankCanvas">
+            <n-icon :size="16"><AddOutline /></n-icon>
+            进入空白画布
+          </button>
         </div>
 
         <div v-if="projects.length === 0" class="empty-state">
@@ -537,7 +592,14 @@
         </div>
 
         <div v-else class="project-grid">
-          <div v-for="project in projects" :key="project.id" class="project-card group">
+          <div
+            v-for="project in projects"
+            :key="project.id"
+            class="project-card group"
+            draggable="true"
+            @dragstart="startProjectDrag(project, $event)"
+            @dragend="endProjectDrag"
+          >
             <div class="project-thumb" @click="openProject(project)">
               <template v-if="getProjectPreview(project)">
                 <video
@@ -558,6 +620,10 @@
               <button class="project-open" @click="openProject(project)">
                 <span>{{ project.name }}</span>
                 <small>{{ formatDate(project.updatedAt) }}</small>
+              </button>
+              <button class="project-delete" title="删除项目" @click.stop="requestDeleteProject(project)">
+                <n-icon :size="15"><TrashOutline /></n-icon>
+                <span>删除</span>
               </button>
               <n-dropdown :options="getProjectActions(project)" @select="(key) => handleProjectAction(key, project)" placement="bottom-end">
                 <button class="project-menu" @click.stop>
@@ -581,6 +647,10 @@
         <n-icon :size="19"><SparklesOutline /></n-icon>
         <span>首页</span>
       </button>
+      <button @click="enterBlankCanvas" title="进入画布">
+        <n-icon :size="20"><AddOutline /></n-icon>
+        <span>画布</span>
+      </button>
       <button @click="scrollToProjects" title="我的项目">
         <n-icon :size="20"><DocumentOutline /></n-icon>
         <span>项目</span>
@@ -593,9 +663,19 @@
         <n-icon :size="20"><ColorPaletteOutline /></n-icon>
         <span>模型</span>
       </button>
-      <button @click="showApiSettings = true" title="设置">
-        <n-icon :size="20"><SettingsOutline /></n-icon>
-        <span>设置</span>
+      <button
+        class="trash-rail-button"
+        :class="{ 'is-drag-over': isTrashDragOver, 'has-items': deletedProjects.length }"
+        @click="showTrashModal = true"
+        @dragenter.prevent="isTrashDragOver = true"
+        @dragover.prevent="isTrashDragOver = true"
+        @dragleave.prevent="isTrashDragOver = false"
+        @drop.prevent="dropProjectToTrash"
+        title="最近删除"
+      >
+        <n-icon :size="20"><TrashOutline /></n-icon>
+        <span>回收站</span>
+        <b v-if="deletedProjects.length">{{ deletedProjects.length }}</b>
       </button>
     </aside>
 
@@ -708,13 +788,65 @@
         <n-button type="primary" @click="confirmRename">确定</n-button>
       </template>
     </n-modal>
+
+    <n-modal v-model:show="showDeleteModal" preset="dialog" title="删除项目" type="warning">
+      <p>确定要将「{{ deleteTargetProject?.name || '未命名项目' }}」移到回收站吗？30 天后会自动永久删除。</p>
+      <template #action>
+        <n-button @click="cancelDeleteProject">取消</n-button>
+        <n-button type="error" @click="confirmDeleteProject">移到回收站</n-button>
+      </template>
+    </n-modal>
+
+    <n-modal v-model:show="showTrashModal" preset="card" class="trash-modal" :bordered="false">
+      <div class="trash-panel">
+        <div class="trash-head">
+          <div>
+            <p>RECENTLY DELETED</p>
+            <h3>最近删除</h3>
+            <span>项目会保留 30 天，之后自动永久删除。</span>
+          </div>
+          <button :disabled="!deletedProjects.length" @click="emptyTrash">清空回收站</button>
+        </div>
+
+        <div v-if="deletedProjects.length" class="trash-list">
+          <div v-for="project in deletedProjects" :key="project.id" class="trash-item">
+            <div class="trash-thumb">
+              <template v-if="getProjectPreview(project)">
+                <video
+                  v-if="isVideoUrl(getProjectPreview(project))"
+                  :src="getProjectPreview(project)"
+                  muted
+                  playsinline
+                />
+                <img v-else :src="getProjectPreview(project)" :alt="project.name" />
+              </template>
+              <n-icon v-else :size="24"><DocumentOutline /></n-icon>
+            </div>
+            <div class="trash-copy">
+              <strong>{{ project.name }}</strong>
+              <span>{{ formatDate(project.deletedAt) }} 删除 · {{ getTrashRemainingDays(project) }} 天后自动清理</span>
+            </div>
+            <div class="trash-actions">
+              <button @click="restoreDeletedProject(project)">恢复</button>
+              <button class="danger" @click="deleteForever(project)">永久删除</button>
+            </div>
+          </div>
+        </div>
+
+        <div v-else class="trash-empty">
+          <n-icon :size="42"><TrashOutline /></n-icon>
+          <h4>回收站是空的</h4>
+          <p>从项目卡片点击删除，或把项目拖到侧边栏回收站。</p>
+        </div>
+      </div>
+    </n-modal>
   </div>
 </template>
 
 <script setup>
 import { computed, h, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { NButton, NDropdown, NIcon, NInput, NModal, NSpin, useDialog } from 'naive-ui'
+import { NButton, NDropdown, NIcon, NInput, NModal, NSpin } from 'naive-ui'
 import {
   AddOutline,
   ColorPaletteOutline,
@@ -737,10 +869,15 @@ import {
 } from '@vicons/ionicons5'
 import {
   projects,
+  deletedProjects,
   initProjectsStore,
   createProject,
   updateProjectCanvas,
   deleteProject,
+  restoreProject,
+  permanentlyDeleteProject,
+  emptyDeletedProjects,
+  getTrashRemainingDays,
   duplicateProject,
   renameProject,
   deriveProjectThumbnail
@@ -752,9 +889,9 @@ import { getModelSizeOptions } from '../stores/models'
 import ApiSettings from '../components/ApiSettings.vue'
 import AppHeader from '../components/AppHeader.vue'
 import GuidedTour from '../components/GuidedTour.vue'
-import showcaseBrand from '../assets/showcase-brand.png'
-import showcaseStoryboard from '../assets/showcase-storyboard.png'
-import showcaseVideo from '../assets/showcase-video.png'
+const showcaseBrand = './showcase/showcase-brand.png'
+const showcaseStoryboard = './showcase/showcase-storyboard.png'
+const showcaseVideo = './showcase/showcase-video.png'
 import {
   CANVAS_PROMPT_SUGGESTIONS,
   HOME_CHAT_SUGGESTIONS,
@@ -764,13 +901,14 @@ import {
 
 const router = useRouter()
 const route = useRoute()
-const dialog = useDialog()
 const modelStore = useModelStore()
 
 const showApiSettings = ref(false)
 const showHomeRuntimeLogs = ref(false)
 const showOnboarding = ref(false)
 const showHomeTour = ref(false)
+const showDeleteModal = ref(false)
+const showTrashModal = ref(false)
 const isWorkspacePage = ref(false)
 const activeMode = ref('create')
 const inputText = ref('')
@@ -791,6 +929,9 @@ const focusedEntry = ref('create')
 const showRenameModal = ref(false)
 const renameValue = ref('')
 const renameTargetId = ref(null)
+const deleteTargetProject = ref(null)
+const draggedProjectId = ref('')
+const isTrashDragOver = ref(false)
 const projectsSection = ref(null)
 const inspirationSection = ref(null)
 const homeShellRef = ref(null)
@@ -937,6 +1078,10 @@ const suggestionPool = CANVAS_PROMPT_SUGGESTIONS
 const visibleSuggestions = ref([])
 const chatSuggestions = HOME_CHAT_SUGGESTIONS
 const inspirationCases = INSPIRATION_CASES
+const awesomeCaseCount = inspirationCases.filter((item) => item.caseNumber || item.source).length
+const inspirationSearch = ref('')
+const inspirationCategory = ref('all')
+const inspirationVisibleCount = ref(48)
 const heroTypeLines = [
   '聊出创意方向',
   '搭建视觉画布',
@@ -965,6 +1110,65 @@ const onboardingStorageKey = 'yufeng-canvas-onboarding-v2'
 const homeTourStorageKey = 'yufeng-canvas-home-tour-v1'
 const chatHistoryStorageKey = 'yufeng-canvas-chat-history-v1'
 const recentHomeProjects = computed(() => projects.value.slice(0, 4))
+const inspirationCategories = computed(() => {
+  const categoryStats = inspirationCases.reduce((map, item) => {
+    const key = item.categoryKey || item.category || 'other'
+    const label = item.category || key
+    const current = map.get(key) || { key, label, count: 0 }
+    current.count += 1
+    map.set(key, current)
+    return map
+  }, new Map())
+
+  return [
+    { key: 'all', label: '全部', count: inspirationCases.length },
+    ...Array.from(categoryStats.values()).sort((a, b) => b.count - a.count)
+  ]
+})
+
+const filteredInspirationCases = computed(() => {
+  const query = inspirationSearch.value.trim().toLowerCase()
+  return inspirationCases.filter((item) => {
+    const categoryKey = item.categoryKey || item.category || 'other'
+    const matchesCategory = inspirationCategory.value === 'all' || categoryKey === inspirationCategory.value
+    if (!matchesCategory) return false
+    if (!query) return true
+
+    const haystack = [
+      item.title,
+      item.shortTitle,
+      item.displayTitle,
+      item.sourceTitle,
+      item.category,
+      item.displayExcerpt,
+      item.useCase,
+      item.aspectHint,
+      item.difficulty,
+      ...(item.promptTags || []),
+      item.excerpt,
+      item.prompt,
+      item.caseNumber ? `case ${item.caseNumber}` : ''
+    ].filter(Boolean).join(' ').toLowerCase()
+    return haystack.includes(query)
+  })
+})
+
+const visibleInspirationCases = computed(() => filteredInspirationCases.value.slice(0, inspirationVisibleCount.value))
+
+const loadMoreInspiration = () => {
+  inspirationVisibleCount.value += 48
+}
+
+const resetInspirationFilters = () => {
+  inspirationSearch.value = ''
+  inspirationCategory.value = 'all'
+  inspirationVisibleCount.value = 48
+}
+
+watch([inspirationSearch, inspirationCategory], () => {
+  inspirationVisibleCount.value = 48
+})
+
 const heroTypeChars = computed(() => Array.from(heroTypeText.value))
 const heroTypewriterAriaLabel = computed(() => {
   const fallback = heroTypeLines[heroTypeIndex.value] || heroTypeLines[0]
@@ -1759,17 +1963,68 @@ const handleProjectAction = (key, project) => {
   }
 
   if (key === 'delete') {
-    dialog.warning({
-      title: '删除项目',
-      content: `确定要删除「${project.name}」吗？此操作不可恢复。`,
-      positiveText: '删除',
-      negativeText: '取消',
-      onPositiveClick: () => {
-        deleteProject(project.id)
-        window.$message?.success('项目已删除')
-      }
-    })
+    requestDeleteProject(project)
   }
+}
+
+const requestDeleteProject = (project) => {
+  deleteTargetProject.value = project
+  showDeleteModal.value = true
+}
+
+const cancelDeleteProject = () => {
+  showDeleteModal.value = false
+  deleteTargetProject.value = null
+}
+
+const confirmDeleteProject = () => {
+  const project = deleteTargetProject.value
+  if (!project?.id) {
+    cancelDeleteProject()
+    return
+  }
+
+  const deleted = deleteProject(project.id)
+  window.$message?.[deleted ? 'success' : 'warning'](deleted ? '已移到回收站，可在 30 天内恢复' : '项目不存在或已被删除')
+  cancelDeleteProject()
+}
+
+const startProjectDrag = (project, event) => {
+  draggedProjectId.value = project.id
+  event?.dataTransfer?.setData?.('text/plain', project.id)
+  if (event?.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move'
+  }
+}
+
+const endProjectDrag = () => {
+  draggedProjectId.value = ''
+  isTrashDragOver.value = false
+}
+
+const dropProjectToTrash = (event) => {
+  const projectId = event?.dataTransfer?.getData?.('text/plain') || draggedProjectId.value
+  draggedProjectId.value = ''
+  isTrashDragOver.value = false
+  if (!projectId) return
+
+  const deleted = deleteProject(projectId)
+  window.$message?.[deleted ? 'success' : 'warning'](deleted ? '已拖入回收站' : '项目不存在或已被删除')
+}
+
+const restoreDeletedProject = (project) => {
+  const restored = restoreProject(project.id)
+  window.$message?.[restored ? 'success' : 'warning'](restored ? '项目已恢复' : '项目不存在或已被清理')
+}
+
+const deleteForever = (project) => {
+  const deleted = permanentlyDeleteProject(project.id)
+  window.$message?.[deleted ? 'success' : 'warning'](deleted ? '已永久删除' : '项目不存在或已被清理')
+}
+
+const emptyTrash = () => {
+  const emptied = emptyDeletedProjects()
+  window.$message?.[emptied ? 'success' : 'info'](emptied ? '回收站已清空' : '回收站已经是空的')
 }
 
 const confirmRename = () => {
@@ -1790,7 +2045,10 @@ const ensureConfigured = () => {
 }
 
 const createNewProject = () => {
-  if (!ensureConfigured()) return
+  enterBlankCanvas()
+}
+
+const enterBlankCanvas = () => {
   const id = createProject('未命名项目')
   if (!localStorage.getItem('yufeng-canvas-canvas-tour-v1')) {
     sessionStorage.setItem('yufeng-canvas-start-canvas-tour', '1')
@@ -2263,7 +2521,6 @@ const handleOnboardingAction = async (key) => {
 }
 
 const handleCreateWithInput = () => {
-  if (!ensureConfigured()) return
   const prompt = inputText.value.trim()
   const id = createProject(prompt ? prompt.slice(0, 24) : '未命名项目')
   sessionStorage.setItem('ai-canvas-initial-prompt', prompt)
@@ -2275,7 +2532,6 @@ const handleCreateWithInput = () => {
 }
 
 const openProject = (project) => {
-  if (!ensureConfigured()) return
   router.push(`/canvas/${project.id}`)
 }
 
@@ -4678,6 +4934,154 @@ onUnmounted(() => {
   opacity: 1;
 }
 
+
+.inspiration-toolbar {
+  display: grid;
+  gap: 12px;
+  margin: 0 0 18px;
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.36);
+  border-radius: 28px;
+  background: rgba(255, 255, 255, 0.58);
+  box-shadow: 0 18px 50px rgba(15, 23, 42, 0.08);
+  backdrop-filter: blur(18px);
+}
+
+.dark .inspiration-toolbar {
+  background: rgba(15, 23, 42, 0.52);
+  border-color: rgba(148, 163, 184, 0.22);
+}
+
+.inspiration-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.dark .inspiration-search {
+  background: rgba(2, 6, 23, 0.42);
+}
+
+.inspiration-search input {
+  min-width: 0;
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 13px;
+}
+
+.inspiration-search button,
+.inspiration-more-row button {
+  border: 1px solid rgba(34, 197, 94, 0.28);
+  border-radius: 999px;
+  padding: 7px 11px;
+  background: rgba(34, 197, 94, 0.1);
+  color: #047857;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.dark .inspiration-search button,
+.dark .inspiration-more-row button {
+  color: #86efac;
+}
+
+.inspiration-category-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.inspiration-category-row button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 10px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.52);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 800;
+  transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+}
+
+.dark .inspiration-category-row button {
+  background: rgba(15, 23, 42, 0.55);
+}
+
+.inspiration-category-row button:hover,
+.inspiration-category-row button.active {
+  transform: translateY(-1px);
+  border-color: rgba(34, 197, 94, 0.48);
+  background: rgba(34, 197, 94, 0.12);
+}
+
+.inspiration-category-row button span {
+  display: inline-grid;
+  min-width: 22px;
+  place-items: center;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.08);
+  color: var(--text-secondary);
+}
+
+.dark .inspiration-category-row button span {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.inspiration-count {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.case-badge {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(2, 6, 23, 0.62);
+  color: white;
+  font-size: 11px;
+  font-weight: 850;
+  backdrop-filter: blur(12px);
+}
+
+.inspiration-image-placeholder {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  place-items: center;
+  background: radial-gradient(circle at 35% 22%, rgba(34, 255, 181, 0.28), transparent 36%), linear-gradient(135deg, rgba(15, 23, 42, 0.82), rgba(20, 184, 166, 0.34));
+  color: white;
+  font-size: 42px;
+  font-weight: 950;
+}
+
+.inspiration-body small {
+  display: block;
+  margin-top: 10px;
+  color: var(--text-tertiary, var(--text-secondary));
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.inspiration-more-row {
+  display: flex;
+  justify-content: center;
+  margin-top: 18px;
+}
+
 .inspiration-grid {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -4721,6 +5125,7 @@ onUnmounted(() => {
 }
 
 .inspiration-image {
+  position: relative;
   aspect-ratio: 4 / 3;
   overflow: hidden;
   background: rgba(148, 163, 184, 0.12);
@@ -4737,11 +5142,32 @@ onUnmounted(() => {
   transform: scale(1.06);
 }
 
+.inspiration-card.is-awesome-case .inspiration-image {
+  background:
+    radial-gradient(circle at 18% 8%, rgba(34, 255, 181, 0.13), transparent 34%),
+    linear-gradient(135deg, rgba(241, 245, 249, 0.96), rgba(236, 253, 245, 0.72));
+}
+
+.inspiration-card.is-awesome-case .inspiration-image img {
+  object-fit: contain;
+  padding: 0;
+}
+
+.inspiration-card.is-awesome-case:hover .inspiration-image img {
+  transform: scale(1.02);
+}
+
+.dark .inspiration-card.is-awesome-case .inspiration-image {
+  background:
+    radial-gradient(circle at 18% 8%, rgba(34, 255, 181, 0.1), transparent 34%),
+    linear-gradient(135deg, rgba(15, 23, 42, 0.96), rgba(6, 78, 59, 0.28));
+}
+
 .inspiration-body {
   padding: 14px;
 }
 
-.inspiration-body span {
+.inspiration-category-pill {
   display: inline-flex;
   margin-bottom: 9px;
   padding: 4px 8px;
@@ -4752,7 +5178,7 @@ onUnmounted(() => {
   font-weight: 800;
 }
 
-.dark .inspiration-body span {
+.dark .inspiration-category-pill {
   color: #86efac;
 }
 
@@ -4770,6 +5196,67 @@ onUnmounted(() => {
   line-height: 1.65;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
+}
+
+.inspiration-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.inspiration-tags i {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(15, 118, 110, 0.08);
+  color: #0f766e;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.dark .inspiration-tags i {
+  background: rgba(45, 212, 191, 0.12);
+  color: #99f6e4;
+}
+
+.inspiration-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 11px;
+  color: rgba(71, 85, 105, 0.78);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.inspiration-meta b,
+.inspiration-meta em,
+.inspiration-meta span {
+  display: inline-flex;
+  align-items: center;
+  font-style: normal;
+}
+
+.inspiration-meta b,
+.inspiration-meta em {
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(34, 197, 94, 0.1);
+  color: #047857;
+}
+
+.dark .inspiration-meta {
+  color: rgba(203, 213, 225, 0.78);
+}
+
+.dark .inspiration-meta b,
+.dark .inspiration-meta em {
+  background: rgba(34, 197, 94, 0.13);
+  color: #86efac;
 }
 
 .empty-state {
@@ -4810,6 +5297,14 @@ onUnmounted(() => {
   box-shadow: 0 22px 58px rgba(15, 23, 42, 0.12);
   backdrop-filter: blur(18px);
   transition: transform 0.24s ease, box-shadow 0.24s ease, border-color 0.24s ease;
+}
+
+.project-card[draggable="true"] {
+  cursor: grab;
+}
+
+.project-card[draggable="true"]:active {
+  cursor: grabbing;
 }
 
 .project-card::before {
@@ -4899,6 +5394,7 @@ onUnmounted(() => {
   color: var(--text-secondary);
 }
 
+.project-delete,
 .project-menu,
 .side-rail button {
   display: flex;
@@ -4909,9 +5405,26 @@ onUnmounted(() => {
   transition: all 0.2s ease;
 }
 
+.project-delete,
 .project-menu {
   width: 34px;
   height: 34px;
+}
+
+.project-delete {
+  color: color-mix(in srgb, #ef4444 68%, var(--text-secondary));
+  opacity: 1;
+  width: auto;
+  min-width: 54px;
+  gap: 4px;
+  padding: 0 9px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.project-delete:hover {
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
 }
 
 .project-menu:hover,
@@ -4945,6 +5458,184 @@ onUnmounted(() => {
   border-color: rgba(148, 163, 184, 0.34);
   background:
     linear-gradient(135deg, rgba(255, 255, 255, 0.68), rgba(240, 253, 250, 0.34));
+}
+
+.trash-rail-button {
+  position: relative;
+}
+
+.trash-rail-button.has-items {
+  color: color-mix(in srgb, #ef4444 58%, var(--text-secondary));
+}
+
+.trash-rail-button.is-drag-over {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.16);
+  border-color: rgba(239, 68, 68, 0.36);
+  transform: scale(1.04);
+}
+
+.trash-rail-button b {
+  position: absolute;
+  top: 3px;
+  right: 6px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: #ef4444;
+  color: white;
+  font-size: 10px;
+  font-weight: 950;
+  line-height: 16px;
+}
+
+.trash-modal {
+  width: min(760px, calc(100vw - 32px));
+  border-radius: 30px;
+  overflow: hidden;
+}
+
+.trash-panel {
+  color: var(--text-primary);
+}
+
+.trash-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 18px;
+}
+
+.trash-head p {
+  margin: 0 0 6px;
+  color: var(--accent-color);
+  font-size: 11px;
+  font-weight: 950;
+  letter-spacing: 0.18em;
+}
+
+.trash-head h3 {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 950;
+  letter-spacing: -0.05em;
+}
+
+.trash-head span {
+  display: block;
+  margin-top: 8px;
+  color: var(--text-secondary);
+}
+
+.trash-head button,
+.trash-actions button {
+  border-radius: 14px;
+  padding: 9px 12px;
+  background: rgba(15, 23, 42, 0.06);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.dark .trash-head button,
+.dark .trash-actions button {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.trash-head button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.trash-list {
+  display: grid;
+  gap: 10px;
+}
+
+.trash-item {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.54);
+}
+
+.dark .trash-item {
+  background: rgba(15, 23, 42, 0.56);
+}
+
+.trash-thumb {
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 54px;
+  overflow: hidden;
+  border-radius: 15px;
+  background: rgba(148, 163, 184, 0.12);
+  color: var(--text-secondary);
+}
+
+.trash-thumb img,
+.trash-thumb video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.trash-copy {
+  min-width: 0;
+}
+
+.trash-copy strong,
+.trash-copy span {
+  display: block;
+}
+
+.trash-copy strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trash-copy span {
+  margin-top: 4px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.trash-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.trash-actions .danger {
+  color: #ef4444;
+}
+
+.trash-empty {
+  display: grid;
+  place-items: center;
+  padding: 48px 16px;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.trash-empty h4 {
+  margin: 12px 0 4px;
+  color: var(--text-primary);
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.trash-empty p {
+  margin: 0;
 }
 
 .dark .side-rail {

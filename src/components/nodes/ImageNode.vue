@@ -285,7 +285,8 @@
       </div>
 
       <!-- Handles | 连接点 -->
-      <NodeHandleMenu :nodeId="id" nodeType="image" :visible="showHandleMenu" :operations="operations" @select="handleSelect" />
+      <span class="node-port-label node-port-label-in">图片</span>
+      <NodeHandleMenu :nodeId="id" nodeType="image" output-label="参考图" :visible="showHandleMenu" :operations="operations" @select="handleSelect" />
       <Handle type="target" :position="Position.Left" id="left" class="!bg-[var(--accent-color)]" />
     </div>
   </div>

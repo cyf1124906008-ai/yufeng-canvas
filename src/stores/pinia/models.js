@@ -92,7 +92,7 @@ const inferImageSizes = (modelKey = '') => {
     return ['2048x2048', '2560x1440', '1440x2560', '2304x1728', '1728x2304']
   }
   if (value.includes('seedream') || value.includes('imagen')) {
-    return ['1024x1024', '2048x2048', '1536x1024', '1024x1536']
+    return ['2048x2048', '2560x1440', '1440x2560', '1536x1024', '1024x1536']
   }
   return ['1024x1024', '1536x1024', '1024x1536', '1792x1024', '1024x1792']
 }
@@ -123,7 +123,8 @@ const inferDiscoveredCapability = (model = {}) => {
 
   if (
     endpointTypes.includes('image-generation') ||
-    /gpt-image|chatgpt-image|seedream|imagen|flux|banana|grok-imagine|qwen-image/.test(key)
+    /gpt-image|chatgpt-image|seedream|imagen|flux|banana|grok-imagine|qwen-image/.test(key) ||
+    (key.includes('gemini') && key.includes('image'))
   ) {
     return 'image'
   }
@@ -266,6 +267,7 @@ const buildCustomImageModel = (model, provider) => ({
   protocol: model.protocol || 'auto',
   resolvedProtocol: resolveImageProtocol(model),
   sizes: model.sizes || inferImageSizes(model.key),
+  qualities: model.qualities || [],
   defaultParams: {
     size: model.defaultParams?.size || inferImageDefaultSize(model.key),
     quality: model.defaultParams?.quality || 'standard',

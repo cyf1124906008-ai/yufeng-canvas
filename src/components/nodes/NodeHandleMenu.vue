@@ -1,6 +1,7 @@
 <template>
   <div class="handle-menu-anchor nodrag nopan">
     <Handle type="source" :position="Position.Right" id="right" class="node-source-handle" />
+    <span v-if="outputLabel" class="node-output-label">{{ outputLabel }}</span>
 
     <div
       v-if="showHandleHoverZone"
@@ -65,6 +66,7 @@ const props = defineProps({
   nodeType: { type: String, required: true },
   visible: { type: Boolean },
   dotColor: { type: String, default: 'var(--accent-color)' },
+  outputLabel: { type: String, default: '结果' },
   operations: { type: Array, default: null }
 })
 
@@ -123,8 +125,8 @@ const handleCreate = (item) => {
   position: absolute;
   left: 100%;
   top: 50%;
-  width: 128px;
-  height: 78px;
+  width: 150px;
+  height: 92px;
   transform: translateY(-50%);
   z-index: 10050;
   pointer-events: none;
@@ -134,8 +136,8 @@ const handleCreate = (item) => {
   left: 0 !important;
   right: auto !important;
   top: 50% !important;
-  width: 16px !important;
-  height: 16px !important;
+  width: 18px !important;
+  height: 18px !important;
   border: 2px solid rgba(240, 253, 250, 0.98) !important;
   background: linear-gradient(135deg, #5eead4, #22c55e) !important;
   box-shadow:
@@ -146,12 +148,38 @@ const handleCreate = (item) => {
   z-index: 10054 !important;
 }
 
+.node-output-label {
+  position: absolute;
+  left: 18px;
+  top: calc(50% - 30px);
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid rgba(94, 234, 212, 0.34);
+  border-radius: 999px;
+  color: #047857;
+  background: rgba(240, 253, 250, 0.86);
+  box-shadow: 0 8px 18px rgba(20, 184, 166, 0.14);
+  font-size: 10px;
+  font-weight: 900;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 10055;
+}
+
+:global(.dark) .node-output-label {
+  color: #a7f3d0;
+  border-color: rgba(94, 234, 212, 0.24);
+  background: rgba(15, 23, 42, 0.86);
+}
+
 .handle-add-button {
   position: absolute;
-  left: 28px;
+  left: 30px;
   top: 50%;
-  width: 34px;
-  height: 34px;
+  width: 38px;
+  height: 38px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -174,6 +202,14 @@ const handleCreate = (item) => {
   z-index: 10056;
 }
 
+.handle-add-button::before {
+  content: "";
+  position: absolute;
+  inset: -12px;
+  border-radius: 22px;
+  background: rgba(94, 234, 212, 0.08);
+}
+
 .handle-add-button:hover,
 .handle-add-button:focus-visible {
   border-color: rgba(255, 255, 255, 0.96);
@@ -191,7 +227,7 @@ const handleCreate = (item) => {
 
 .handle-menu {
   position: absolute;
-  left: 68px;
+  left: 76px;
   top: 50%;
   display: flex;
   min-width: 148px;

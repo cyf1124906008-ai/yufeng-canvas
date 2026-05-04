@@ -18,6 +18,7 @@ import { useProvider } from './useProvider'
 import { useModelStore } from '@/stores/pinia'
 import { getCapabilityLabel, getModelCapabilityConflict } from '@/utils/modelCapability'
 import { addRuntimeLog } from '@/stores/canvas'
+import { showBubble } from '@/utils/bubble'
 
 const nowMs = () => (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now())
 const elapsedMs = (startedAt) => Math.max(0, Math.round(nowMs() - startedAt))
@@ -28,12 +29,169 @@ const isGeminiImageModel = (model = '') =>
 const isImageEndpointUnsupportedError = (error) => {
   const message = [
     error?.message,
+    error?.error?.message,
+    error?.error?.code,
+    error?.code,
     error?.response?.data?.message,
     error?.response?.data?.error?.message,
+    error?.response?.data?.error?.code,
     typeof error?.response?.data === 'string' ? error.response.data : ''
   ].filter(Boolean).join(' ').toLowerCase()
 
   return /not supported model|unsupported model|not support|image generation/.test(message)
+}
+
+const getApiErrorText = (error) => [
+  error?.message,
+  error?.error?.message,
+  error?.error?.code,
+  error?.code,
+  error?.details,
+  error?.response?.data?.message,
+  error?.response?.data?.error?.message,
+  error?.response?.data?.error?.code,
+  typeof error?.response?.data === 'string' ? error.response.data : ''
+].filter(Boolean).join(' ')
+
+const getApiErrorStatus = (error) => error?.response?.status || error?.status || error?.error?.status || error?.code || ''
+
+const isRecoverableImageParamError = (error) => {
+  const message = getApiErrorText(error).toLowerCase()
+  return /quality|不合法的quality|size|resolution|不合法的size|尺寸|像素|pixels|count|数量|num| n /.test(message)
+}
+
+const getFriendlyImageErrorMessage = (error) => {
+  const status = getApiErrorStatus(error)
+  const message = getApiErrorText(error).toLowerCase()
+
+  if (status === 401 || status === 403 || /permission|forbidden|unauthorized|无权限|权限|余额|quota|credit/.test(message)) {
+    return '模型供应商拒绝了请求，通常是 API Key 没权限、额度不足，或当前 Key 不支持这个模型。'
+  }
+
+  if (/quality|不合法的quality/.test(message)) {
+    return '当前模型不支持所选画质参数，已尝试自动移除画质参数。'
+  }
+
+  if (/size|resolution|不合法的size|尺寸|像素|pixels/.test(message)) {
+    return '当前模型不支持所选尺寸，已尝试自动切换到模型支持的尺寸。'
+  }
+
+  if (/not supported model|unsupported model|not support|image generation/.test(message)) {
+    return '当前模型不支持图片生成接口，已尝试自动切换到 Chat 图片通道。'
+  }
+
+  if (status >= 500 || /server|upstream|timeout|超时/.test(message)) {
+    return '模型供应商返回服务异常，可能是上游模型临时失败或参数未被该厂商兼容。'
+  }
+
+  return error?.message || '图片生成失败，请打开运行日志查看请求详情。'
+}
+
+const getMinimumPixelsFromError = (error) => {
+  const message = getApiErrorText(error)
+  const match = message.match(/at least\s+(\d+)\s+pixels/i)
+  return match ? Number(match[1]) : 0
+}
+
+const getImageSizePixels = (size = '') => {
+  const match = String(size || '').match(/^(\d+)\s*x\s*(\d+)$/i)
+  if (!match) return 0
+  return Number(match[1]) * Number(match[2])
+}
+
+const isGptImageFamily = (model = '') =>
+  /(^|[-_])gpt-image|chatgpt-image/i.test(model)
+
+const isSeedreamFamily = (model = '') =>
+  /seedream/i.test(model)
+
+const getSafeImageSize = ({ requestedSize, modelKey, imageModel, modelConfig }) => {
+  const availableSizes = [
+    ...(Array.isArray(imageModel?.sizes) ? imageModel.sizes : []),
+    ...(Array.isArray(modelConfig?.sizes) ? modelConfig.sizes : [])
+  ].filter(Boolean)
+
+  const defaultSize = imageModel?.defaultParams?.size || modelConfig?.defaultParams?.size || availableSizes[0]
+
+  if (isSeedreamFamily(modelKey)) {
+    const minPixels = 3686400
+    const isValidSeedreamSize = (size) => getImageSizePixels(size) >= minPixels
+
+    if (requestedSize && isValidSeedreamSize(requestedSize)) {
+      return requestedSize
+    }
+
+    if (defaultSize && isValidSeedreamSize(defaultSize)) {
+      return defaultSize
+    }
+
+    return availableSizes.find(isValidSeedreamSize) || '2048x2048'
+  }
+
+  if (isGptImageFamily(modelKey) && availableSizes.length > 0) {
+    return availableSizes.includes(requestedSize)
+      ? requestedSize
+      : defaultSize || availableSizes[0] || '1024x1024'
+  }
+
+  return requestedSize || defaultSize || '1024x1024'
+}
+
+const getImageSizeCandidates = ({ modelKey, imageModel, modelConfig, minPixels = 0 }) => {
+  const candidates = [
+    ...(Array.isArray(imageModel?.sizes) ? imageModel.sizes : []),
+    ...(Array.isArray(modelConfig?.sizes) ? modelConfig.sizes : []),
+    imageModel?.defaultParams?.size,
+    modelConfig?.defaultParams?.size,
+    ...(isSeedreamFamily(modelKey) ? ['2048x2048', '2560x1440', '1440x2560'] : []),
+    ...(isGptImageFamily(modelKey) ? ['1024x1024', '1536x1024', '1024x1536'] : []),
+    '1024x1024'
+  ].filter(Boolean)
+
+  return [...new Set(candidates)]
+    .filter((size) => !minPixels || getImageSizePixels(size) >= minPixels)
+}
+
+const shouldSendImageQuality = ({ quality, modelKey, imageModel, modelConfig }) => {
+  if (!quality) return false
+  if (isGptImageFamily(modelKey)) return false
+
+  const qualityOptions = imageModel?.qualities || modelConfig?.qualities
+  if (!Array.isArray(qualityOptions) || qualityOptions.length === 0) {
+    return false
+  }
+
+  return qualityOptions.some((option) => option?.key === quality || option === quality)
+}
+
+const normalizeImageGenerationParams = (params, imageModel, modelConfig) => {
+  const modelKey = params.model
+  const size = getSafeImageSize({
+    requestedSize: params.size,
+    modelKey,
+    imageModel,
+    modelConfig
+  })
+
+  const requestData = {
+    model: modelKey,
+    prompt: params.prompt,
+    size
+  }
+
+  if (params.n && Number(params.n) > 1) {
+    requestData.n = Number(params.n)
+  }
+
+  if (shouldSendImageQuality({ quality: params.quality, modelKey, imageModel, modelConfig })) {
+    requestData.quality = params.quality
+  }
+
+  if (params.image) {
+    requestData.image = params.image
+  }
+
+  return requestData
 }
 
 const extractImageUrlsFromChatContent = (content) => {
@@ -625,28 +783,41 @@ export const useImageGeneration = () => {
       }
 
       // 适配请求参数
-      const adaptedParams = adaptRequest('image', requestData)
+      const normalizedRequestData = normalizeImageGenerationParams(params, imageModel, modelConfig)
+      Object.keys(requestData).forEach((key) => delete requestData[key])
+      Object.assign(requestData, normalizedRequestData)
+
+      addRuntimeLog('info', `图片请求参数已适配：${params.model}`, {
+        requestedSize: params.size,
+        size: requestData.size,
+        requestedQuality: params.quality,
+        quality: requestData.quality || '',
+        count: requestData.n || 1
+      })
+
+      let activeRequestData = { ...requestData }
+      let adaptedParams = adaptRequest('image', activeRequestData)
 
       // Call API | 调用 API
-      const hasReferenceImages = Array.isArray(adaptedParams.image)
-        ? adaptedParams.image.length > 0
-        : !!adaptedParams.image
+      const hasImages = (payload) => Array.isArray(payload.image)
+        ? payload.image.length > 0
+        : !!payload.image
 
       let adaptedData = []
 
       const imageProtocol = modelStore.getImageModelProtocol(params.model)
-      const generateViaChatImageProtocol = async () => {
+      const generateViaChatImageProtocol = async (payload = adaptedParams) => {
         const promptText = [
           params.prompt,
-          params.size ? `\n\nTarget image size/aspect ratio: ${params.size}.` : ''
+          activeRequestData.size ? `\n\nTarget image size/aspect ratio: ${activeRequestData.size}.` : ''
         ].filter(Boolean).join('')
 
         const content = [
           { type: 'text', text: promptText }
         ]
 
-        if (hasReferenceImages) {
-          const imageSources = Array.isArray(adaptedParams.image) ? adaptedParams.image : [adaptedParams.image]
+        if (hasImages(payload)) {
+          const imageSources = Array.isArray(payload.image) ? payload.image : [payload.image]
           imageSources.filter(Boolean).forEach((url) => {
             content.push({
               type: 'image_url',
@@ -671,24 +842,114 @@ export const useImageGeneration = () => {
         return normalizeGeminiImageResponse(response)
       }
 
+      const generateViaImageEndpoint = async (payload = adaptedParams) => {
+        const response = hasImages(payload)
+          ? await generateImage(await buildImageEditFormData(payload), {
+              requestType: 'formdata',
+              endpoint: modelStore.getImageEditEndpoint()
+            })
+          : await generateImage(payload, {
+              requestType: 'json',
+              endpoint: modelStore.getImageEndpoint()
+            })
+
+        return adaptResponse('image', response)
+      }
+
+      const retryImageEndpointWith = async (nextRequestData, reason) => {
+        activeRequestData = { ...nextRequestData }
+        adaptedParams = adaptRequest('image', activeRequestData)
+        addRuntimeLog('info', `图片生成自动重试：${reason}`, {
+          model: params.model,
+          size: activeRequestData.size || '',
+          quality: activeRequestData.quality || '',
+          count: activeRequestData.n || 1
+        })
+        showBubble('retry', reason)
+        return generateViaImageEndpoint(adaptedParams)
+      }
+
+      const tryImageEndpointFallbacks = async (initialError) => {
+        const tried = new Set([JSON.stringify(activeRequestData)])
+        let lastError = initialError
+
+        const runCandidate = async (candidate, reason) => {
+          const signature = JSON.stringify(candidate)
+          if (tried.has(signature)) return null
+          tried.add(signature)
+
+          try {
+            return await retryImageEndpointWith(candidate, reason)
+          } catch (fallbackError) {
+            lastError = fallbackError
+            return null
+          }
+        }
+
+        for (let attempt = 0; attempt < 4; attempt += 1) {
+          const errorText = getApiErrorText(lastError).toLowerCase()
+          const minPixels = getMinimumPixelsFromError(lastError)
+
+          if (activeRequestData.quality && /quality|不合法的quality/.test(errorText)) {
+            const nextRequestData = { ...activeRequestData }
+            delete nextRequestData.quality
+            const result = await runCandidate(nextRequestData, '当前模型不支持画质参数，已自动移除后重试。')
+            if (result) return result
+            continue
+          }
+
+          if (/size|resolution|不合法的size|尺寸|像素|pixels/.test(errorText)) {
+            const sizeCandidates = getImageSizeCandidates({
+              modelKey: params.model,
+              imageModel,
+              modelConfig,
+              minPixels
+            }).filter((size) => size !== activeRequestData.size)
+
+            for (const size of sizeCandidates) {
+              const result = await runCandidate({
+                ...activeRequestData,
+                size
+              }, `当前尺寸不被模型支持，已自动切换为 ${size} 后重试。`)
+              if (result) return result
+            }
+          }
+
+          if (activeRequestData.n && /count|数量|num| n /.test(errorText)) {
+            const nextRequestData = { ...activeRequestData }
+            delete nextRequestData.n
+            const result = await runCandidate(nextRequestData, '当前模型不支持多张生成，已自动改为 1 张后重试。')
+            if (result) return result
+            continue
+          }
+
+          break
+        }
+
+        throw lastError
+      }
+
       if (imageProtocol === 'chat') {
         adaptedData = await generateViaChatImageProtocol()
       } else {
         try {
-          const response = hasReferenceImages
-            ? await generateImage(await buildImageEditFormData(adaptedParams), {
-                requestType: 'formdata',
-                endpoint: modelStore.getImageEditEndpoint()
-              })
-            : await generateImage(adaptedParams, {
-                requestType: 'json',
-                endpoint: modelStore.getImageEndpoint()
-              })
-
-          // 适配响应数据
-          adaptedData = adaptResponse('image', response)
+          adaptedData = await generateViaImageEndpoint(adaptedParams)
         } catch (imageEndpointError) {
-          if (isGeminiImageModel(params.model) && isImageEndpointUnsupportedError(imageEndpointError)) {
+          if (isRecoverableImageParamError(imageEndpointError)) {
+            try {
+              adaptedData = await tryImageEndpointFallbacks(imageEndpointError)
+            } catch (fallbackError) {
+              if (!isImageEndpointUnsupportedError(fallbackError)) {
+                throw fallbackError
+              }
+
+              addRuntimeLog('info', `图片模型自动切换 Chat 图片通道：${params.model}`, {
+                reason: fallbackError.message || 'image endpoint unsupported after parameter fallback'
+              })
+              modelStore.updateCustomImageModelProtocol?.(params.model, 'chat')
+              adaptedData = await generateViaChatImageProtocol()
+            }
+          } else if (isImageEndpointUnsupportedError(imageEndpointError)) {
             addRuntimeLog('info', `图片模型自动切换 Chat 图片通道：${params.model}`, {
               reason: imageEndpointError.message || 'image endpoint unsupported'
             })
@@ -713,14 +974,22 @@ export const useImageGeneration = () => {
         durationMs: elapsedMs(startedAt)
       })
       setSuccess()
+      showBubble('success', `图片生成完成 (${adaptedData.length} 张)`)
       return adaptedData
     } catch (err) {
+      const friendlyMessage = getFriendlyImageErrorMessage(err)
+      const friendlyError = new Error(friendlyMessage)
+      friendlyError.cause = err
+      friendlyError.originalMessage = err?.message || ''
+      friendlyError.status = getApiErrorStatus(err)
       addRuntimeLog('error', `图片生成失败：${err.message || '未知错误'}`, {
         model: params.model,
-        durationMs: elapsedMs(startedAt)
+        durationMs: elapsedMs(startedAt),
+        friendlyMessage
       })
-      setError(err)
-      throw err
+      showBubble('error', friendlyMessage)
+      setError(friendlyError)
+      throw friendlyError
     }
   }
 
@@ -930,9 +1199,58 @@ export const useVideoGeneration = () => {
     throw new Error(`视频任务暂未返回可播放地址（任务ID：${pollTaskId}）。右侧运行日志已记录最后一次响应。`)
   }
 
+  const getFriendlyVideoErrorMessage = (error) => {
+    const status = getApiErrorStatus(error)
+    const message = getApiErrorText(error).toLowerCase()
+
+    if (status === 401 || status === 403 || /permission|forbidden|unauthorized|无权限|权限|余额|quota|credit/.test(message)) {
+      return '模型供应商拒绝了请求，请检查 API Key 权限和余额。'
+    }
+    if (status === 429 || /rate.?limit|频率|频繁/.test(message)) {
+      return '请求过于频繁，请稍后再试。'
+    }
+    if (/ratio|aspect.?ratio|不合法的ratio|不合法的aspect/.test(message)) {
+      return '当前比例不被模型支持，已尝试自动切换比例。'
+    }
+    if (/resolution|分辨率|不合法的resolution/.test(message)) {
+      return '当前分辨率不被模型支持，已尝试自动降低分辨率。'
+    }
+    if (/duration|seconds|时长|不合法的duration/.test(message)) {
+      return '当前时长不被模型支持，已尝试自动调整时长。'
+    }
+    if (/content|policy|违禁|审核|safety|inappropriate/.test(message)) {
+      return '提示词内容触发审核，请修改后重试。'
+    }
+    if (/image.?format|图片格式|unsupported.*image/.test(message)) {
+      return '参考图片格式不被支持，请尝试其他图片。'
+    }
+    if (status >= 500 || /server|upstream|timeout|超时|internal.?error/.test(message)) {
+      return '模型供应商服务异常，可能是临时故障，请稍后再试。'
+    }
+    return error?.message || '视频生成失败，请打开运行日志查看请求详情。'
+  }
+
+  const isRecoverableVideoParamError = (error) => {
+    const message = getApiErrorText(error).toLowerCase()
+    return /ratio|aspect.?ratio|不合法的ratio|resolution|分辨率|duration|seconds|时长|不合法的duration/.test(message)
+  }
+
+  const getVideoRatioCandidates = (modelKey, modelConfig, currentRatio) => {
+    const available = modelConfig?.ratios || modelConfig?.defaultParams?.ratios || []
+    const fallback = ['16:9', '9:16', '1:1', '4:3', '3:4']
+    const pool = [...new Set([...available, ...fallback])]
+    return pool.filter((r) => r && r !== currentRatio)
+  }
+
+  const getVideoDurationCandidates = (modelConfig, currentDuration) => {
+    const available = modelConfig?.durs || modelConfig?.defaultParams?.durs || []
+    const fallback = [5, 10, 8]
+    const pool = [...new Set([...available, ...fallback])]
+    return pool.filter((d) => d && d !== currentDuration)
+  }
+
   /**
-   * Generate video with fixed params (includes polling) | 固定参数生成视频（含轮询）
-   * @param {Object} params - { model, prompt, first_frame_image, last_frame_image, ratio, duration }
+   * Generate video with fixed params (includes polling + fallback) | 固定参数生成视频（含轮询+回退）
    */
   const generate = async (params) => {
     setLoading(true)
@@ -941,34 +1259,106 @@ export const useVideoGeneration = () => {
     progress.attempt = 0
     progress.percentage = 0
 
-    try {
-      // 创建任务
-      const { taskId: newTaskId, url, taskEndpoint } = await createVideoTaskOnly(params)
+    const modelConfig = getModelByName(params.model)
 
-      // 如果有直接 URL，返回
-      if (url) {
-        video.value = { url }
-        setSuccess()
-        return video.value
+    try {
+      let result = null
+      let lastError = null
+
+      try {
+        result = await executeVideoGeneration(params)
+      } catch (initialError) {
+        lastError = initialError
+
+        if (!isRecoverableVideoParamError(initialError)) {
+          throw initialError
+        }
+
+        const tried = new Set([JSON.stringify({ ratio: params.ratio, dur: params.dur })])
+
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+          const errorText = getApiErrorText(lastError).toLowerCase()
+          let nextParams = null
+          let reason = ''
+
+          if (/ratio|aspect.?ratio|不合法的ratio|不合法的aspect/.test(errorText)) {
+            const candidates = getVideoRatioCandidates(params.model, modelConfig, params.ratio)
+              .filter((r) => !tried.has(JSON.stringify({ ratio: r, dur: params.dur })))
+            if (candidates.length > 0) {
+              nextParams = { ...params, ratio: candidates[0] }
+              reason = `当前比例不被模型支持，已自动切换为 ${candidates[0]} 后重试。`
+            }
+          }
+
+          if (!nextParams && /duration|seconds|时长|不合法的duration/.test(errorText)) {
+            const candidates = getVideoDurationCandidates(modelConfig, params.dur)
+              .filter((d) => !tried.has(JSON.stringify({ ratio: params.ratio, dur: d })))
+            if (candidates.length > 0) {
+              nextParams = { ...params, dur: candidates[0] }
+              reason = `当前时长不被模型支持，已自动调整为 ${candidates[0]} 秒后重试。`
+            }
+          }
+
+          if (!nextParams) break
+
+          tried.add(JSON.stringify({ ratio: nextParams.ratio, dur: nextParams.dur }))
+
+          addRuntimeLog('info', `视频生成自动重试：${reason}`, {
+            model: params.model,
+            ratio: nextParams.ratio,
+            dur: nextParams.dur
+          })
+          showBubble('retry', reason)
+
+          try {
+            result = await executeVideoGeneration(nextParams)
+            break
+          } catch (fallbackError) {
+            lastError = fallbackError
+          }
+        }
+
+        if (!result) {
+          throw lastError
+        }
       }
 
-      // 需要轮询
-      taskId.value = newTaskId
-      status.value = 'polling'
-
-      // 轮询获取结果
-      const result = await pollVideoTask(newTaskId, (attempt, percentage) => {
-        progress.attempt = attempt
-        progress.percentage = percentage
-      }, { taskEndpoint })
-
-      video.value = result
-      setSuccess()
       return result
     } catch (err) {
-      setError(err)
-      throw err
+      const friendlyMessage = getFriendlyVideoErrorMessage(err)
+      addRuntimeLog('error', `视频生成失败：${err.message || '未知错误'}`, {
+        model: params.model,
+        friendlyMessage
+      })
+      showBubble('error', friendlyMessage)
+      setError(new Error(friendlyMessage))
+      throw new Error(friendlyMessage)
     }
+  }
+
+  const executeVideoGeneration = async (params) => {
+    const { taskId: newTaskId, url, taskEndpoint } = await createVideoTaskOnly(params)
+
+    if (url) {
+      video.value = { url }
+      setSuccess()
+      showBubble('success', '视频生成完成')
+      return video.value
+    }
+
+    taskId.value = newTaskId
+    status.value = 'polling'
+    showBubble('info', '视频任务已创建，正在排队处理...')
+
+    const result = await pollVideoTask(newTaskId, (attempt, percentage) => {
+      progress.attempt = attempt
+      progress.percentage = percentage
+    }, { taskEndpoint })
+
+    video.value = result
+    setSuccess()
+    showBubble('success', '视频生成完成')
+    return result
   }
 
   return { loading, error, status, video, taskId, progress, generate, reset, createVideoTaskOnly, pollVideoTask }

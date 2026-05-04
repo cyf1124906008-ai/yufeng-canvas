@@ -19,14 +19,14 @@
             @keydown.enter="finishEditLabel" @keydown.escape="cancelEditLabel"
             class="text-sm font-medium bg-[var(--bg-tertiary)] text-[var(--text-secondary)] px-1 rounded outline-none border border-purple-500" />
         </div>
-        <div class="flex items-center gap-1">
-          <button @click="handleDuplicate" class="p-1 hover:bg-[var(--bg-tertiary)] rounded transition-colors"
+        <div class="nodrag nopan flex items-center gap-1" @pointerdown.stop @mousedown.stop @click.stop>
+          <button @pointerdown.stop @mousedown.stop @click.stop="handleDuplicate" class="nodrag nopan p-1 hover:bg-[var(--bg-tertiary)] rounded transition-colors"
             title="复制节点">
             <n-icon :size="14">
               <CopyOutline />
             </n-icon>
           </button>
-          <button @click="handleDelete" class="p-1 hover:bg-[var(--bg-tertiary)] rounded transition-colors"
+          <button @pointerdown.stop @mousedown.stop @click.stop="handleDelete" class="nodrag nopan p-1 hover:bg-[var(--bg-tertiary)] rounded transition-colors"
             title="删除节点">
             <n-icon :size="14">
               <TrashOutline />
@@ -122,9 +122,10 @@
       </div>
 
       <!-- Handles | 连接点 -->
+      <span class="node-port-label node-port-label-in">上下文</span>
       <Handle type="target" :position="Position.Left" id="left" class="!bg-purple-500" />
       <NodeHandleMenu :nodeId="id" nodeType="llmConfig" dotColor="#a855f7" :visible="showHandleMenu"
-        :operations="operations" @select="handleSelect" />
+        output-label="文本" :operations="operations" @select="handleSelect" />
     </div>
   </div>
 
@@ -627,7 +628,9 @@ watch(() => props.data, (newData) => {
     // 立即将文本中的 @label 转为 chip
     nextTick(() => convertTextMentionsToChips())
   }
-  if (newData?.model !== undefined) model.value = newData.model
+  if (newData?.model !== undefined) {
+    model.value = newData.model || modelStore.selectedChatModel || modelStore.availableChatModels[0]?.key || ''
+  }
   if (newData?.outputFormat !== undefined) outputFormat.value = newData.outputFormat
   if (newData?.outputContent !== undefined) outputContent.value = newData.outputContent
 

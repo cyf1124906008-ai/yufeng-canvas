@@ -20,12 +20,14 @@ import personaCharacterCardImage from '../assets/inspiration-cases/persona-chara
 import goldSaintsCardGridImage from '../assets/inspiration-cases/gold-saints-card-grid.jpg'
 import lanternPanoramaLongScrollImage from '../assets/inspiration-cases/lantern-panorama-long-scroll.jpg'
 import douyinLiveCommerceImage from '../assets/inspiration-cases/douyin-live-commerce.jpg'
+import { AWESOME_GPT_IMAGE_2_CASES, AWESOME_GPT_IMAGE_2_PROMPT_SUGGESTIONS, AWESOME_GPT_IMAGE_2_SOURCE } from './awesomeGptImage2Library'
 
 export const PROMPT_LIBRARY_SOURCE = {
   name: 'GPT Image 2 community prompt collections',
   license: 'Apache-2.0 / MIT / CC BY 4.0 attribution notes',
-  url: 'https://github.com/EvoLinkAI/awesome-gpt-image-2-prompts',
+  url: AWESOME_GPT_IMAGE_2_SOURCE.url,
   sources: [
+    AWESOME_GPT_IMAGE_2_SOURCE.url,
     'https://github.com/EvoLinkAI/awesome-gpt-image-2-prompts',
     'https://github.com/Anil-matcha/Awesome-GPT-Image-2-API-Prompts'
   ]
@@ -240,4 +242,14 @@ INSPIRATION_CASES.push(
     prompt: '生成真实手机竖屏直播带货截图，主播在直播间展示商品，画面包含商品卡片、优惠券、弹幕、点赞、成交提示和购买按钮，中文 UI 清晰，平台感真实。',
     image: douyinLiveCommerceImage
   }
+)
+
+CANVAS_PROMPT_SUGGESTIONS.push(...AWESOME_GPT_IMAGE_2_PROMPT_SUGGESTIONS)
+
+INSPIRATION_CASES.push(
+  ...AWESOME_GPT_IMAGE_2_CASES.map((item) => ({
+    ...item,
+    image: item.image,
+    source: '开源案例'
+  }))
 )

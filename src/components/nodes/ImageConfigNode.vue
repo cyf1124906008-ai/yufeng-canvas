@@ -23,12 +23,12 @@
           class="text-sm font-medium bg-[var(--bg-tertiary)] text-[var(--text-secondary)] px-1 rounded outline-none border border-blue-500"
         />
         <div class="node-actions nodrag nopan flex items-center gap-1" @pointerdown.stop @mousedown.stop @click.stop>
-          <button type="button" @pointerdown.stop @mousedown.stop @click.stop="handleDuplicate" class="node-action-button p-1 hover:bg-[var(--bg-tertiary)] rounded transition-colors" title="复制节点">
+          <button type="button" @pointerdown.stop @mousedown.stop @click.stop="handleDuplicate" class="node-action-button nodrag nopan p-1 hover:bg-[var(--bg-tertiary)] rounded transition-colors" title="复制节点">
             <n-icon :size="14">
               <CopyOutline />
             </n-icon>
           </button>
-          <button type="button" @pointerdown.stop @mousedown.stop @click.stop="handleDelete" class="node-action-button p-1 hover:bg-[var(--bg-tertiary)] rounded transition-colors" title="删除节点">
+          <button type="button" @pointerdown.stop @mousedown.stop @click.stop="handleDelete" class="node-action-button nodrag nopan p-1 hover:bg-[var(--bg-tertiary)] rounded transition-colors" title="删除节点">
             <n-icon :size="14">
               <TrashOutline />
             </n-icon>
@@ -178,8 +178,9 @@
       </div>
 
       <!-- Handles | 连接点 -->
+      <span class="node-port-label node-port-label-in">Prompt / 参考图</span>
       <Handle type="target" :position="Position.Left" id="left" class="!bg-[var(--accent-color)]" />
-      <NodeHandleMenu :nodeId="id" nodeType="imageConfig" :visible="showHandleMenu" :operations="operations" @select="handleSelect" />
+      <NodeHandleMenu :nodeId="id" nodeType="imageConfig" output-label="结果" :visible="showHandleMenu" :operations="operations" @select="handleSelect" />
     </div>
 
   </div>
@@ -783,7 +784,7 @@ const handleGenerate = async (mode = 'auto') => {
       // Mark this config node as executed | 标记配置节点已执行
       updateNode(props.id, { executed: true, outputNodeId: imageNodeId })
     }
-    window.$message?.success('图片生成成功')
+    // Success bubble already shown by useApi
   } catch (err) {
     // Update node to show error | 更新节点显示错误
     updateNode(imageNodeId, {
@@ -839,9 +840,10 @@ const handleDelete = () => {
 
 // 监听模型变化，同步 Quality 和 Size
 watch(() => props.data?.model, (newModel) => {
-  if (newModel && newModel !== localModel.value) {
-    localModel.value = newModel
-    const config = getModelConfig(newModel)
+  const resolvedModel = newModel || modelStore.selectedImageModel || ''
+  if (resolvedModel && resolvedModel !== localModel.value) {
+    localModel.value = resolvedModel
+    const config = getModelConfig(resolvedModel)
 
     // 同步 Quality
     if (config?.defaultParams?.quality) {
@@ -852,6 +854,25 @@ watch(() => props.data?.model, (newModel) => {
     if (config?.defaultParams?.size) {
       localSize.value = config.defaultParams.size
     }
+  }
+})
+
+watch(() => props.data?.size, (value) => {
+  if (value && value !== localSize.value) {
+    localSize.value = value
+  }
+})
+
+watch(() => props.data?.quality, (value) => {
+  if (value && value !== localQuality.value) {
+    localQuality.value = value
+  }
+})
+
+watch(() => props.data?.n, (value) => {
+  const normalized = Number(value || 1)
+  if (normalized !== localCount.value) {
+    localCount.value = normalized
   }
 })
 

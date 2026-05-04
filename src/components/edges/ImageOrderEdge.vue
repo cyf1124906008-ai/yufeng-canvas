@@ -1,26 +1,18 @@
 <template>
-  <!-- Custom edge with image order selector | 带图片顺序选择器的自定义边 -->
   <BaseEdge :path="path" :style="edgeStyle" />
-  
-  <!-- Edge label with order selector | 带顺序选择器的边标签 -->
+
   <EdgeLabelRenderer>
-    <div 
-      :style="{ 
-        position: 'absolute', 
+    <div
+      :style="{
+        position: 'absolute',
         transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
         pointerEvents: 'all'
       }"
       class="nodrag nopan"
     >
-      <n-dropdown 
-        :options="orderOptions" 
-        @select="handleOrderSelect"
-        size="small"
-      >
-        <button 
-          class="edge-order-badge flex items-center justify-center w-7 h-7 text-xs font-bold rounded-full text-white shadow-md hover:scale-110 transition-transform"
-        >
-          {{ currentOrder }}
+      <n-dropdown :options="orderOptions" @select="handleOrderSelect" size="small">
+        <button class="edge-order-badge">
+          参考图 {{ currentOrder }}
         </button>
       </n-dropdown>
     </div>
@@ -33,7 +25,6 @@ import { BaseEdge, EdgeLabelRenderer, getBezierPath, useVueFlow } from '@vue-flo
 import { NDropdown } from 'naive-ui'
 import { edges, nodes } from '../../stores/canvas'
 
-// Get VueFlow instance | 获取 VueFlow 实例
 const { updateEdgeData } = useVueFlow()
 
 const props = defineProps({
@@ -51,57 +42,45 @@ const props = defineProps({
   style: Object
 })
 
-// Order labels | 顺序标签
 const orderLabels = [
-  { label: '① 第一张', key: 1 },
-  { label: '② 第二张', key: 2 },
-  { label: '③ 第三张', key: 3 },
-  { label: '④ 第四张', key: 4 },
-  { label: '⑤ 第五张', key: 5 }
+  { label: '参考图 1', key: 1 },
+  { label: '参考图 2', key: 2 },
+  { label: '参考图 3', key: 3 },
+  { label: '参考图 4', key: 4 },
+  { label: '参考图 5', key: 5 }
 ]
 
-// Dynamic order options based on connected edges count + @ mentioned images | 基于连接边数量和@提及图片的动态顺序选项
 const orderOptions = computed(() => {
-  // Get all imageOrder edges connected to the same target | 获取连接到同一目标的图片边
   const sameTargetImageEdges = edges.value.filter(edge =>
     edge.target === props.target &&
     edge.type === 'imageOrder'
   )
   const edgeCount = sameTargetImageEdges.length || 1
 
-  // Get @ mentioned image count from connected TextNodes | 获取已连接 TextNode 中 @ 提及的图片数量
   let mentionedImageCount = 0
-  const connectedTextEdges = edges.value.filter(e => e.target === props.target)
+  const connectedTextEdges = edges.value.filter(edge => edge.target === props.target)
   for (const edge of connectedTextEdges) {
-    const sourceNode = nodes.value.find(n => n.id === edge.source)
-    if (sourceNode?.type === 'text') {
-      const content = sourceNode.data?.content || ''
-      // Count @ mentions of image nodes | 统计图片节点的 @ 提及
-      const mentionRegex = /@\[([^\]|]+)(?:\|([^\]]+))?\]/g
-      let match
-      while ((match = mentionRegex.exec(content)) !== null) {
-        const mentionedNode = nodes.value.find(n => n.id === match[1])
-        if (mentionedNode?.type === 'image') {
-          mentionedImageCount++
-        }
+    const sourceNode = nodes.value.find(node => node.id === edge.source)
+    if (sourceNode?.type !== 'text') continue
+
+    const content = sourceNode.data?.content || ''
+    const mentionRegex = /@\[([^\]|]+)(?:\|([^\]]+))?\]/g
+    let match
+    while ((match = mentionRegex.exec(content)) !== null) {
+      const mentionedNode = nodes.value.find(node => node.id === match[1])
+      if (mentionedNode?.type === 'image') {
+        mentionedImageCount++
       }
     }
   }
 
-  // Minimum order is mentionedImageCount + 1 | 最小顺序是 @ 提及图片数量 + 1
   const minOrder = mentionedImageCount + 1
-  // Total count = edge count + mentioned image count | 总数量 = 边数量 + @ 提及图片数量
-  const totalCount = edgeCount + mentionedImageCount
-  const maxOrder = Math.min(totalCount, 5)
-
-  // Return options from minOrder to maxOrder | 返回从 minOrder 到 maxOrder 的选项
+  const maxOrder = Math.min(edgeCount + mentionedImageCount, 5)
   return orderLabels.filter(label => label.key >= minOrder && label.key <= maxOrder)
 })
 
-// Current order from edge data | 从边数据获取当前顺序
 const currentOrder = computed(() => props.data?.imageOrder || 1)
 
-// Calculate bezier path | 计算贝塞尔路径
 const path = computed(() => {
   const [edgePath] = getBezierPath({
     sourceX: props.sourceX,
@@ -114,48 +93,58 @@ const path = computed(() => {
   return edgePath
 })
 
-// Label position (center of edge) | 标签位置（边的中心）
 const labelX = computed(() => (props.sourceX + props.targetX) / 2)
-const labelY = computed(() => (props.sourceY + props.targetY) / 2)
+const labelY = computed(() => (props.sourceY + props.targetY) / 2 + (currentOrder.value - 1) * 18)
 
-// Edge style | 边样式
 const edgeStyle = computed(() => ({
   stroke: '#38bdf8',
-  strokeWidth: 3.5,
-  filter: 'drop-shadow(0 0 7px rgba(56, 189, 248, 0.54))',
+  strokeWidth: 4.2,
+  strokeLinecap: 'round',
+  filter: 'drop-shadow(0 0 8px rgba(56, 189, 248, 0.56))',
   ...props.style
 }))
 
-// Handle order selection | 处理顺序选择
 const handleOrderSelect = (newOrder) => {
-  // Get all image edges connected to the same target | 获取连接到同一目标的所有图片边
-  const sameTargetImageEdges = edges.value.filter(edge => 
-    edge.target === props.target && 
+  const sameTargetImageEdges = edges.value.filter(edge =>
+    edge.target === props.target &&
     edge.type === 'imageOrder'
   )
-  
-  // Find edge currently using this order | 查找当前使用此顺序的边
-  const edgeWithSameOrder = sameTargetImageEdges.find(edge => 
-    edge.id !== props.id && 
+
+  const edgeWithSameOrder = sameTargetImageEdges.find(edge =>
+    edge.id !== props.id &&
     edge.data?.imageOrder === newOrder
   )
-  
-  // If another edge has this order, swap with current | 如果另一条边有此顺序，则交换
+
   if (edgeWithSameOrder) {
     updateEdgeData(edgeWithSameOrder.id, { imageOrder: currentOrder.value })
   }
-  
-  // Update current edge order | 更新当前边顺序
+
   updateEdgeData(props.id, { imageOrder: newOrder })
 }
 </script>
 
 <style scoped>
 .edge-order-badge {
-  border: 2px solid rgba(240, 249, 255, 0.92);
+  min-width: 82px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(240, 249, 255, 0.94);
+  border-radius: 999px;
+  padding: 0 11px;
+  color: #f0f9ff;
   background:
     radial-gradient(circle at 30% 18%, rgba(255, 255, 255, 0.5), transparent 38%),
     linear-gradient(135deg, #38bdf8, #2563eb);
   box-shadow: 0 12px 30px rgba(15, 23, 42, 0.32), 0 0 20px rgba(56, 189, 248, 0.38);
+  font-size: 11px;
+  font-weight: 900;
+  transition: transform 0.16s ease, box-shadow 0.16s ease;
+}
+
+.edge-order-badge:hover {
+  transform: scale(1.04);
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.34), 0 0 26px rgba(56, 189, 248, 0.48);
 }
 </style>

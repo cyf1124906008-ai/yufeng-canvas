@@ -29,7 +29,19 @@ export default defineConfig(({ mode }) => {
       }
     },
     build: {
-      outDir: isDesktop ? 'dist-desktop' : 'dist'
+      outDir: isDesktop ? 'dist-desktop' : 'dist',
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            'naive-ui': ['naive-ui'],
+            'vue-flow': ['@vue-flow/core'],
+            'icons': ['@vicons/ionicons5']
+          }
+        }
+      }
+    },
+    esbuild: {
+      drop: mode === 'production' ? ['console', 'debugger'] : []
     }
   }
 })

@@ -6,6 +6,9 @@ import { ref, computed, watch } from 'vue'
 
 // Storage key | 存储键
 const STORAGE_KEY = 'ai-canvas-projects'
+const TRASH_STORAGE_KEY = 'ai-canvas-deleted-projects'
+const TRASH_RETENTION_DAYS = 30
+const TRASH_RETENTION_MS = TRASH_RETENTION_DAYS * 24 * 60 * 60 * 1000
 const RUNTIME_NODE_FIELDS = ['loading', 'progress', 'attempt', 'isPolling']
 const MEDIA_URL_FIELDS = [
   'thumbnail',
@@ -25,6 +28,9 @@ const generateId = () => `project_${Date.now()}_${Math.random().toString(36).sub
 // Projects list | 项目列表
 export const projects = ref([])
 
+// Deleted projects list | 最近删除项目列表
+export const deletedProjects = ref([])
+
 // Current project ID | 当前项目ID
 export const currentProjectId = ref(null)
 
@@ -32,6 +38,23 @@ export const currentProjectId = ref(null)
 export const currentProject = computed(() => {
   return projects.value.find(p => p.id === currentProjectId.value) || null
 })
+
+const reviveProjectDates = (project) => ({
+  ...project,
+  createdAt: project?.createdAt ? new Date(project.createdAt) : new Date(),
+  updatedAt: project?.updatedAt ? new Date(project.updatedAt) : new Date(),
+  deletedAt: project?.deletedAt ? new Date(project.deletedAt) : undefined
+})
+
+const getTrashExpiryTime = (project) => {
+  const deletedAt = new Date(project?.deletedAt || 0).getTime()
+  return deletedAt + TRASH_RETENTION_MS
+}
+
+export const getTrashRemainingDays = (project) => {
+  const remainingMs = getTrashExpiryTime(project) - Date.now()
+  return Math.max(0, Math.ceil(remainingMs / (24 * 60 * 60 * 1000)))
+}
 
 const isUsableMediaUrl = (value) => {
   if (!value || typeof value !== 'string') return false
@@ -104,30 +127,80 @@ export const deriveProjectThumbnail = (project, { preferExisting = true } = {}) 
 export const loadProjects = () => {
   try {
     const stored = localStorage.getItem(STORAGE_KEY)
-    if (stored) {
-      const parsed = JSON.parse(stored)
-      let recoveredThumbnail = false
-      projects.value = parsed.map(p => {
-        const project = {
-          ...p,
-          createdAt: new Date(p.createdAt),
-          updatedAt: new Date(p.updatedAt)
-        }
-        const thumbnail = deriveProjectThumbnail(project)
-        if (!project.thumbnail && thumbnail) {
-          project.thumbnail = thumbnail
-          recoveredThumbnail = true
-        }
-        return project
-      })
-
-      if (recoveredThumbnail) {
-        saveProjects()
-      }
+    if (stored === null) {
+      projects.value = []
+      return false
     }
+
+    if (!stored) {
+      projects.value = []
+      return true
+    }
+
+    const parsed = JSON.parse(stored)
+    let recoveredThumbnail = false
+    projects.value = Array.isArray(parsed) ? parsed.map(p => {
+      const project = reviveProjectDates(p)
+      const thumbnail = deriveProjectThumbnail(project)
+      if (!project.thumbnail && thumbnail) {
+        project.thumbnail = thumbnail
+        recoveredThumbnail = true
+      }
+      return project
+    }) : []
+
+    if (recoveredThumbnail) {
+      saveProjects()
+    }
+
+    return true
   } catch (err) {
     console.error('Failed to load projects:', err)
     projects.value = []
+    return true
+  }
+}
+
+export const saveDeletedProjects = () => {
+  const cleanedDeletedProjects = deletedProjects.value.map(project => cleanProjectForStorage({
+    ...project,
+    deletedAt: project.deletedAt || new Date()
+  }))
+
+  try {
+    localStorage.setItem(TRASH_STORAGE_KEY, JSON.stringify(cleanedDeletedProjects))
+  } catch (err) {
+    console.error('Failed to save deleted projects:', err)
+    window.$message?.warning('回收站保存失败，存储空间可能不足')
+  }
+}
+
+export const purgeExpiredDeletedProjects = () => {
+  const beforeCount = deletedProjects.value.length
+  const now = Date.now()
+  deletedProjects.value = deletedProjects.value.filter(project => getTrashExpiryTime(project) > now)
+
+  if (deletedProjects.value.length !== beforeCount) {
+    saveDeletedProjects()
+  }
+}
+
+export const loadDeletedProjects = () => {
+  try {
+    const stored = localStorage.getItem(TRASH_STORAGE_KEY)
+    if (!stored) {
+      deletedProjects.value = []
+      return
+    }
+
+    const parsed = JSON.parse(stored)
+    deletedProjects.value = Array.isArray(parsed)
+      ? parsed.map(reviveProjectDates).filter(project => project.deletedAt)
+      : []
+    purgeExpiredDeletedProjects()
+  } catch (err) {
+    console.error('Failed to load deleted projects:', err)
+    deletedProjects.value = []
   }
 }
 
@@ -313,8 +386,63 @@ export const getProjectCanvas = (id) => {
  * @param {string} id - Project ID | 项目ID
  */
 export const deleteProject = (id) => {
-  projects.value = projects.value.filter(p => p.id !== id)
+  const index = projects.value.findIndex(p => p.id === id)
+  if (index === -1) return false
+
+  const [project] = projects.value.splice(index, 1)
+  const deletedProject = {
+    ...project,
+    deletedAt: new Date()
+  }
+
+  deletedProjects.value = [
+    deletedProject,
+    ...deletedProjects.value.filter(item => item.id !== id)
+  ]
+
+  if (currentProjectId.value === id) {
+    currentProjectId.value = null
+  }
+
   saveProjects()
+  saveDeletedProjects()
+  return true
+}
+
+export const restoreProject = (id) => {
+  const index = deletedProjects.value.findIndex(p => p.id === id)
+  if (index === -1) return false
+
+  const [project] = deletedProjects.value.splice(index, 1)
+  const restoredProject = {
+    ...project,
+    deletedAt: undefined,
+    updatedAt: new Date()
+  }
+  delete restoredProject.deletedAt
+
+  projects.value = [
+    restoredProject,
+    ...projects.value.filter(item => item.id !== id)
+  ]
+
+  saveProjects()
+  saveDeletedProjects()
+  return true
+}
+
+export const permanentlyDeleteProject = (id) => {
+  const beforeCount = deletedProjects.value.length
+  deletedProjects.value = deletedProjects.value.filter(p => p.id !== id)
+  saveDeletedProjects()
+  return deletedProjects.value.length !== beforeCount
+}
+
+export const emptyDeletedProjects = () => {
+  if (!deletedProjects.value.length) return false
+  deletedProjects.value = []
+  saveDeletedProjects()
+  return true
 }
 
 /**
@@ -397,10 +525,11 @@ export const getSortedProjects = (sortBy = 'updatedAt', order = 'desc') => {
  * Initialize projects store | 初始化项目存储
  */
 export const initProjectsStore = () => {
-  loadProjects()
+  const hasStoredProjects = loadProjects()
+  loadDeletedProjects()
   
-  // Create sample project if empty | 如果为空则创建示例项目
-  if (projects.value.length === 0) {
+  // Create sample project only on first launch | 仅首次启动时创建示例项目
+  if (!hasStoredProjects && projects.value.length === 0) {
     const id = createProject('示例项目')
     const project = projects.value.find(p => p.id === id)
     if (project) {
@@ -449,6 +578,10 @@ if (typeof window !== 'undefined') {
     loadProjects,
     saveProjects,
     createProject,
-    deleteProject
+    deleteProject,
+    restoreProject,
+    permanentlyDeleteProject,
+    emptyDeletedProjects,
+    deletedProjects
   }
 }

@@ -94,11 +94,14 @@ instance.interceptors.response.use(
       status: response.status,
       durationMs
     })
-    window.$message?.error(message || 'Request failed')
+    if (response.config?.metadata?.capability !== 'image') {
+      window.$message?.error(message || 'Request failed')
+    }
     return Promise.reject(response.data)
   },
   (error) => {
     const { response } = error
+    const capability = error.config?.metadata?.capability || 'default'
 
     if (response) {
       const { status, data } = response
@@ -110,12 +113,15 @@ instance.interceptors.response.use(
         durationMs
       })
 
-      if (status === 401) {
-        window.$message?.error('API Key invalid or expired')
-      } else if (status === 429) {
-        window.$message?.error('Too many requests, please try again later')
-      } else {
-        window.$message?.error(message || 'Request failed')
+      // Image/video generation: silent here — useApi.js handles friendly Chinese bubbles + fallback.
+      if (capability !== 'image' && capability !== 'video') {
+        if (status === 401) {
+          window.$message?.error('API Key 无效或已过期')
+        } else if (status === 429) {
+          window.$message?.error('请求过于频繁，请稍后再试')
+        } else {
+          window.$message?.error(message || '请求失败')
+        }
       }
     } else {
       const durationMs = getRequestDuration(error.config)
@@ -124,7 +130,9 @@ instance.interceptors.response.use(
         code: error.code,
         durationMs
       })
-      window.$message?.error(error.message || 'Network error')
+      if (capability !== 'image' && capability !== 'video') {
+        window.$message?.error(error.code === 'ECONNABORTED' ? '请求超时，请检查网络连接' : (error.message || '网络异常'))
+      }
     }
 
     return Promise.reject(error)

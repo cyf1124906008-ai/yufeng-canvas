@@ -9,6 +9,12 @@ import { IMAGE_MODELS, VIDEO_MODELS, CHAT_MODELS, DEFAULT_IMAGE_MODEL, DEFAULT_V
 // Node ID counter | 节点ID计数器
 let nodeId = 0
 const getNodeId = () => `node_${nodeId++}`
+let edgeId = 0
+const getEdgeId = (params = {}) => {
+  const source = params.source || 'source'
+  const target = params.target || 'target'
+  return `edge_${source}_${target}_${Date.now()}_${edgeId++}`
+}
 
 // Current project ID | 当前项目ID
 export const currentProjectId = ref(null)
@@ -374,7 +380,7 @@ export const duplicateNode = (id) => {
 // Add edge | 添加边
 export const addEdge = (params) => {
   const newEdge = {
-    id: `edge_${params.source}_${params.target}`,
+    id: params.id || getEdgeId(params),
     ...params
   }
   edges.value = [...edges.value, newEdge]
@@ -400,7 +406,7 @@ export const addEdges = (edgeSpecs, autoBatch = true) => {
 
   edgeSpecs.forEach(params => {
     const newEdge = {
-      id: `edge_${params.source}_${params.target}`,
+      id: params.id || getEdgeId(params),
       ...params
     }
     edges.value = [...edges.value, newEdge]
@@ -434,6 +440,7 @@ export const clearCanvas = () => {
   nodes.value = []
   edges.value = []
   nodeId = 0
+  edgeId = 0
 }
 
 // Initialize with sample data | 使用示例数据初始化
@@ -488,6 +495,7 @@ export const loadProject = (projectId) => {
       return max
     }, -1)
     nodeId = maxId + 1
+    edgeId = edges.value.length + 1
   } else {
     // Empty project | 空项目
     clearCanvas()
