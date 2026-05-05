@@ -43,7 +43,9 @@ export function registerTask(task) {
     videoProtocol: task.videoProtocol || '',
     // Comfy-specific recovery fields
     promptId: task.promptId || '',
-    baseUrl: task.baseUrl || ''
+    baseUrl: task.baseUrl || '',
+    // Image-specific recovery fields
+    outputNodeId: task.outputNodeId || ''
   }
   tasks.value.push(entry)
   saveTasks()

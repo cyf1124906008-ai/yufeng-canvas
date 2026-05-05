@@ -7,6 +7,17 @@ import { getRuntimeApiKey, getRuntimeBaseUrl, getRuntimeProvider } from '@/utils
 
 const DATA_URL_PATTERN = /^data:(.+?);base64,(.+)$/
 
+const arrayBufferToBase64 = (buffer) => {
+  const bytes = new Uint8Array(buffer)
+  let binary = ''
+  const chunkSize = 0x8000
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, i + chunkSize)
+    binary += String.fromCharCode.apply(null, chunk)
+  }
+  return btoa(binary)
+}
+
 const dataUrlToBlob = (dataUrl) => {
   const match = dataUrl.match(DATA_URL_PATTERN)
   if (!match) {
@@ -124,13 +135,13 @@ const ipcFormDataGenerate = async (fullUrl, authHeaders, formData, taskId) => {
   const parts = []
   for (const [key, value] of formData.entries()) {
     if (value instanceof Blob) {
-      const buffer = await value.arrayBuffer()
+      const ab = await value.arrayBuffer()
       parts.push({
         key,
         type: 'blob',
         mimeType: value.type || 'application/octet-stream',
         filename: value.name || 'file',
-        data: Buffer.from(buffer).toString('base64')
+        data: arrayBufferToBase64(ab)
       })
     } else {
       parts.push({ key, type: 'text', value: String(value) })

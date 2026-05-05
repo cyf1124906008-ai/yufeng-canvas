@@ -985,6 +985,9 @@ export const useImageGeneration = () => {
       friendlyError.cause = err
       friendlyError.originalMessage = err?.message || ''
       friendlyError.status = getApiErrorStatus(err)
+      if (err?._frontendTimeout) {
+        friendlyError._frontendTimeout = true
+      }
       addRuntimeLog('error', `图片生成失败：${err.message || '未知错误'}`, {
         model: params.model,
         durationMs: elapsedMs(startedAt),

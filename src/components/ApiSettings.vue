@@ -364,6 +364,7 @@ import { getProviderConfig } from '../config/providers'
 import { useModelStore } from '../stores/pinia'
 import { backupUserDataNow, exportUserDataToFile, importUserDataFromFile } from '../utils/appDataBackup'
 import { getCapabilityLabel, getModelCapabilityConflict } from '../utils/modelCapability'
+import { normalizeBaseUrl } from '../utils/request'
 import ComfyEnginePanel from './settings/ComfyEnginePanel.vue'
 
 const props = defineProps({
@@ -634,7 +635,7 @@ const handleSyncModels = async () => {
   const provider = persistFormConfig()
   const apiKey = formData.apiKey || formData.chatApiKey || formData.imageApiKey || formData.videoApiKey
   const rawUrl = formData.baseUrl || resolvedBaseUrl.value
-  const baseUrl = rawUrl ? rawUrl.replace(/\/+$/, '').replace(/\/(v1\/(images\/generations|chat\/completions|models|videos|embeddings)|api\/v1)\/?$/i, '') : ''
+  const baseUrl = normalizeBaseUrl(rawUrl) || modelStore.getBaseUrlByProvider?.(provider) || ''
 
   if (!baseUrl) {
     window.$message?.warning('请先填写 Base URL')

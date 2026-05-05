@@ -191,7 +191,7 @@
  * Image config node component | 文生图配置节点组件
  * Configuration panel for text-to-image generation with API integration
  */
-import { ref, computed, watch, onMounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { NIcon, NDropdown, NSpin } from 'naive-ui'
 import { ChevronDownOutline, ChevronForwardOutline, CopyOutline, TrashOutline, RefreshOutline, AddOutline, ImageOutline, CreateOutline } from '@vicons/ionicons5'
@@ -343,6 +343,97 @@ const canGenerate = computed(() =>
   !modelCapabilityConflict.value
 )
 
+// Recovery poll timer (cleaned up on unmount)
+let recoveryTimer = null
+
+/**
+ * Extract image URL from raw API response (handles both image and chat endpoints).
+ */
+const extractImageUrl = (rawData) => {
+  if (!rawData) return null
+  // Chat image protocol: response.choices[0].message.content may contain markdown/HTML URLs
+  const visit = (value) => {
+    if (!value) return null
+    if (typeof value === 'string') {
+      const mdMatch = value.match(/!\[[^\]]*]\(([^)]+)\)/)
+      if (mdMatch) return mdMatch[1]
+      const htmlMatch = value.match(/<img[^>]+src=["']([^"']+)["']/i)
+      if (htmlMatch) return htmlMatch[1]
+      const dataMatch = value.match(/data:image\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=]+/)
+      if (dataMatch) return dataMatch[0]
+      return null
+    }
+    if (Array.isArray(value)) {
+      for (const item of value) { const r = visit(item); if (r) return r }
+      return null
+    }
+    if (typeof value === 'object') {
+      if (value.image_url?.url) return value.image_url.url
+      if (value.url) return value.url
+      if (value.b64_json) return `data:image/png;base64,${value.b64_json}`
+      if (value.text) { const r = visit(value.text); if (r) return r }
+      if (value.content) { const r = visit(value.content); if (r) return r }
+      if (value.data) { const r = visit(value.data); if (r) return r }
+      if (value.choices) { const r = visit(value.choices); if (r) return r }
+      if (value.message) { const r = visit(value.message); if (r) return r }
+    }
+    return null
+  }
+  return visit(rawData)
+}
+
+/**
+ * Apply a recovered result to the output image node.
+ * Handles asset persistence the same way as the normal generate path.
+ */
+const applyRecoveredResult = async (outputId, rawData) => {
+  const imageUrl = extractImageUrl(rawData)
+  if (!imageUrl || !outputId) return
+
+  const imageData = {
+    loading: false,
+    error: '',
+    label: '文生图',
+    updatedAt: Date.now(),
+    finishedAt: Date.now()
+  }
+
+  // Persist URL as local asset
+  if (!imageUrl.startsWith('data:') && !imageUrl.startsWith('blob:')) {
+    try {
+      const projectId = currentProjectId.value || 'canvas-default'
+      const resp = await fetch(imageUrl)
+      const blob = await resp.blob()
+      const dataUrl = await new Promise((resolve) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(reader.result)
+        reader.readAsDataURL(blob)
+      })
+      const asset = await saveAsset(dataUrl, projectId)
+      if (asset?.assetPath) {
+        imageData.assetPath = asset.assetPath
+        imageData.url = dataUrl
+      } else {
+        imageData.url = imageUrl
+      }
+    } catch {
+      imageData.url = imageUrl
+    }
+  } else {
+    imageData.url = imageUrl
+    if (imageUrl.startsWith('data:')) {
+      try {
+        const projectId = currentProjectId.value || 'canvas-default'
+        const asset = await saveAsset(imageUrl, projectId)
+        if (asset?.assetPath) imageData.assetPath = asset.assetPath
+      } catch { /* keep data URL */ }
+    }
+  }
+
+  updateNode(outputId, imageData)
+  updateNode(props.id, { executed: true, outputNodeId: outputId, updatedAt: Date.now() })
+}
+
 // Initialize on mount | 挂载时初始化
 onMounted(async () => {
   // 检查当前模型是否在可用模型列表中
@@ -361,21 +452,59 @@ onMounted(async () => {
   // Recover image generation task after page refresh
   const runningTask = getTaskByNodeId(props.id).value
   if (runningTask?.status === 'running' && runningTask.taskId) {
-    const pendingResult = await ipcGetPendingResult(runningTask.taskId)
-    if (pendingResult?.ok && pendingResult.data) {
-      updateTask(runningTask.id, { status: 'completed' })
-      removeTask(runningTask.id)
-      // Apply the recovered result to connected output image node
-      const outputId = runningTask.outputNodeId || props.data?.outputNodeId
-      if (outputId) {
-        updateNode(outputId, {
-          loading: false,
-          label: '文生图',
-          recoveredResult: pendingResult.data,
-          updatedAt: Date.now()
-        })
-      }
+    const outputId = runningTask.outputNodeId || props.data?.outputNodeId
+
+    // Mark output node as loading while we poll for result
+    if (outputId) {
+      updateNode(outputId, { loading: true, error: '', updatedAt: Date.now() })
     }
+
+    // Poll for pending result every 3 seconds, max 30 minutes
+    let attempts = 0
+    const maxAttempts = 600 // 600 * 3s = 30 min
+    recoveryTimer = setInterval(async () => {
+      attempts++
+      try {
+        const pendingResult = await ipcGetPendingResult(runningTask.taskId)
+        if (pendingResult?.ok && pendingResult.data) {
+          clearInterval(recoveryTimer)
+          recoveryTimer = null
+          updateTask(runningTask.id, { status: 'completed' })
+          removeTask(runningTask.id)
+          await applyRecoveredResult(outputId, pendingResult.data)
+          window.$message?.success('后台图片生成任务已完成，结果已恢复到画布')
+        } else if (attempts >= maxAttempts) {
+          clearInterval(recoveryTimer)
+          recoveryTimer = null
+          updateTask(runningTask.id, { status: 'failed', error: '恢复超时，主进程未返回结果' })
+          removeTask(runningTask.id)
+          if (outputId) {
+            updateNode(outputId, {
+              loading: false,
+              error: '后台生成结果恢复超时',
+              updatedAt: Date.now()
+            })
+          }
+        }
+        // pendingResult is null → main process hasn't finished yet, keep polling
+      } catch {
+        // IPC error (main process crashed?) — stop polling
+        clearInterval(recoveryTimer)
+        recoveryTimer = null
+        updateTask(runningTask.id, { status: 'failed', error: '恢复时 IPC 通信失败' })
+        removeTask(runningTask.id)
+        if (outputId) {
+          updateNode(outputId, { loading: false, error: '恢复结果时发生错误', updatedAt: Date.now() })
+        }
+      }
+    }, 3000)
+  }
+})
+
+onUnmounted(() => {
+  if (recoveryTimer) {
+    clearInterval(recoveryTimer)
+    recoveryTimer = null
   }
 })
 
@@ -756,6 +885,9 @@ const handleGenerate = async (mode = 'auto') => {
   }
   
   createdImageNodeId.value = imageNodeId
+
+  // Persist outputNodeId immediately so recovery after refresh can find the output node
+  updateNode(props.id, { outputNodeId: imageNodeId, updatedAt: Date.now() })
 
   // Force Vue Flow to recalculate node dimensions | 强制 Vue Flow 重新计算节点尺寸
   setTimeout(() => {
