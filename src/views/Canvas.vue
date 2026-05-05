@@ -460,8 +460,26 @@
         </div>
       </aside>
 
+      <!-- Workspace launchers | 默认只保留小入口，避免遮挡画布 -->
+      <div class="absolute left-20 top-4 z-20 flex flex-wrap gap-2">
+        <button
+          v-if="!showStudioCockpit"
+          class="rounded-full border border-emerald-300/25 bg-slate-950/75 px-3 py-2 text-xs font-semibold text-emerald-100 shadow-xl backdrop-blur hover:bg-slate-900"
+          @click="showStudioCockpit = true"
+        >
+          AI 工作区
+        </button>
+        <button
+          v-if="!showEngineWorkspace"
+          class="rounded-full border border-cyan-300/25 bg-slate-950/75 px-3 py-2 text-xs font-semibold text-cyan-100 shadow-xl backdrop-blur hover:bg-slate-900"
+          @click="showEngineWorkspace = true"
+        >
+          Comfy / Drama
+        </button>
+      </div>
+
       <!-- Studio cockpit | AI 创作工作区主控台 -->
-      <section class="studio-cockpit absolute left-20 top-4 z-20 w-[520px] max-w-[calc(100vw-8rem)] rounded-3xl border border-emerald-400/25 bg-slate-950/[0.82] text-white backdrop-blur-xl shadow-2xl overflow-hidden">
+      <section v-if="showStudioCockpit" class="studio-cockpit absolute left-20 top-14 z-20 w-[520px] max-w-[calc(100vw-8rem)] rounded-3xl border border-emerald-400/25 bg-slate-950/[0.82] text-white backdrop-blur-xl shadow-2xl overflow-hidden">
         <div class="px-4 py-3 border-b border-white/10 bg-gradient-to-r from-emerald-500/15 via-cyan-500/10 to-transparent">
           <div class="flex items-start justify-between gap-3">
             <div>
@@ -473,7 +491,10 @@
                 </div>
               </div>
             </div>
-            <span class="shrink-0 text-[10px] px-2 py-1 rounded-full bg-emerald-400/15 text-emerald-200 border border-emerald-300/30">v0.1.46</span>
+            <div class="flex shrink-0 items-center gap-2">
+              <span class="text-[10px] px-2 py-1 rounded-full bg-emerald-400/15 text-emerald-200 border border-emerald-300/30">v0.1.47</span>
+              <button class="rounded-full border border-white/10 bg-white/[0.08] px-2 py-1 text-[10px] text-white/70 hover:bg-white/[0.14]" @click="showStudioCockpit = false">收起</button>
+            </div>
           </div>
           <div class="mt-3 grid grid-cols-4 gap-2 text-center text-[11px]">
             <div class="rounded-2xl bg-white/[0.08] px-2 py-2 border border-white/10">
@@ -523,7 +544,7 @@
         </div>
       </section>
 
-      <YufengEngineWorkspace @action="handleEngineWorkspaceAction" />
+      <YufengEngineWorkspace v-if="showEngineWorkspace" @action="handleEngineWorkspaceAction" @close="showEngineWorkspace = false" />
 
       <!-- Bottom AI composer | 底部 AI 输入：默认收起，按 Ctrl/⌘+K 呼出 -->
       <div

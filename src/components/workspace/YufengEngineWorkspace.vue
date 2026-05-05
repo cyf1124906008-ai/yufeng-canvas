@@ -7,7 +7,10 @@
           <h3 class="text-sm font-semibold">ComfyUI + Drama 原生工作区</h3>
           <span class="text-[11px] text-white/55">这里的按钮会直接创建节点、项目结构、镜头表或执行工作流。</span>
         </div>
-        <span class="rounded-full border border-emerald-300/30 bg-emerald-300/10 px-2 py-1 text-[10px] text-emerald-100">v0.1.47</span>
+        <div class="flex shrink-0 items-center gap-2">
+          <span class="rounded-full border border-emerald-300/30 bg-emerald-300/10 px-2 py-1 text-[10px] text-emerald-100">v0.1.47</span>
+          <button class="rounded-full border border-white/10 bg-white/[0.08] px-2 py-1 text-[10px] text-white/70 hover:bg-white/[0.14]" @click="$emit('close')">收起</button>
+        </div>
       </div>
       <div class="mt-3 grid grid-cols-2 gap-2">
         <button
@@ -164,7 +167,7 @@ import { useComfyStore } from '@/stores/comfy'
 import { COMFY_WRAPPER_TEMPLATES, getComfyShellSummary } from '@/integrations/comfy/yufengComfyShell'
 import { DRAMA_STATUS_LABELS, summarizeDramaProject } from '@/integrations/drama/dramaWorkspace'
 
-const emit = defineEmits(['action'])
+const emit = defineEmits(['action', 'close'])
 
 const activeTab = ref('comfy')
 const comfyStore = useComfyStore()
