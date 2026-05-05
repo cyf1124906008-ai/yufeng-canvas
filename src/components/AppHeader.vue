@@ -85,6 +85,7 @@ import {
 } from '@vicons/ionicons5'
 import { isDark, toggleTheme } from '../stores/theme'
 import { getGithubUrl } from '../config/distribution'
+import { backupUserDataNow } from '../utils/appDataBackup'
 import SupportModal from './SupportModal.vue'
 
 defineProps({
@@ -210,7 +211,7 @@ const showAvailableDialog = (status) => {
   if (status.manual) {
     dialog.info({
       title: `发现新版本 ${status.latestVersion}`,
-      content: '当前运行环境只能打开下载页。安装 0.1.17 或更新版本后，后续版本可在客户端内直接下载并重启安装。',
+      content: '当前运行环境只能打开下载页。安装桌面版后，后续版本可在客户端内直接下载并重启安装。',
       positiveText: '打开下载页',
       negativeText: '稍后',
       onPositiveClick: () => window.desktopApp?.openExternal?.(status.downloadUrl || releaseUrl.value)
@@ -223,7 +224,7 @@ const showAvailableDialog = (status) => {
     content: `当前版本 ${status.currentVersion}。客户端会在后台下载更新，下载完成后提示重启安装。`,
     positiveText: '后台下载',
     negativeText: '稍后',
-    onPositiveClick: () => downloadUpdate()
+    onPositiveClick: () => showBackupPrompt(() => downloadUpdate())
   })
 }
 
@@ -235,10 +236,24 @@ const showDownloadedDialog = (status) => {
 
   dialog.success({
     title: '更新已下载完成',
-    content: `新版本 ${status.latestVersion || ''} 已准备好。点击后应用会自动关闭并静默安装，不再弹安装向导；如果选择稍后，退出应用时也会自动安装。`,
-    positiveText: '重启并安装',
+    content: `新版本 ${status.latestVersion || ''} 已准备好。建议先备份当前数据，再重启安装。`,
+    positiveText: '备份并安装',
     negativeText: '稍后',
-    onPositiveClick: () => installUpdate()
+    onPositiveClick: () => showBackupPrompt(() => installUpdate())
+  })
+}
+
+const showBackupPrompt = (onConfirmed) => {
+  dialog.warning({
+    title: '更新前备份提醒',
+    content: '建议先备份当前本地项目数据和生成素材，再继续更新。大体积图片/视频素材建议同时备份素材目录。',
+    positiveText: '我已备份，继续更新',
+    negativeText: '立即备份',
+    onPositiveClick: () => onConfirmed(),
+    onNegativeClick: () => {
+      backupUserDataNow()
+      window.$message?.success('数据备份已保存到本地。如需导出文件，可在设置 > API Settings > 数据迁移/备份 中手动导出。')
+    }
   })
 }
 

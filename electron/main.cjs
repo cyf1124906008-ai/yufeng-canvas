@@ -223,7 +223,7 @@ const checkLatestReleaseManually = async () => {
 const setupAutoUpdater = () => {
   if (!autoUpdater) return
   autoUpdater.autoDownload = true
-  autoUpdater.autoInstallOnAppQuit = true
+  autoUpdater.autoInstallOnAppQuit = false
   autoUpdater.allowPrerelease = false
   setUpdaterSource()
 
@@ -863,12 +863,14 @@ app.whenReady().then(() => {
   ipcMain.handle('app:load-user-data-backup', () => readJsonFile(getUserDataBackupPath()))
 
   ipcMain.handle('app:export-user-data', async (_event, snapshot) => {
+    const now = new Date()
+    const timestamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`
     const defaultPath = path.join(
       app.getPath('documents'),
-      `YUFENG-Canvas-Data-${new Date().toISOString().slice(0, 10)}.json`
+      `yufeng-canvas-backup-${timestamp}.json`
     )
     const result = await dialog.showSaveDialog({
-      title: '导出 YUFENG Canvas 创作与配置',
+      title: '导出 YUFENG Canvas 备份',
       defaultPath,
       filters: [
         { name: 'YUFENG Canvas 数据包', extensions: ['json'] }

@@ -155,20 +155,23 @@
 
           <div class="data-backup-card">
             <div>
-              <strong>创作文件、历史记录和 API 配置不会跟着安装包丢失</strong>
+              <strong>数据备份与恢复</strong>
               <p>
-                当前版本会自动在本机数据目录保留备份。换电脑、重装系统或切换安装包时，也可以手动导出 / 导入完整数据包。
+                备份包含：项目列表、画布数据、聊天记录、工作流、Drama 数据、本地资产索引、生成图片/视频关联信息。
               </p>
               <p class="data-backup-warning">
-                数据包会包含 API Key，请只保存在自己的电脑或可信位置。
+                此备份包含项目索引；大体积图片/视频素材建议同时备份素材目录。数据包会包含 API Key，请只保存在自己的电脑或可信位置。
               </p>
             </div>
             <div class="data-backup-actions">
               <n-button secondary :loading="dataExporting" @click="handleExportData">
-                导出创作与配置
+                导出备份
               </n-button>
               <n-button type="primary" secondary :loading="dataImporting" @click="handleImportData">
-                导入创作与配置
+                导入备份
+              </n-button>
+              <n-button v-if="isDesktop" secondary @click="openAssetsFolder">
+                打开本地素材目录
               </n-button>
             </div>
           </div>
@@ -762,6 +765,17 @@ const handleClear = () => {
   modelStore.clearApiConfigByProvider(formData.provider)
   syncForm()
   void backupUserDataNow()
+}
+
+const isDesktop = computed(() => !!window.desktopApp?.comfy)
+
+const openAssetsFolder = async () => {
+  if (window.desktopApp?.comfy?.openFolder) {
+    await window.desktopApp.comfy.openFolder('root')
+  } else if (window.desktopApp?.getUserDataPath) {
+    const path = await window.desktopApp.getUserDataPath()
+    window.$message?.info(`素材目录：${path}\\yufeng-canvas\\assets`)
+  }
 }
 </script>
 

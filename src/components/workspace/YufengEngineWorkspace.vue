@@ -8,7 +8,7 @@
           <span class="text-[11px] text-white/55">这里的按钮会直接创建节点、项目结构、镜头表或执行工作流。</span>
         </div>
         <div class="flex shrink-0 items-center gap-2">
-          <span class="rounded-full border border-emerald-300/30 bg-emerald-300/10 px-2 py-1 text-[10px] text-emerald-100">v0.1.47</span>
+          <span class="rounded-full border border-emerald-300/30 bg-emerald-300/10 px-2 py-1 text-[10px] text-emerald-100">v1.0.0</span>
           <button class="rounded-full border border-white/10 bg-white/[0.08] px-2 py-1 text-[10px] text-white/70 hover:bg-white/[0.14]" @click="$emit('close')">收起</button>
         </div>
       </div>
