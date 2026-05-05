@@ -171,9 +171,6 @@ const handleUpdateStatus = (status) => {
   }
 
   if (status?.status === 'available') {
-    if (status.silent && status.initiatedBy === 'auto') {
-      return
-    }
     showAvailableDialog(status)
     return
   }
@@ -321,12 +318,12 @@ const installUpdate = async () => {
 
 const handleUpdateClick = () => {
   if (updateStatus.value.status === 'available') {
-    downloadUpdate()
+    showBackupPrompt(() => downloadUpdate())
     return
   }
 
   if (updateStatus.value.status === 'downloaded') {
-    installUpdate()
+    showBackupPrompt(() => installUpdate())
     return
   }
 

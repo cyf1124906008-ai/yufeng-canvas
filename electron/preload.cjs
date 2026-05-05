@@ -42,5 +42,9 @@ contextBridge.exposeInMainWorld('desktopApp', {
   assets: {
     saveDataUrl: (dataUrl, projectId) => ipcRenderer.invoke('app:assets:save-data-url', dataUrl, projectId),
     readAsDataUrl: (assetPath) => ipcRenderer.invoke('app:assets:read-as-data-url', assetPath)
+  },
+  imageGen: {
+    generate: (config) => ipcRenderer.invoke('app:image:generate', config),
+    getPendingResult: (taskId) => ipcRenderer.invoke('app:image:get-pending-result', taskId)
   }
 })

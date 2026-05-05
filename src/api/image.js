@@ -87,8 +87,21 @@ export const buildImageEditFormData = async (params) => {
   return formData
 }
 
-export const generateImageWithChat = (data, options = {}) => {
+export const generateImageWithChat = async (data, options = {}) => {
   const { endpoint = '/v1/chat/completions' } = options
+
+  const ipc = window.desktopApp?.imageGen
+  if (ipc) {
+    const provider = getRuntimeProvider()
+    const apiKey = getRuntimeApiKey(provider, 'image')
+    const baseUrl = getRuntimeBaseUrl(provider, 'image')
+    const fullUrl = /^https?:\/\//.test(endpoint) ? endpoint : `${baseUrl}${endpoint}`
+
+    const headers = { 'Content-Type': 'application/json' }
+    if (apiKey) headers.Authorization = `Bearer ${apiKey}`
+
+    return ipcGenerateImage(fullUrl, headers, data, `chat_img_${Date.now()}`)
+  }
 
   return request({
     url: endpoint,
@@ -147,12 +160,53 @@ const requestImageEdit = async (endpoint, formData) => {
   return payload
 }
 
+/**
+ * Route a JSON image generation request through Electron main process.
+ * Falls back to renderer-side request when not in Electron desktop.
+ */
+const ipcGenerateImage = async (fullUrl, headers, body, taskId) => {
+  const ipc = window.desktopApp?.imageGen
+  if (!ipc) return null
+
+  const result = await ipc.generate({
+    url: fullUrl,
+    method: 'POST',
+    headers,
+    body,
+    timeout: 240000,
+    taskId
+  })
+
+  if (!result.ok) {
+    const error = new Error(result.error)
+    error.status = result.status
+    error.response = { status: result.status, data: result.data }
+    throw error
+  }
+
+  return result.data
+}
+
 // 鐢熸垚鍥剧墖
-export const generateImage = (data, options = {}) => {
+export const generateImage = async (data, options = {}) => {
   const { endpoint = '/images/generations' } = options
 
   if (typeof FormData !== 'undefined' && data instanceof FormData) {
     return requestImageEdit(endpoint, data)
+  }
+
+  // Route through main process when in Electron desktop for stability
+  const ipc = window.desktopApp?.imageGen
+  if (ipc) {
+    const provider = getRuntimeProvider()
+    const apiKey = getRuntimeApiKey(provider, 'image')
+    const baseUrl = getRuntimeBaseUrl(provider, 'image')
+    const fullUrl = /^https?:\/\//.test(endpoint) ? endpoint : `${baseUrl}${endpoint}`
+
+    const headers = { 'Content-Type': 'application/json' }
+    if (apiKey) headers.Authorization = `Bearer ${apiKey}`
+
+    return ipcGenerateImage(fullUrl, headers, data, `img_${Date.now()}`)
   }
 
   return request({

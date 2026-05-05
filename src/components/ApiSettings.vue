@@ -648,18 +648,36 @@ const handleSyncModels = async () => {
   modelSyncLoading.value = true
   modelSyncSummary.value = ''
 
-  try {
-    const response = await fetch(`${baseUrl}/v1/models`, {
-      method: 'GET',
-      headers: {
-        Authorization: `Bearer ${apiKey}`
-      }
-    })
-    const text = await response.text()
-    const payload = text ? JSON.parse(text) : {}
+  const modelPaths = ['/v1/models', '/models', '/api/v1/models']
 
-    if (!response.ok) {
-      const message = payload?.error?.message || payload?.message || `获取模型失败：${response.status}`
+  try {
+    let payload = null
+    let lastError = null
+
+    for (const path of modelPaths) {
+      try {
+        const response = await fetch(`${baseUrl}${path}`, {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${apiKey}`
+          }
+        })
+        const text = await response.text()
+
+        if (!response.ok) {
+          lastError = text ? JSON.parse(text) : {}
+          continue
+        }
+
+        payload = text ? JSON.parse(text) : {}
+        break
+      } catch {
+        continue
+      }
+    }
+
+    if (!payload) {
+      const message = lastError?.error?.message || lastError?.message || `获取模型失败：尝试了 ${modelPaths.length} 个路径均未成功`
       throw new Error(message)
     }
 

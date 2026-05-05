@@ -198,6 +198,8 @@ import { ChevronDownOutline, ChevronForwardOutline, CopyOutline, TrashOutline, R
 import { useImageGeneration } from '../../hooks'
 import { updateNode, addNode, addEdge, nodes, edges, duplicateNode, removeNode, currentProjectId } from '../../stores/canvas'
 import { saveAsset } from '../../integrations/comfy/api'
+import { registerTask, updateTask, getTaskByNodeId, removeTask } from '../../stores/tasks'
+import { ipcGetPendingResult } from '../../integrations/imageGeneration/client'
 import NodeHandleMenu from './NodeHandleMenu.vue'
 import { useModelStore } from '../../stores/pinia'
 import { getModelSizeOptions, getModelQualityOptions, getModelConfig } from '../../stores/models'
@@ -342,18 +344,37 @@ const canGenerate = computed(() =>
 )
 
 // Initialize on mount | 挂载时初始化
-onMounted(() => {
+onMounted(async () => {
   // 检查当前模型是否在可用模型列表中
   const availableModels = modelStore.availableImageModels
   const isModelAvailable = availableModels.some(m => m.key === localModel.value)
 
   if (!localModel.value || !isModelAvailable) {
-    // 只允许从图片模型列表里选择，避免把视频/文本模型误发到图片接口产生扣费。
     localModel.value = availableModels[0]?.key || ''
     if (localModel.value) {
       updateNode(props.id, { model: localModel.value })
     } else if (props.data?.model) {
       updateNode(props.id, { model: '' })
+    }
+  }
+
+  // Recover image generation task after page refresh
+  const runningTask = getTaskByNodeId(props.id).value
+  if (runningTask?.status === 'running' && runningTask.taskId) {
+    const pendingResult = await ipcGetPendingResult(runningTask.taskId)
+    if (pendingResult?.ok && pendingResult.data) {
+      updateTask(runningTask.id, { status: 'completed' })
+      removeTask(runningTask.id)
+      // Apply the recovered result to connected output image node
+      const outputId = props.data?.outputNodeId
+      if (outputId) {
+        updateNode(outputId, {
+          loading: false,
+          label: '文生图',
+          recoveredResult: pendingResult.data,
+          updatedAt: Date.now()
+        })
+      }
     }
   }
 })
@@ -767,7 +788,15 @@ const handleGenerate = async (mode = 'auto') => {
       params.image = refImages
     }
 
-    const result = await generate(params)
+    const bgTaskId = registerTask({ type: 'image', nodeId: imageNodeId, projectId: currentProjectId.value || '' })
+
+    let result
+    try {
+      result = await generate(params)
+    } catch (genErr) {
+      if (bgTaskId) { updateTask(bgTaskId, { status: 'failed', error: genErr.message }); removeTask(bgTaskId) }
+      throw genErr
+    }
 
     // Update image node with generated URL | 更新图片节点 URL
     if (result && result.length > 0) {
@@ -816,9 +845,10 @@ const handleGenerate = async (mode = 'auto') => {
       }
 
       updateNode(imageNodeId, imageData)
-      
+
       // Mark this config node as executed | 标记配置节点已执行
       updateNode(props.id, { executed: true, outputNodeId: imageNodeId })
+      if (bgTaskId) { updateTask(bgTaskId, { status: 'completed' }); removeTask(bgTaskId) }
     }
     // Success bubble already shown by useApi
   } catch (err) {

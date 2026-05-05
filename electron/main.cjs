@@ -15,6 +15,7 @@ const comfyProcess = require('./comfy/process.cjs')
 const comfyPaths = require('./comfy/paths.cjs')
 const comfyExecutor = require('./comfy/executor.cjs')
 const assetManager = require('./assets/manager.cjs')
+const imageGeneration = require('./imageGeneration.cjs')
 
 const rendererUrl = process.env.ELECTRON_RENDERER_URL
 const repo = 'cyf1124906008-ai/yufeng-canvas'
@@ -222,7 +223,7 @@ const checkLatestReleaseManually = async () => {
 
 const setupAutoUpdater = () => {
   if (!autoUpdater) return
-  autoUpdater.autoDownload = true
+  autoUpdater.autoDownload = false
   autoUpdater.autoInstallOnAppQuit = false
   autoUpdater.allowPrerelease = false
   setUpdaterSource()
@@ -983,6 +984,10 @@ app.whenReady().then(() => {
   // Asset Persistence IPC
   ipcMain.handle('app:assets:save-data-url', (_event, dataUrl, projectId) => assetManager.saveDataUrl(dataUrl, projectId))
   ipcMain.handle('app:assets:read-as-data-url', (_event, assetPath) => assetManager.readAsDataUrl(assetPath))
+
+  // Image Generation IPC (main-process execution for stability)
+  ipcMain.handle('app:image:generate', (_event, config) => imageGeneration.executeImageGeneration(config))
+  ipcMain.handle('app:image:get-pending-result', (_event, taskId) => imageGeneration.getPendingResult(taskId))
 
   createWindow()
   startLocalApiServer()

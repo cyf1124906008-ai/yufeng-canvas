@@ -79,7 +79,8 @@ import { ref, computed } from 'vue'
 import { NIcon } from 'naive-ui'
 import { CloseOutline } from '@vicons/ionicons5'
 import { splitImage } from '@/utils/imageSplitter'
-import { addNode, addEdge, nodes } from '@/stores/canvas'
+import { addNode, addEdge, nodes, currentProjectId } from '@/stores/canvas'
+import { saveAsset } from '@/integrations/comfy/api'
 
 const props = defineProps({
   show: Boolean,
@@ -100,32 +101,44 @@ const splitResults = ref([])
 const splitting = ref(false)
 
 const gridOptions = [
-  { value: '2x2', label: '2x2' },
-  { value: '3x3', label: '3x3' },
-  { value: '4x4', label: '4x4' }
+  { value: '2x2', label: '2×2' },
+  { value: '3x3', label: '3×3' },
+  { value: '4x4', label: '4×4' },
+  { value: '1x3', label: '横三格' },
+  { value: '3x1', label: '竖三格' }
 ]
 
-const gridN = computed(() => parseInt(selectedGrid.value) || 3)
+const gridN = computed(() => {
+  const [r, c] = selectedGrid.value.split('x').map(Number)
+  return Math.max(r, c)
+})
 
 const gridOverlayStyle = computed(() => {
-  const n = gridN.value
-  const gapPercent = 100 / n
-  const lines = []
-  for (let i = 1; i < n; i++) {
-    const pos = gapPercent * i
-    lines.push(`transparent ${pos - 0.5}%, rgba(59,130,246,0.5) ${pos - 0.5}%, rgba(59,130,246,0.5) ${pos + 0.5}%, transparent ${pos + 0.5}%`)
+  const [rows, cols] = selectedGrid.value.split('x').map(Number)
+  const colPercent = 100 / cols
+  const rowPercent = 100 / rows
+  const colLines = []
+  for (let i = 1; i < cols; i++) {
+    const pos = colPercent * i
+    colLines.push(`transparent ${pos - 0.5}%, rgba(59,130,246,0.5) ${pos - 0.5}%, rgba(59,130,246,0.5) ${pos + 0.5}%, transparent ${pos + 0.5}%`)
   }
-  const gradH = lines.join(',')
-  const gradV = lines.join(',')
+  const rowLines = []
+  for (let i = 1; i < rows; i++) {
+    const pos = rowPercent * i
+    rowLines.push(`transparent ${pos - 0.5}%, rgba(59,130,246,0.5) ${pos - 0.5}%, rgba(59,130,246,0.5) ${pos + 0.5}%, transparent ${pos + 0.5}%`)
+  }
+  const colGrad = colLines.length ? `linear-gradient(to right, ${colLines.join(',')})` : 'none'
+  const rowGrad = rowLines.length ? `linear-gradient(to bottom, ${rowLines.join(',')})` : 'none'
   return {
-    background: `linear-gradient(to right, ${gradH}), linear-gradient(to bottom, ${gradV})`,
+    background: `${colGrad}, ${rowGrad}`,
     backgroundSize: '100% 100%'
   }
 })
 
-const resultGridStyle = computed(() => ({
-  gridTemplateColumns: `repeat(${gridN.value}, minmax(0, 1fr))`
-}))
+const resultGridStyle = computed(() => {
+  const [, cols] = selectedGrid.value.split('x').map(Number)
+  return { gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }
+})
 
 async function handleSplit() {
   if (!sourceUrl.value) return
@@ -140,7 +153,7 @@ async function handleSplit() {
   }
 }
 
-function handleAddToCanvas() {
+async function handleAddToCanvas() {
   if (!splitResults.value.length) return
 
   const sourceNode = props.sourceNodeId
@@ -148,18 +161,34 @@ function handleAddToCanvas() {
     : null
   const baseX = (sourceNode?.position?.x ?? 100) + 400
   const baseY = sourceNode?.position?.y ?? 100
-  const n = gridN.value
+  const [rows, cols] = selectedGrid.value.split('x').map(Number)
   const spacing = 280
 
   for (const item of splitResults.value) {
     const offsetX = item.col * spacing
     const offsetY = item.row * spacing
-    const imageNodeId = addNode('image', { x: baseX + offsetX, y: baseY + offsetY }, {
+
+    // Save each split result as a local asset
+    const imageData = {
       label: `拆图 ${item.label}`,
-      url: item.dataUrl,
       createdAt: Date.now(),
       updatedAt: Date.now()
-    })
+    }
+
+    try {
+      const projectId = currentProjectId.value || 'canvas-default'
+      const asset = await saveAsset(item.dataUrl, projectId)
+      if (asset?.assetPath) {
+        imageData.assetPath = asset.assetPath
+        imageData.url = item.dataUrl
+      } else {
+        imageData.url = item.dataUrl
+      }
+    } catch {
+      imageData.url = item.dataUrl
+    }
+
+    const imageNodeId = addNode('image', { x: baseX + offsetX, y: baseY + offsetY }, imageData)
 
     if (props.sourceNodeId) {
       addEdge({
