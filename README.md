@@ -20,6 +20,7 @@
 
 <p align="center">
   <img alt="Platform" src="https://img.shields.io/badge/platform-Windows-0f172a?style=flat-square" />
+  <img alt="Release" src="https://img.shields.io/github/v/release/cyf1124906008-ai/yufeng-canvas?style=flat-square&label=release" />
   <img alt="License" src="https://img.shields.io/badge/license-MIT-16a34a?style=flat-square" />
   <img alt="Vue" src="https://img.shields.io/badge/Vue-3-42b883?style=flat-square" />
   <img alt="Electron" src="https://img.shields.io/badge/Electron-37-00a3ff?style=flat-square" />
@@ -50,7 +51,16 @@
 | 灵感案例库 | 集成 GPT Image 2 提示词案例卡片，点击即可带入画布继续二创。 |
 | 多 Key / 多模型 | 文本、图片、视频可以分别配置 API Key、Base URL、Provider 和模型名。 |
 | 运行日志 | 记录请求地址、任务 ID、状态、错误和原始响应，方便排查供应商问题。 |
-| 客户端更新 | 安装 v0.1.17 及以上版本后，可在应用右上角检查 GitHub 最新版本。 |
+| 客户端更新 | v1.0.0 起更新前会提示先备份本地项目和素材，避免覆盖安装前数据丢失。 |
+
+## v1.0.0 正式版重点
+
+- **云端模型优先**：通过 API Key + Base URL 接入 OpenAI 兼容、DataEyes、火山/豆包等供应商，不要求普通用户部署本地模型。
+- **ComfyUI 风格专业参数**：把 Prompt、Negative Prompt、Seed、Steps、CFG、Sampler、Scheduler、LoRA、ControlNet、参考图、重绘、放大等概念包装成中文配置。
+- **复杂工作流库**：新增角色一致性、短剧分镜、电商广告、局部重绘、图生视频、九宫格拆图等更贴近生产的工作流。
+- **Drama 工作区**：短剧项目、角色、场景、分镜、首帧和视频任务进入同一个 Canvas 项目结构。
+- **稳定生成任务**：图片/视频/Comfy 任务结果尽量保存为本地资产；图片生成前端等待超时后，主进程继续等待供应商结果。
+- **更新前备份**：检查到新版和安装新版前都会提示备份，本地项目数据和生成素材不静默覆盖。
 
 ## 产品预览
 
@@ -86,6 +96,8 @@
 4. 在首页直接对话，或点击 `开始创作` 进入节点画布。
 
 如果浏览器拦截直接下载，可以打开 [Latest Release](https://github.com/cyf1124906008-ai/yufeng-canvas/releases/latest) 手动下载。覆盖安装即可，不需要先卸载。
+
+> 升级提示：从旧版本升级到 v1.0.0 前，建议先在设置页导出本地数据，并单独备份本地素材目录。新版客户端也会在自动更新前弹出备份确认。
 
 ### 推荐默认服务
 
@@ -133,7 +145,7 @@ YUFENG Canvas 不内置你的 Key，也不会把 Key 打包进安装包。每个
 
 ### 更新必须重新下载安装包吗？
 
-从 `v0.1.17` 开始支持客户端检查更新。已经安装 `v0.1.17` 或更高版本的用户，可以在应用右上角点击更新按钮检查 GitHub 最新版本。更早版本需要手动安装一次新版。
+从 `v1.0.0` 开始，客户端检查到新版后不会静默下载或安装，会先提示用户备份本地项目数据和生成素材。已经安装旧版的用户，可以手动下载 v1.0.0 覆盖安装一次，后续再使用右上角更新入口。
 
 ## 本地开发
 
@@ -159,6 +171,7 @@ pnpm desktop:dist
 3. 提交源码并推送到 GitHub。
 4. 创建 GitHub Release，上传安装包、`.blockmap`、`latest.yml`。
 5. 同时上传稳定文件名 `YUFENG-Canvas-Latest.exe`，README 的直接下载入口会始终指向最新版。
+6. Release 正文可以直接使用 [docs/releases/v1.0.0.md](docs/releases/v1.0.0.md) 作为模板。
 
 ## 技术栈
 
