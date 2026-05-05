@@ -46,7 +46,9 @@ export async function doInstall() {
 
 export async function doInstallDependencies() {
   if (!isDesktop.value) return
-  return await comfyInstallDependencies()
+  const result = await comfyInstallDependencies()
+  await refreshStatus()
+  return result
 }
 
 export async function scanModels() {
@@ -58,12 +60,16 @@ export async function scanModels() {
 
 export async function doStart() {
   if (!isDesktop.value) return
-  await comfyStart()
+  const s = await comfyStart()
+  if (isState(s)) state.value = s
+  return s
 }
 
 export async function doStop() {
   if (!isDesktop.value) return
-  await comfyStop()
+  const s = await comfyStop()
+  if (isState(s)) state.value = s
+  return s
 }
 
 export async function doTestConnection(baseUrl) {

@@ -197,8 +197,28 @@
                 <n-icon :size="16"><AddOutline /></n-icon>
                 直接进入空白画布
               </button>
+              <button class="primary-action small hot" @click.stop="createIntegratedProject('dramaShots')">
+                一键短剧 8 分镜
+              </button>
+              <button class="secondary-action small" @click.stop="createIntegratedProject('comfyWrapper')">
+                内置 Comfy 工作流
+              </button>
               <button class="secondary-action small" @click.stop="scrollToProjects">
                 我的项目
+              </button>
+            </div>
+
+            <div class="integrated-launch-grid" aria-label="YUFENG 内置生产线">
+              <button
+                v-for="card in integratedLaunchCards"
+                :key="card.id"
+                class="integrated-launch-card"
+                @click.stop="createIntegratedProject(card.id)"
+              >
+                <span>{{ card.badge }}</span>
+                <strong>{{ card.title }}</strong>
+                <small>{{ card.desc }}</small>
+                <b>{{ card.action }}</b>
               </button>
             </div>
 
@@ -207,6 +227,11 @@
                 <p>DIRECT CHAT</p>
                 <h3>先把创意聊清楚。</h3>
                 <span>让文本模型帮你拆方向、写提示词、整理分镜；需要图片或视频时，再一键进入节点画布。</span>
+              </div>
+
+              <div class="integrated-inline-actions">
+                <button @click.stop="createIntegratedProject('dramaShots')">内置短剧项目：生成 8 分镜</button>
+                <button @click.stop="createIntegratedProject('comfyWrapper')">内置 ComfyUI：创建可运行包装节点</button>
               </div>
 
               <div class="chat-thread">
@@ -886,6 +911,7 @@ import { runtimeLogs, clearRuntimeLogs } from '../stores/canvas'
 import { useModelStore } from '../stores/pinia'
 import { useChat, useImageGeneration } from '../hooks'
 import { getModelSizeOptions } from '../stores/models'
+import { PROJECT_TYPES } from '../config/projectSchema'
 import ApiSettings from '../components/ApiSettings.vue'
 import AppHeader from '../components/AppHeader.vue'
 import GuidedTour from '../components/GuidedTour.vue'
@@ -1109,6 +1135,36 @@ let heroTypeTimer = null
 const onboardingStorageKey = 'yufeng-canvas-onboarding-v2'
 const homeTourStorageKey = 'yufeng-canvas-home-tour-v1'
 const chatHistoryStorageKey = 'yufeng-canvas-chat-history-v1'
+const integratedLaunchCards = [
+  {
+    id: 'comfyWrapper',
+    badge: '内置 ComfyUI',
+    title: '本地文生图包装',
+    desc: '直接在画布创建可编辑、可运行的 Comfy 简化节点，不跳网页。',
+    action: '创建 Comfy 节点'
+  },
+  {
+    id: 'dramaShots',
+    badge: 'Huobao Drama',
+    title: '短剧项目 + 8 分镜',
+    desc: '创建角色库、场景库、镜头表、首帧节点、视频节点和连线。',
+    action: '生成短剧结构'
+  },
+  {
+    id: 'productLaunch',
+    badge: 'YUFENG Workflow',
+    title: '产品发布全套物料',
+    desc: '产品图、广告海报、社媒物料、TVC 首帧一次搭好。',
+    action: '搭建生产链'
+  },
+  {
+    id: 'image2video',
+    badge: 'Video Pipeline',
+    title: '首帧到视频链路',
+    desc: '图片生成节点连接视频生成节点，适合短视频和分镜预演。',
+    action: '创建视频链路'
+  }
+]
 const recentHomeProjects = computed(() => projects.value.slice(0, 4))
 const inspirationCategories = computed(() => {
   const categoryStats = inspirationCases.reduce((map, item) => {
@@ -2046,6 +2102,39 @@ const ensureConfigured = () => {
 
 const createNewProject = () => {
   enterBlankCanvas()
+}
+
+const createIntegratedProject = (actionId) => {
+  const specs = {
+    comfyWrapper: {
+      name: 'Comfy 本地工作流',
+      type: PROJECT_TYPES.IMAGE,
+      action: 'comfyWrapper'
+    },
+    dramaShots: {
+      name: '短剧 8 分镜项目',
+      type: PROJECT_TYPES.DRAMA,
+      action: 'dramaShots'
+    },
+    productLaunch: {
+      name: '产品发布全套物料',
+      type: PROJECT_TYPES.MIXED,
+      action: 'productLaunch'
+    },
+    image2video: {
+      name: '首帧到视频链路',
+      type: PROJECT_TYPES.VIDEO,
+      action: 'image2video'
+    }
+  }
+  const spec = specs[actionId] || specs.comfyWrapper
+  const id = createProject(spec.name, spec.type)
+  sessionStorage.setItem('yufeng-canvas-initial-action', JSON.stringify({
+    action: spec.action,
+    createdAt: Date.now()
+  }))
+  sessionStorage.removeItem('ai-canvas-initial-prompt')
+  router.push(`/canvas/${id}`)
 }
 
 const enterBlankCanvas = () => {
@@ -3804,6 +3893,111 @@ onUnmounted(() => {
 .chat-home,
 .create-home {
   position: relative;
+}
+
+.integrated-launch-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 14px 4px 18px;
+}
+
+.integrated-launch-card {
+  position: relative;
+  min-height: 118px;
+  padding: 14px;
+  overflow: hidden;
+  text-align: left;
+  border: 1px solid rgba(20, 184, 166, 0.22);
+  border-radius: 22px;
+  color: var(--text-primary);
+  background:
+    radial-gradient(circle at 92% 12%, rgba(45, 212, 191, 0.20), transparent 34%),
+    rgba(255, 255, 255, 0.48);
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.10);
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.dark .integrated-launch-card {
+  border-color: rgba(125, 249, 231, 0.16);
+  background:
+    radial-gradient(circle at 92% 12%, rgba(45, 212, 191, 0.16), transparent 34%),
+    rgba(15, 23, 42, 0.46);
+}
+
+.integrated-launch-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(16, 185, 129, 0.62);
+  box-shadow: 0 22px 54px rgba(5, 150, 105, 0.16);
+}
+
+.integrated-launch-card span,
+.integrated-launch-card strong,
+.integrated-launch-card small,
+.integrated-launch-card b {
+  display: block;
+}
+
+.integrated-launch-card span {
+  margin-bottom: 8px;
+  color: #0fb981;
+  font-size: 11px;
+  font-weight: 950;
+  letter-spacing: 0.08em;
+}
+
+.integrated-launch-card strong {
+  margin-bottom: 6px;
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.integrated-launch-card small {
+  min-height: 34px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.42;
+}
+
+.integrated-launch-card b {
+  margin-top: 10px;
+  color: #0891b2;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.integrated-inline-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: -8px 6px 16px;
+}
+
+.integrated-inline-actions button {
+  min-height: 46px;
+  border: 1px solid rgba(45, 212, 191, 0.34);
+  border-radius: 16px;
+  color: #062f2b;
+  background: linear-gradient(135deg, rgba(52, 211, 153, 0.92), rgba(34, 211, 238, 0.72));
+  font-size: 13px;
+  font-weight: 900;
+  box-shadow: 0 14px 34px rgba(20, 184, 166, 0.16);
+}
+
+.dark .integrated-inline-actions button {
+  color: #eafffb;
+  background: linear-gradient(135deg, rgba(5, 150, 105, 0.78), rgba(8, 145, 178, 0.58));
+}
+
+.primary-action.hot {
+  background: linear-gradient(135deg, #34d399 0%, #22c55e 48%, #06b6d4 100%);
+}
+
+@media (max-width: 720px) {
+  .integrated-launch-grid,
+  .integrated-inline-actions {
+    grid-template-columns: 1fr;
+  }
 }
 
 .entry-copy {

@@ -467,14 +467,14 @@
           class="rounded-full border border-emerald-300/25 bg-slate-950/75 px-3 py-2 text-xs font-semibold text-emerald-100 shadow-xl backdrop-blur hover:bg-slate-900"
           @click="showStudioCockpit = true"
         >
-          AI 工作区
+          AI 控制台
         </button>
         <button
           v-if="!showEngineWorkspace"
           class="rounded-full border border-cyan-300/25 bg-slate-950/75 px-3 py-2 text-xs font-semibold text-cyan-100 shadow-xl backdrop-blur hover:bg-slate-900"
           @click="showEngineWorkspace = true"
         >
-          Comfy / Drama
+          内置 ComfyUI + 短剧
           <span class="ml-1 text-[10px] text-cyan-200/65">{{ compactEngineStatus }}</span>
         </button>
       </div>
@@ -2312,6 +2312,24 @@ const runCanvasQuickAction = (prompt) => {
   if (executed) nextTick(() => fitView({ padding: 0.18, duration: 500 }))
 }
 
+const handleInitialCanvasAction = (rawAction) => {
+  let action = rawAction
+  try {
+    const parsed = JSON.parse(rawAction)
+    action = parsed?.action || rawAction
+  } catch {
+    action = rawAction
+  }
+
+  const allowed = new Set(['comfyWrapper', 'dramaShots', 'productLaunch', 'image2video', 'txt2img', 'characterBible'])
+  if (!allowed.has(action)) return
+
+  runStudioAction(action)
+  showStudioCockpit.value = false
+  showEngineWorkspace.value = false
+  window.$message?.success('已在画布创建可执行生产线')
+}
+
 const duplicateCurrentProject = () => {
   const projectId = route.params.id
   if (!projectId || projectId === 'new') {
@@ -2548,6 +2566,14 @@ onMounted(() => {
 
   // Load project data | 加载项目数据
   loadProjectById(route.params.id)
+
+  const initialAction = sessionStorage.getItem('yufeng-canvas-initial-action')
+  if (initialAction) {
+    sessionStorage.removeItem('yufeng-canvas-initial-action')
+    nextTick(() => {
+      handleInitialCanvasAction(initialAction)
+    })
+  }
 
   // Check for initial prompt from home page | 检查来自首页的初始提示词
   const initialPrompt = sessionStorage.getItem('ai-canvas-initial-prompt')

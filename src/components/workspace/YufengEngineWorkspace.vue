@@ -45,9 +45,21 @@
           </dl>
           <p v-if="comfySummary.error" class="mt-2 rounded-xl bg-red-500/10 px-2 py-1 text-[11px] text-red-100">{{ comfySummary.error }}</p>
           <div class="mt-3 flex flex-wrap gap-2">
-            <button class="shell-action primary" @click="$emit('action', 'openComfySettings')">安装/启动/连接</button>
+            <button class="shell-action primary" @click="startComfy">启动内置 ComfyUI</button>
+            <button class="shell-action" @click="installDependencies">安装依赖</button>
+            <button class="shell-action" @click="scanModels">扫描模型</button>
             <button class="shell-action" @click="$emit('action', 'openWorkflowImport')">导入 API workflow</button>
             <button class="shell-action" @click="$emit('action', 'createComfyWrapper')">生成包装节点</button>
+            <button class="shell-action" @click="$emit('action', 'openComfySettings')">高级设置</button>
+          </div>
+          <div v-if="modelScan" class="mt-3 rounded-xl bg-black/20 p-2 text-[11px] text-white/60">
+            <div class="flex flex-wrap gap-2">
+              <span>Checkpoint {{ modelScan.counts?.checkpoints || 0 }}</span>
+              <span>LoRA {{ modelScan.counts?.loras || 0 }}</span>
+              <span>ControlNet {{ modelScan.counts?.controlnet || 0 }}</span>
+              <span>VAE {{ modelScan.counts?.vae || 0 }}</span>
+            </div>
+            <p v-if="modelScan.missing?.length" class="mt-1 text-amber-100">缺少模型权重：{{ modelScan.missing.join('、') }}</p>
           </div>
         </div>
 
@@ -174,16 +186,49 @@ const comfyStore = useComfyStore()
 
 onMounted(() => {
   comfyStore.refreshStatus?.()
+  comfyStore.scanModels?.()
 })
 
 const comfyTemplates = COMFY_WRAPPER_TEMPLATES
 const comfySummary = computed(() => getComfyShellSummary(comfyStore.state.value))
+const modelScan = computed(() => comfyStore.modelScan.value)
 const comfyNodes = computed(() => nodes.value.filter(node => node.type === 'comfyWorkflow'))
 const assetNodes = computed(() => nodes.value.filter(node => ['image', 'video'].includes(node.type) && (node.data?.url || node.data?.assetPath)))
 const dramaSummary = computed(() => summarizeDramaProject(currentProject.value))
 const shotList = computed(() => Array.isArray(currentProject.value?.drama?.shots) ? currentProject.value.drama.shots : [])
 const statusOptions = computed(() => Object.entries(DRAMA_STATUS_LABELS).map(([value, label]) => ({ value, label })))
 const projectTypeLabel = computed(() => currentProject.value?.type === 'drama' ? '短剧项目' : '可升级为短剧')
+
+async function installDependencies() {
+  const result = await comfyStore.doInstallDependencies?.()
+  await comfyStore.refreshStatus?.()
+  if (result?.ok === false) {
+    window.$message?.error(result.error || '依赖安装启动失败')
+    return
+  }
+  window.$message?.success('已开始安装 ComfyUI Python 依赖，进度可在日志里查看')
+}
+
+async function startComfy() {
+  await comfyStore.doInstall?.()
+  await comfyStore.doStart?.()
+  await comfyStore.refreshStatus?.()
+  await comfyStore.scanModels?.()
+  if (comfyStore.state.value?.error) {
+    window.$message?.error(comfyStore.state.value.error)
+    return
+  }
+  window.$message?.success('已启动内置 ComfyUI')
+}
+
+async function scanModels() {
+  const result = await comfyStore.scanModels?.()
+  if (result?.ok === false) {
+    window.$message?.error(result.error || '扫描模型失败')
+    return
+  }
+  window.$message?.success('模型目录扫描完成')
+}
 
 function updateShotStatus(shot, status) {
   emit('action', 'updateDramaShotStatus', { shotId: shot.id, status })
