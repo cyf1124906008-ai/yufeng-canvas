@@ -460,6 +460,31 @@
         </div>
       </aside>
 
+      <!-- Visible AI workspace entry | 可见 AI 工作区入口 -->
+      <section class="absolute left-20 top-4 z-20 max-w-[420px] rounded-2xl border border-[var(--border-color)] bg-[var(--bg-primary)]/88 backdrop-blur-xl shadow-xl p-3">
+        <div class="flex items-center justify-between gap-3 mb-2">
+          <div>
+            <div class="text-sm font-semibold text-[var(--text-primary)]">AI 工作区 · Canvas Action Protocol</div>
+            <div class="text-xs text-[var(--text-secondary)]">可直接创建节点、连接工作流、生成短剧分镜；不依赖聊天窗口。</div>
+          </div>
+          <span class="text-[10px] px-2 py-1 rounded-full bg-emerald-500/15 text-emerald-500 border border-emerald-500/30">v0.1.45</span>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <button class="px-3 py-1.5 text-xs rounded-lg bg-[var(--accent-color)] text-white hover:bg-[var(--accent-hover)] transition-colors" @click="runCanvasQuickAction('创建一个文生图工作流')">
+            创建文生图流程
+          </button>
+          <button class="px-3 py-1.5 text-xs rounded-lg bg-[var(--bg-secondary)] hover:bg-[var(--bg-tertiary)] border border-[var(--border-color)] transition-colors" @click="runCanvasQuickAction('创建一个文生图到视频工作流')">
+            图到视频流程
+          </button>
+          <button class="px-3 py-1.5 text-xs rounded-lg bg-[var(--bg-secondary)] hover:bg-[var(--bg-tertiary)] border border-[var(--border-color)] transition-colors" @click="runCanvasQuickAction('创建一个古装短剧第一集，生成8个分镜和首帧节点')">
+            短剧 8 分镜
+          </button>
+          <button class="px-3 py-1.5 text-xs rounded-lg bg-[var(--bg-secondary)] hover:bg-[var(--bg-tertiary)] border border-[var(--border-color)] transition-colors" @click="openCanvasComposer">
+            自然语言操控
+          </button>
+        </div>
+      </section>
+
       <!-- Bottom AI composer | 底部 AI 输入：默认收起，按 Ctrl/⌘+K 呼出 -->
       <div
         class="composer-dock absolute bottom-4 left-1/2 -translate-x-1/2 z-20"
@@ -1971,6 +1996,43 @@ const cancelCommandPlan = () => {
   pendingCommandPlan.value = null
 }
 
+const executeCanvasCommandPlan = (plan) => {
+  const batchErr = validateCommandBatch(plan.commands)
+  if (batchErr) {
+    window.$message?.error(batchErr.message)
+    addRuntimeLog('error', `AI 指令校验失败: ${batchErr.message}`, { commands: plan.commands })
+    return false
+  }
+
+  const { needsConfirm } = classifyCommandRisk(plan.commands)
+  if (needsConfirm) {
+    pendingCommandPlan.value = plan
+    showCommandConfirmModal.value = true
+    return true
+  }
+
+  const result = executeCommandBatch(plan.commands)
+  if (result.ok) {
+    addRuntimeLog('info', `AI 已执行: ${plan.summary}`, { commands: plan.commands, nodeIds: result.nodeIds, edgeIds: result.edgeIds })
+    window.$message?.success(plan.summary)
+    return true
+  }
+
+  addRuntimeLog('error', `AI 执行失败: ${result.message}`, { commands: plan.commands })
+  window.$message?.error(result.message)
+  return false
+}
+
+const runCanvasQuickAction = (prompt) => {
+  const plan = buildLocalCommandPlan(prompt, buildCanvasSnapshot())
+  if (!plan) {
+    chatInput.value = prompt
+    openCanvasComposer()
+    return
+  }
+  executeCanvasCommandPlan(plan)
+}
+
 const duplicateCurrentProject = () => {
   const projectId = route.params.id
   if (!projectId || projectId === 'new') {
@@ -2078,21 +2140,7 @@ const sendMessage = async () => {
           const batchErr = validateCommandBatch(plan.commands)
           if (batchErr) throw new Error(batchErr.message)
 
-          const { needsConfirm } = classifyCommandRisk(plan.commands)
-
-          if (needsConfirm) {
-            pendingCommandPlan.value = plan
-            showCommandConfirmModal.value = true
-          } else {
-            const result = executeCommandBatch(plan.commands)
-            if (result.ok) {
-              addRuntimeLog('info', `AI 已执行: ${plan.summary}`, { commands: plan.commands })
-              window.$message?.success(plan.summary)
-            } else {
-              addRuntimeLog('error', `AI 执行失败: ${result.message}`)
-              window.$message?.error(result.message)
-            }
-          }
+          executeCanvasCommandPlan(plan)
         } else {
           // Fallback: parsed failed or no commands, use old workflow orchestrator
           throw new Error(parsed.error || '无可执行命令')
