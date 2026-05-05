@@ -460,27 +460,65 @@
         </div>
       </aside>
 
-      <!-- Visible AI workspace entry | 可见 AI 工作区入口 -->
-      <section class="absolute left-20 top-4 z-20 max-w-[420px] rounded-2xl border border-[var(--border-color)] bg-[var(--bg-primary)]/88 backdrop-blur-xl shadow-xl p-3">
-        <div class="flex items-center justify-between gap-3 mb-2">
-          <div>
-            <div class="text-sm font-semibold text-[var(--text-primary)]">AI 工作区 · Canvas Action Protocol</div>
-            <div class="text-xs text-[var(--text-secondary)]">可直接创建节点、连接工作流、生成短剧分镜；不依赖聊天窗口。</div>
+      <!-- Studio cockpit | AI 创作工作区主控台 -->
+      <section class="studio-cockpit absolute left-20 top-4 z-20 w-[520px] max-w-[calc(100vw-8rem)] rounded-3xl border border-emerald-400/25 bg-slate-950/[0.82] text-white backdrop-blur-xl shadow-2xl overflow-hidden">
+        <div class="px-4 py-3 border-b border-white/10 bg-gradient-to-r from-emerald-500/15 via-cyan-500/10 to-transparent">
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <div class="flex items-center gap-2">
+                <span class="inline-flex h-8 w-8 items-center justify-center rounded-2xl bg-emerald-400 text-slate-950 font-bold">Y</span>
+                <div>
+                  <div class="text-sm font-semibold">YUFENG AI 创作工作区</div>
+                  <div class="text-[11px] text-emerald-100/75">ComfyUI · Canvas Action Protocol · Drama Workspace</div>
+                </div>
+              </div>
+            </div>
+            <span class="shrink-0 text-[10px] px-2 py-1 rounded-full bg-emerald-400/15 text-emerald-200 border border-emerald-300/30">v0.1.46</span>
           </div>
-          <span class="text-[10px] px-2 py-1 rounded-full bg-emerald-500/15 text-emerald-500 border border-emerald-500/30">v0.1.45</span>
+          <div class="mt-3 grid grid-cols-4 gap-2 text-center text-[11px]">
+            <div class="rounded-2xl bg-white/[0.08] px-2 py-2 border border-white/10">
+              <b class="block text-base text-white">{{ studioStats.nodeCount }}</b>
+              <span class="text-white/60">节点</span>
+            </div>
+            <div class="rounded-2xl bg-white/[0.08] px-2 py-2 border border-white/10">
+              <b class="block text-base text-white">{{ studioStats.edgeCount }}</b>
+              <span class="text-white/60">连线</span>
+            </div>
+            <div class="rounded-2xl bg-white/[0.08] px-2 py-2 border border-white/10">
+              <b class="block text-base text-white">{{ studioStats.shotCount }}</b>
+              <span class="text-white/60">分镜</span>
+            </div>
+            <div class="rounded-2xl bg-white/[0.08] px-2 py-2 border border-white/10">
+              <b class="block text-base text-white">{{ studioStats.comfyCount }}</b>
+              <span class="text-white/60">Comfy</span>
+            </div>
+          </div>
         </div>
-        <div class="flex flex-wrap gap-2">
-          <button class="px-3 py-1.5 text-xs rounded-lg bg-[var(--accent-color)] text-white hover:bg-[var(--accent-hover)] transition-colors" @click="runCanvasQuickAction('创建一个文生图工作流')">
-            创建文生图流程
+
+        <div class="p-3 grid grid-cols-2 gap-2">
+          <button
+            v-for="action in studioActions"
+            :key="action.id"
+            class="group text-left rounded-2xl border border-white/10 bg-white/[0.06] hover:bg-white/[0.11] hover:border-emerald-300/40 transition-all p-3"
+            @click="runStudioAction(action.id)"
+          >
+            <div class="flex items-center justify-between gap-2 mb-1">
+              <strong class="text-sm text-white">{{ action.title }}</strong>
+              <span class="text-[10px] rounded-full px-2 py-0.5 border border-emerald-300/25 text-emerald-100/80">{{ action.badge }}</span>
+            </div>
+            <p class="text-[11px] leading-relaxed text-white/60">{{ action.desc }}</p>
           </button>
-          <button class="px-3 py-1.5 text-xs rounded-lg bg-[var(--bg-secondary)] hover:bg-[var(--bg-tertiary)] border border-[var(--border-color)] transition-colors" @click="runCanvasQuickAction('创建一个文生图到视频工作流')">
-            图到视频流程
+        </div>
+
+        <div class="px-3 pb-3 flex flex-wrap gap-2">
+          <button class="px-3 py-1.5 text-xs rounded-xl bg-emerald-400 text-slate-950 font-semibold hover:bg-emerald-300 transition-colors" @click="openCanvasComposer">
+            自然语言操控 Ctrl/⌘ K
           </button>
-          <button class="px-3 py-1.5 text-xs rounded-lg bg-[var(--bg-secondary)] hover:bg-[var(--bg-tertiary)] border border-[var(--border-color)] transition-colors" @click="runCanvasQuickAction('创建一个古装短剧第一集，生成8个分镜和首帧节点')">
-            短剧 8 分镜
+          <button class="px-3 py-1.5 text-xs rounded-xl bg-white/[0.08] hover:bg-white/[0.12] border border-white/10 transition-colors" @click="showWorkflowPanel = true">
+            导入 Comfy / 工作流模板
           </button>
-          <button class="px-3 py-1.5 text-xs rounded-lg bg-[var(--bg-secondary)] hover:bg-[var(--bg-tertiary)] border border-[var(--border-color)] transition-colors" @click="openCanvasComposer">
-            自然语言操控
+          <button class="px-3 py-1.5 text-xs rounded-xl bg-white/[0.08] hover:bg-white/[0.12] border border-white/10 transition-colors" @click="showApiSettings = true">
+            模型与本地引擎
           </button>
         </div>
       </section>
@@ -868,6 +906,53 @@ const agentTasks = ref([
     detail: '后续会自动生成可编辑节点流。'
   }
 ])
+
+
+const studioActions = [
+  {
+    id: 'txt2img',
+    title: '文生图工作流',
+    badge: 'Native',
+    desc: '创建 Prompt 节点 + 图片生成节点，并自动连线。'
+  },
+  {
+    id: 'image2video',
+    title: '图到视频链路',
+    badge: 'Video',
+    desc: '创建图片生成到视频生成的连续生产流程。'
+  },
+  {
+    id: 'comfyWrapper',
+    title: 'Comfy 包装节点',
+    badge: 'Local',
+    desc: '把复杂 ComfyUI 工作流包装成一个可填写表单节点。'
+  },
+  {
+    id: 'dramaShots',
+    title: '短剧 8 分镜',
+    badge: 'Drama',
+    desc: '创建短剧项目结构、镜头表和 8 个首帧节点。'
+  },
+  {
+    id: 'productLaunch',
+    title: '产品发布套装',
+    badge: 'Batch',
+    desc: '产品图、海报、社媒、视频首帧一次搭好。'
+  },
+  {
+    id: 'characterBible',
+    title: '角色一致性',
+    badge: 'IP',
+    desc: '创建角色设定、三视图、表情表和视频测试节点。'
+  }
+]
+
+const studioStats = computed(() => ({
+  nodeCount: nodes.value.length,
+  edgeCount: edges.value.length,
+  comfyCount: nodes.value.filter(node => node.type === 'comfyWorkflow').length,
+  shotCount: Array.isArray(currentProject.value?.drama?.shots) ? currentProject.value.drama.shots.length : 0
+}))
 
 const selectedNode = computed(() =>
   nodes.value.find((node) => node.id === selectedNodeId.value) || null
@@ -2023,6 +2108,68 @@ const executeCanvasCommandPlan = (plan) => {
   return false
 }
 
+
+const makeStudioNodePlan = (summary, commands) => ({
+  summary,
+  commands,
+  requiresConfirmation: false
+})
+
+const runStudioAction = (actionId) => {
+  const snapshot = buildCanvasSnapshot()
+  const y = snapshot.nodes.length
+    ? Math.max(...snapshot.nodes.map(node => Number(node.position?.y) || 0)) + 240
+    : 180
+
+  const actionPlans = {
+    txt2img: makeStudioNodePlan('已创建文生图工作流', [
+      { name: 'addNode', params: { ref: 'prompt', type: 'text', position: { x: 120, y }, data: { label: '创作需求', content: '描述你想生成的照片、海报、角色或场景。' } } },
+      { name: 'addNode', params: { ref: 'image', type: 'imageConfig', position: { x: 520, y }, data: { label: '文生图', prompt: '高质量视觉作品，主体清晰，构图明确，光影自然，细节丰富', size: '1024x1024', quality: 'high' } } },
+      { name: 'connectNodes', params: { source: 'prompt', target: 'image' } }
+    ]),
+    image2video: makeStudioNodePlan('已创建图到视频生产链路', [
+      { name: 'addNode', params: { ref: 'prompt', type: 'text', position: { x: 120, y }, data: { label: '镜头描述', content: '先生成首帧，再用首帧驱动视频。写清主体、镜头运动、氛围和时长。' } } },
+      { name: 'addNode', params: { ref: 'image', type: 'imageConfig', position: { x: 500, y }, data: { label: '首帧生成', prompt: '电影感首帧，主体清晰，构图明确，适合视频延展', size: '1920x1080', quality: 'high' } } },
+      { name: 'addNode', params: { ref: 'video', type: 'videoConfig', position: { x: 880, y }, data: { label: '图生视频', prompt: '自然镜头运动，画面稳定，保持主体一致性', ratio: '16:9', duration: 5 } } },
+      { name: 'connectNodes', params: { source: 'prompt', target: 'image' } },
+      { name: 'connectNodes', params: { source: 'image', target: 'video' } }
+    ]),
+    comfyWrapper: makeStudioNodePlan('已创建 ComfyUI 包装节点', [
+      { name: 'addNode', params: { ref: 'note', type: 'text', position: { x: 120, y }, data: { label: 'Comfy 使用说明', content: '导入 Comfy API workflow JSON 后，YUFENG 会把复杂节点包装成 prompt、尺寸、seed、steps、cfg 等简单表单。' } } },
+      { name: 'addNode', params: { ref: 'comfy', type: 'comfyWorkflow', position: { x: 560, y }, data: { label: 'Comfy 工作流包装', prompt: '输入你的画面需求', negativePrompt: '低清晰度、畸形、错误文字', width: 1024, height: 1024, seed: -1, steps: 20, cfg: 7 } } },
+      { name: 'connectNodes', params: { source: 'note', target: 'comfy' } }
+    ]),
+    productLaunch: makeStudioNodePlan('已创建产品发布全套物料工作流', [
+      { name: 'addNode', params: { ref: 'brief', type: 'text', position: { x: 120, y }, data: { label: '产品 Brief', content: '产品名称、卖点、人群、使用场景、品牌色、投放平台。' } } },
+      { name: 'addNode', params: { ref: 'packshot', type: 'imageConfig', position: { x: 500, y }, data: { label: '产品主图', prompt: '商业产品摄影，干净背景，质感真实，适合电商主图', size: '1024x1024', quality: 'high' } } },
+      { name: 'addNode', params: { ref: 'poster', type: 'imageConfig', position: { x: 880, y }, data: { label: '广告海报', prompt: '品牌广告海报，标题区清晰，产品突出，高级排版', size: '1080x1920', quality: 'high' } } },
+      { name: 'addNode', params: { ref: 'tvc', type: 'videoConfig', position: { x: 1260, y }, data: { label: 'TVC 首帧到视频', prompt: '产品广告短片，镜头推进，光影高级，节奏明确', ratio: '9:16', duration: 5 } } },
+      { name: 'connectNodes', params: { source: 'brief', target: 'packshot' } },
+      { name: 'connectNodes', params: { source: 'packshot', target: 'poster' } },
+      { name: 'connectNodes', params: { source: 'poster', target: 'tvc' } }
+    ]),
+    characterBible: makeStudioNodePlan('已创建角色一致性工作流', [
+      { name: 'addNode', params: { ref: 'bible', type: 'text', position: { x: 120, y }, data: { label: '角色设定', content: '角色姓名、年龄、身份、服装、发型、脸型、性格、禁用变化。' } } },
+      { name: 'addNode', params: { ref: 'portrait', type: 'imageConfig', position: { x: 500, y }, data: { label: '角色标准照', prompt: '角色正面标准照，干净背景，面部清晰，服装设定稳定', size: '1024x1024', quality: 'high' } } },
+      { name: 'addNode', params: { ref: 'sheet', type: 'imageConfig', position: { x: 880, y }, data: { label: '三视图 / 表情表', prompt: '角色设定表，正面侧面背面，多表情，统一服装和发型', size: '1920x1080', quality: 'high' } } },
+      { name: 'addNode', params: { ref: 'motion', type: 'videoConfig', position: { x: 1260, y }, data: { label: '一致性视频测试', prompt: '保持角色一致，轻微转身，电影感光影，画面稳定', ratio: '16:9', duration: 5 } } },
+      { name: 'connectNodes', params: { source: 'bible', target: 'portrait' } },
+      { name: 'connectNodes', params: { source: 'portrait', target: 'sheet' } },
+      { name: 'connectNodes', params: { source: 'sheet', target: 'motion' } }
+    ])
+  }
+
+  if (actionId === 'dramaShots') {
+    runCanvasQuickAction('创建一个古装短剧第一集，生成8个分镜和首帧节点')
+    return
+  }
+
+  const plan = actionPlans[actionId]
+  if (!plan) return
+  const executed = executeCanvasCommandPlan(plan)
+  if (executed) nextTick(() => fitView({ padding: 0.18, duration: 500 }))
+}
+
 const runCanvasQuickAction = (prompt) => {
   const plan = buildLocalCommandPlan(prompt, buildCanvasSnapshot())
   if (!plan) {
@@ -2030,7 +2177,8 @@ const runCanvasQuickAction = (prompt) => {
     openCanvasComposer()
     return
   }
-  executeCanvasCommandPlan(plan)
+  const executed = executeCanvasCommandPlan(plan)
+  if (executed) nextTick(() => fitView({ padding: 0.18, duration: 500 }))
 }
 
 const duplicateCurrentProject = () => {
