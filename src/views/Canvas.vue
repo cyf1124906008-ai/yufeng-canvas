@@ -715,7 +715,7 @@ import { nodes, edges, runtimeLogs, clearRuntimeLogs, addRuntimeLog, addNode, ad
 import { loadAllModels } from '../stores/models'
 import { useChat, useWorkflowOrchestrator } from '../hooks'
 import { useModelStore } from '../stores/pinia'
-import { projects, initProjectsStore, updateProject, renameProject, deleteProject, duplicateProject, currentProject } from '../stores/projects'
+import { projects, initProjectsStore, updateProject, renameProject, deleteProject, duplicateProject, currentProject, currentProjectId as projectStoreCurrentId } from '../stores/projects'
 
 // API Settings component | API 设置组件
 import ApiSettings from '../components/ApiSettings.vue'
@@ -794,7 +794,7 @@ const router = useRouter()
 const route = useRoute()
 
 // Vue Flow instance | Vue Flow 实例
-const { viewport, zoomIn, zoomOut, fitView, updateNodeInternals } = useVueFlow()
+const { viewport, zoomIn, zoomOut, fitView, updateNodeInternals, setCenter } = useVueFlow()
 
 // Register custom node types | 注册自定义节点类型
 const nodeTypes = {
@@ -2138,10 +2138,8 @@ const runStudioAction = (actionId) => {
       { name: 'connectNodes', params: { source: 'prompt', target: 'image' } },
       { name: 'connectNodes', params: { source: 'image', target: 'video' } }
     ]),
-    comfyWrapper: makeStudioNodePlan('已创建 ComfyUI 包装节点', [
-      { name: 'addNode', params: { ref: 'note', type: 'text', position: { x: 120, y }, data: { label: 'Comfy 使用说明', content: '导入 Comfy API workflow JSON 后，YUFENG 会把复杂节点包装成 prompt、尺寸、seed、steps、cfg 等简单表单。' } } },
-      { name: 'addNode', params: { ref: 'comfy', type: 'comfyWorkflow', position: { x: 560, y }, data: { label: 'Comfy 工作流包装', prompt: '输入你的画面需求', negativePrompt: '低清晰度、畸形、错误文字', width: 1024, height: 1024, seed: -1, steps: 20, cfg: 7 } } },
-      { name: 'connectNodes', params: { source: 'note', target: 'comfy' } }
+    comfyWrapper: makeStudioNodePlan('已创建 Comfy 简化包装节点', [
+      { name: 'createComfyWrapper', params: { templateId: 'txt2img-basic', position: { x: 560, y } } }
     ]),
     productLaunch: makeStudioNodePlan('已创建产品发布全套物料工作流', [
       { name: 'addNode', params: { ref: 'brief', type: 'text', position: { x: 120, y }, data: { label: '产品 Brief', content: '产品名称、卖点、人群、使用场景、品牌色、投放平台。' } } },
@@ -2152,19 +2150,13 @@ const runStudioAction = (actionId) => {
       { name: 'connectNodes', params: { source: 'packshot', target: 'poster' } },
       { name: 'connectNodes', params: { source: 'poster', target: 'tvc' } }
     ]),
-    characterBible: makeStudioNodePlan('已创建角色一致性工作流', [
-      { name: 'addNode', params: { ref: 'bible', type: 'text', position: { x: 120, y }, data: { label: '角色设定', content: '角色姓名、年龄、身份、服装、发型、脸型、性格、禁用变化。' } } },
-      { name: 'addNode', params: { ref: 'portrait', type: 'imageConfig', position: { x: 500, y }, data: { label: '角色标准照', prompt: '角色正面标准照，干净背景，面部清晰，服装设定稳定', size: '1024x1024', quality: 'high' } } },
-      { name: 'addNode', params: { ref: 'sheet', type: 'imageConfig', position: { x: 880, y }, data: { label: '三视图 / 表情表', prompt: '角色设定表，正面侧面背面，多表情，统一服装和发型', size: '1920x1080', quality: 'high' } } },
-      { name: 'addNode', params: { ref: 'motion', type: 'videoConfig', position: { x: 1260, y }, data: { label: '一致性视频测试', prompt: '保持角色一致，轻微转身，电影感光影，画面稳定', ratio: '16:9', duration: 5 } } },
-      { name: 'connectNodes', params: { source: 'bible', target: 'portrait' } },
-      { name: 'connectNodes', params: { source: 'portrait', target: 'sheet' } },
-      { name: 'connectNodes', params: { source: 'sheet', target: 'motion' } }
+    characterBible: makeStudioNodePlan('已创建角色库和一致性工作流', [
+      { name: 'createCharacterBible', params: {} }
     ])
   }
 
   if (actionId === 'dramaShots') {
-    runCanvasQuickAction('创建一个古装短剧第一集，生成8个分镜和首帧节点')
+    runCanvasQuickAction('创建一个古装短剧第一集，生成8个分镜、角色设定、场景设定、首帧节点和视频节点')
     return
   }
 
@@ -2174,11 +2166,45 @@ const runStudioAction = (actionId) => {
   if (executed) nextTick(() => fitView({ padding: 0.18, duration: 500 }))
 }
 
+const focusCanvasNodeById = (nodeId) => {
+  const node = nodes.value.find(item => item.id === nodeId)
+  if (!node) {
+    window.$message?.warning('没有找到对应画布节点')
+    return
+  }
+  selectedNodeId.value = node.id
+  nextTick(() => {
+    if (typeof setCenter === 'function') {
+      setCenter((node.position?.x || 0) + 180, (node.position?.y || 0) + 100, { zoom: Math.max(viewport.value.zoom || 0.8, 0.75), duration: 500 })
+    } else {
+      fitView({ padding: 0.25, duration: 500 })
+    }
+  })
+}
+
+const updateDramaShotStatus = ({ shotId, status }) => {
+  const project = currentProject.value
+  if (!project?.drama?.shots?.length) {
+    window.$message?.warning('当前项目没有镜头表')
+    return
+  }
+  const allowed = new Set(['pending', 'firstFrameReady', 'videoRunning', 'videoReady', 'redo', 'locked'])
+  if (!allowed.has(status)) {
+    window.$message?.warning('不支持的镜头状态')
+    return
+  }
+  const shots = project.drama.shots.map(shot => shot.id === shotId ? { ...shot, status, updatedAt: Date.now() } : shot)
+  updateProject(project.id, { drama: { ...(project.drama || {}), shots } })
+  const shot = shots.find(item => item.id === shotId)
+  const nodeId = shot?.nodeIds?.text
+  if (nodeId) updateNode(nodeId, { shotStatus: status, updatedAt: Date.now() })
+  window.$message?.success('镜头状态已更新')
+}
 
 const handleEngineWorkspaceAction = (action, payload) => {
   if (action === 'openComfySettings') {
     showApiSettings.value = true
-    window.$message?.info('?? API ??????Comfy ???????????????? ComfyUI?')
+    window.$message?.info('已打开模型与本地引擎设置，请进入 Comfy 引擎页安装、启动或测试连接。')
     return
   }
 
@@ -2187,42 +2213,50 @@ const handleEngineWorkspaceAction = (action, payload) => {
     return
   }
 
+  if (action === 'focusNode') {
+    focusCanvasNodeById(payload)
+    return
+  }
+
+  if (action === 'runComfyWorkflow') {
+    const plan = makeStudioNodePlan('运行 Comfy 工作流', [
+      { name: 'runComfyWorkflow', params: { nodeId: payload } }
+    ])
+    executeCanvasCommandPlan(plan)
+    return
+  }
+
+  if (action === 'updateDramaShotStatus') {
+    updateDramaShotStatus(payload || {})
+    return
+  }
+
   if (action === 'createComfyWrapper') {
     const y = nodes.value.length
       ? Math.max(...nodes.value.map(node => Number(node.position?.y) || 0)) + 240
       : 180
-    const wrapperData = buildDefaultComfyWrapperData(payload || 'txt2img-basic')
-    const plan = makeStudioNodePlan(`??? ${wrapperData.wrapperTemplateTitle} Comfy ????`, [
-      {
-        name: 'addNode',
-        params: {
-          ref: 'comfyShellNote',
-          type: 'text',
-          position: { x: 120, y },
-          data: {
-            label: 'ComfyUI ????',
-            content: '?????? ComfyUI workflow?YUFENG ?????????????????????? Canvas Action Protocol ???'
-          }
-        }
-      },
-      {
-        name: 'addNode',
-        params: {
-          ref: 'comfyShellNode',
-          type: 'comfyWorkflow',
-          position: { x: 560, y },
-          data: wrapperData
-        }
-      },
-      { name: 'connectNodes', params: { source: 'comfyShellNote', target: 'comfyShellNode' } }
+    const plan = makeStudioNodePlan('已创建 Comfy 简化包装节点', [
+      { name: 'createComfyWrapper', params: { templateId: payload || 'txt2img-basic', position: { x: 560, y } } }
     ])
     const executed = executeCanvasCommandPlan(plan)
     if (executed) nextTick(() => fitView({ padding: 0.18, duration: 500 }))
     return
   }
 
-  if (action === 'createDramaWorkspace' || action === 'createDramaShots') {
-    runCanvasQuickAction('????????????????8??????????????????')
+  if (action === 'createDramaWorkspace') {
+    const plan = makeStudioNodePlan('已创建短剧工作区', [
+      { name: 'createDramaProject', params: { title: 'AI 短剧项目', premise: '一个可继续扩展的 YUFENG 短剧项目。' } },
+      { name: 'createCharacterBible', params: {} },
+      { name: 'createSceneBible', params: {} },
+      { name: 'createEpisodeOutline', params: {} }
+    ])
+    const executed = executeCanvasCommandPlan(plan)
+    if (executed) nextTick(() => fitView({ padding: 0.18, duration: 500 }))
+    return
+  }
+
+  if (action === 'createDramaShots') {
+    runCanvasQuickAction('创建一个都市悬疑短剧第一集，生成8个分镜、角色设定、场景设定、首帧节点和视频节点')
     return
   }
 
@@ -2433,9 +2467,11 @@ const loadProjectById = (projectId) => {
   flowKey.value = Date.now()
 
   if (projectId && projectId !== 'new') {
+    projectStoreCurrentId.value = projectId
     loadProject(projectId)
   } else {
-    // New project - clear canvas and detach from previous project | 新项目 - 清空画布并断开旧项目自动保存
+    // New project - clear canvas and detach from previous project.
+    projectStoreCurrentId.value = null
     detachCurrentProject()
   }
 }

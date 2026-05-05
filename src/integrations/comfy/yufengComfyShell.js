@@ -1,4 +1,4 @@
-﻿export const COMFY_SHELL_LAYERS = [
+export const COMFY_SHELL_LAYERS = [
   {
     id: 'engine',
     title: 'ComfyUI 原生引擎层',
@@ -94,6 +94,18 @@ export function buildDefaultComfyWrapperData(templateId = 'txt2img-basic') {
     seed: -1,
     steps: 20,
     cfg: 7,
+    bindings: {
+      prompt: { virtual: true },
+      negativePrompt: { virtual: true },
+      width: { virtual: true },
+      height: { virtual: true },
+      seed: { virtual: true },
+      steps: { virtual: true },
+      cfg: { virtual: true }
+    },
+    apiWorkflow: null,
+    status: 'idle',
+    error: '这是 YUFENG 简化包装节点。要真实运行，请导入 Comfy API workflow JSON 或在专业模式绑定底层 workflow。',
     wrapperTemplateId: template.id,
     wrapperTemplateTitle: template.title,
     yufengShell: true

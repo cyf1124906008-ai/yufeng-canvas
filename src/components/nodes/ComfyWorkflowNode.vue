@@ -188,13 +188,13 @@ async function handleRun() {
   if (props.data.status === 'running') return
 
   if (!window.desktopApp?.comfyRuntime) {
-    emitUpdate('error', '请先在设置 > Comfy 引擎测试连接')
+    emitUpdate('error', '请先在模型与本地引擎设置里连接 ComfyUI')
     emitUpdate('status', 'error')
     return
   }
 
   if (!props.data.apiWorkflow || typeof props.data.apiWorkflow !== 'object') {
-    emitUpdate('error', '请选择 Comfy API workflow JSON')
+    emitUpdate('error', '请先导入 Comfy API workflow JSON，或在专业模式绑定底层 workflow')
     emitUpdate('status', 'error')
     return
   }
@@ -257,7 +257,7 @@ function pollForResult(promptId) {
           emitUpdate('status', 'error')
           return
         }
-        // Task completed successfully but no images — stop polling immediately
+        // Stop immediately if Comfy finished but produced no images.
         if (history.status?.completed || history.status?.status_str === 'success') {
           clearInterval(pollTimer)
           clearInterval(elapsedTimer)
