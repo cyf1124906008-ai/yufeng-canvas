@@ -60,6 +60,14 @@
           <n-icon :size="20"><DownloadOutline /></n-icon>
         </button>
         <button
+          v-if="selectedImageNodeUrl"
+          @click="openImageSplitter"
+          class="p-2 hover:bg-[var(--bg-tertiary)] rounded-lg transition-colors text-emerald-400"
+          title="九宫格拆图"
+        >
+          <n-icon :size="20"><GridOutline /></n-icon>
+        </button>
+        <button
           @click="showApiSettings = true"
           class="p-2 hover:bg-[var(--bg-tertiary)] rounded-lg transition-colors"
           :class="{ 'text-[var(--accent-color)]': hasAnyApiConfigured }"
@@ -683,6 +691,7 @@
 
     <!-- Download Modal | 下载弹窗 -->
     <DownloadModal v-model:show="showDownloadModal" />
+    <ImageSplitterModal v-model:show="showImageSplitter" :image-url="splitterImageUrl" :source-node-id="splitterSourceNodeId" />
 
     <!-- Workflow Panel | 工作流面板 -->
     <WorkflowPanel v-model:show="showWorkflowPanel" @add-workflow="handleAddWorkflow" />
@@ -738,10 +747,12 @@ import { loadAllModels } from '../stores/models'
 import { useChat, useWorkflowOrchestrator } from '../hooks'
 import { useModelStore } from '../stores/pinia'
 import { projects, initProjectsStore, updateProject, renameProject, deleteProject, duplicateProject, currentProject, currentProjectId as projectStoreCurrentId } from '../stores/projects'
+import { initTaskStore } from '../stores/tasks'
 
 // API Settings component | API 设置组件
 import ApiSettings from '../components/ApiSettings.vue'
 import DownloadModal from '../components/DownloadModal.vue'
+import ImageSplitterModal from '../components/ImageSplitterModal.vue'
 import WorkflowPanel from '../components/WorkflowPanel.vue'
 import YufengEngineWorkspace from '../components/workspace/YufengEngineWorkspace.vue'
 import AppHeader from '../components/AppHeader.vue'
@@ -876,6 +887,9 @@ const flowKey = ref(Date.now())
 const showRenameModal = ref(false)
 const showDeleteModal = ref(false)
 const showDownloadModal = ref(false)
+const showImageSplitter = ref(false)
+const splitterImageUrl = ref('')
+const splitterSourceNodeId = ref('')
 const showWorkflowPanel = ref(false)
 const showRuntimeLogs = ref(false)
 const showCanvasTour = ref(false)
@@ -1321,6 +1335,26 @@ const hasDownloadableAssets = computed(() => {
     (n.type === 'image' || n.type === 'video') && n.data?.url
   )
 })
+
+const selectedImageNodeUrl = computed(() => {
+  const selected = nodes.value.find(n => n.type === 'image' && n.data?.selected && n.data?.url)
+  return selected?.data?.url || ''
+})
+
+const selectedImageNodeId = computed(() => {
+  const selected = nodes.value.find(n => n.type === 'image' && n.data?.selected && n.data?.url)
+  return selected?.id || ''
+})
+
+function openImageSplitter() {
+  if (!selectedImageNodeUrl.value) {
+    window.$message?.warning('请先选中一个图片节点')
+    return
+  }
+  splitterImageUrl.value = selectedImageNodeUrl.value
+  splitterSourceNodeId.value = selectedImageNodeId.value
+  showImageSplitter.value = true
+}
 
 const showCanvasBackground = computed(() => showGrid.value && !canvasPerfLite.value)
 
@@ -2561,6 +2595,7 @@ onMounted(() => {
 
   // Initialize projects store | 初始化项目存储
   initProjectsStore()
+  initTaskStore()
   refreshComfyStatus()
   scanComfyModels()
 

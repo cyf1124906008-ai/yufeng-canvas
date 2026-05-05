@@ -88,6 +88,8 @@ export async function openFolder(key = 'root') {
   return await comfyOpenFolder(key)
 }
 
+export { state, loading, logs, modelScan, isDesktop }
+
 export function useComfyStore() {
   return {
     state,

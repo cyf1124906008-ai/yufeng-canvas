@@ -30,6 +30,14 @@ export function buildComfyBindings(apiWorkflow) {
       if (node.inputs?.seed != null) bindings.seed = { nodeId, input: 'seed' }
       if (node.inputs?.steps != null) bindings.steps = { nodeId, input: 'steps' }
       if (node.inputs?.cfg != null) bindings.cfg = { nodeId, input: 'cfg' }
+      if (node.inputs?.sampler_name != null) bindings.sampler = { nodeId, input: 'sampler_name' }
+      if (node.inputs?.scheduler != null) bindings.scheduler = { nodeId, input: 'scheduler' }
+      if (node.inputs?.denoise != null) bindings.denoise = { nodeId, input: 'denoise' }
+    }
+    if (node.class_type === 'SamplerCustom') {
+      if (node.inputs?.sampler_name != null) bindings.sampler = { nodeId, input: 'sampler_name' }
+      if (node.inputs?.scheduler != null) bindings.scheduler = { nodeId, input: 'scheduler' }
+      if (node.inputs?.denoise != null) bindings.denoise = { nodeId, input: 'denoise' }
     }
     if (node.class_type === 'CheckpointLoaderSimple' && node.inputs?.ckpt_name != null) {
       bindings.checkpoint = { nodeId, input: 'ckpt_name' }
@@ -49,7 +57,10 @@ export function extractComfyDefaults(apiWorkflow, bindings) {
     height: 512,
     seed: -1,
     steps: 20,
-    cfg: 7
+    cfg: 7,
+    sampler: 'euler',
+    scheduler: 'normal',
+    denoise: 1.0
   }
   for (const [key, binding] of Object.entries(bindings || {})) {
     const value = apiWorkflow?.[binding.nodeId]?.inputs?.[binding.input]

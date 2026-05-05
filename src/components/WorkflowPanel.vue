@@ -129,6 +129,7 @@ import {
   ChatbubbleOutline
 } from '@vicons/ionicons5'
 import { WORKFLOW_TEMPLATES } from '../config/workflows'
+import { COMPLEX_WORKFLOW_TEMPLATES } from '../config/complexWorkflows'
 import { nodes, edges } from '../stores/canvas'
 
 const props = defineProps({
@@ -150,7 +151,7 @@ const visible = computed({
 })
 
 // Public workflows | 公共工作流
-const publicWorkflows = computed(() => WORKFLOW_TEMPLATES)
+const publicWorkflows = computed(() => [...WORKFLOW_TEMPLATES, ...COMPLEX_WORKFLOW_TEMPLATES])
 
 const categoryMap = {
   all: '全部',
@@ -160,7 +161,10 @@ const categoryMap = {
   video: '视频',
   brand: '品牌',
   ui: 'UI',
-  creative: '创意'
+  creative: '创意',
+  character: '角色',
+  repair: '修复',
+  grid: '宫格'
 }
 
 const categories = computed(() => {
@@ -316,7 +320,10 @@ const createComfyWorkflowTemplate = (apiWorkflow, fileName) => {
     height: 512,
     seed: -1,
     steps: 20,
-    cfg: 7
+    cfg: 7,
+    sampler: 'euler',
+    scheduler: 'normal',
+    denoise: 1.0
   }
   // Extract defaults from workflow values
   for (const [key, binding] of Object.entries(bindings)) {

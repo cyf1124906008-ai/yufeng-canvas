@@ -196,7 +196,8 @@ import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { NIcon, NDropdown, NSpin } from 'naive-ui'
 import { ChevronDownOutline, ChevronForwardOutline, CopyOutline, TrashOutline, RefreshOutline, AddOutline, ImageOutline, CreateOutline } from '@vicons/ionicons5'
 import { useImageGeneration } from '../../hooks'
-import { updateNode, addNode, addEdge, nodes, edges, duplicateNode, removeNode } from '../../stores/canvas'
+import { updateNode, addNode, addEdge, nodes, edges, duplicateNode, removeNode, currentProjectId } from '../../stores/canvas'
+import { saveAsset } from '../../integrations/comfy/api'
 import NodeHandleMenu from './NodeHandleMenu.vue'
 import { useModelStore } from '../../stores/pinia'
 import { getModelSizeOptions, getModelQualityOptions, getModelConfig } from '../../stores/models'
@@ -770,8 +771,8 @@ const handleGenerate = async (mode = 'auto') => {
 
     // Update image node with generated URL | 更新图片节点 URL
     if (result && result.length > 0) {
-      updateNode(imageNodeId, {
-        url: result[0].url,
+      const imageUrl = result[0].url
+      const imageData = {
         loading: false,
         error: '',
         label: '文生图',
@@ -779,7 +780,42 @@ const handleGenerate = async (mode = 'auto') => {
         prompt,
         finishedAt: Date.now(),
         updatedAt: Date.now()
-      })
+      }
+
+      // Persist HTTP URLs as local assets to survive page refresh
+      if (imageUrl && !imageUrl.startsWith('data:') && !imageUrl.startsWith('blob:')) {
+        try {
+          const projectId = currentProjectId.value || 'canvas-default'
+          const resp = await fetch(imageUrl)
+          const blob = await resp.blob()
+          const dataUrl = await new Promise((resolve) => {
+            const reader = new FileReader()
+            reader.onload = () => resolve(reader.result)
+            reader.readAsDataURL(blob)
+          })
+          const asset = await saveAsset(dataUrl, projectId)
+          if (asset?.assetPath) {
+            imageData.assetPath = asset.assetPath
+            imageData.url = dataUrl
+          } else {
+            imageData.url = imageUrl
+          }
+        } catch {
+          imageData.url = imageUrl
+        }
+      } else {
+        imageData.url = imageUrl
+        // Save data URLs as assets too
+        if (imageUrl && imageUrl.startsWith('data:')) {
+          try {
+            const projectId = currentProjectId.value || 'canvas-default'
+            const asset = await saveAsset(imageUrl, projectId)
+            if (asset?.assetPath) imageData.assetPath = asset.assetPath
+          } catch { /* keep data URL as fallback */ }
+        }
+      }
+
+      updateNode(imageNodeId, imageData)
       
       // Mark this config node as executed | 标记配置节点已执行
       updateNode(props.id, { executed: true, outputNodeId: imageNodeId })

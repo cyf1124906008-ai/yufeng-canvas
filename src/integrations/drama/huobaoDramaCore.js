@@ -141,3 +141,14 @@ export function normalizeHuobaoShotToYufengShot(shot) {
     status: shot.status || 'pending'
   }
 }
+
+export function updateShotStatus(project, shotId, status) {
+  if (!project?.drama?.shots) return
+  const shot = project.drama.shots.find(s => s.id === shotId)
+  if (shot) shot.status = status
+}
+
+export function getShotNodeIds(project, shotId) {
+  const shot = project?.drama?.shots?.find(s => s.id === shotId)
+  return shot?.nodeIds || {}
+}

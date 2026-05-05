@@ -121,6 +121,21 @@
             <div class="rounded-xl bg-black/20 p-2"><b class="block text-base">{{ dramaSummary.shotCount }}</b><span class="text-white/45">镜头</span></div>
           </div>
           <p class="mt-2 line-clamp-2 text-[11px] text-white/55">{{ dramaSummary.premise || '还没有短剧设定。点击下方按钮会创建真实项目结构和画布节点。' }}</p>
+          <!-- Pipeline progress -->
+          <div class="mt-3 flex items-center gap-1">
+            <div
+              v-for="(stage, i) in pipelineStages"
+              :key="stage.id"
+              class="flex-1 flex flex-col items-center gap-1"
+            >
+              <div
+                class="w-full h-1.5 rounded-full transition-colors"
+                :class="stage.completed ? 'bg-emerald-400' : 'bg-white/10'"
+                :title="stage.title"
+              ></div>
+              <span class="text-[9px] text-white/40 truncate w-full text-center">{{ stage.title }}</span>
+            </div>
+          </div>
           <div class="mt-3 flex flex-wrap gap-2">
             <button class="shell-action primary" @click="$emit('action', 'createDramaWorkspace')">创建短剧工作区</button>
             <button class="shell-action" @click="$emit('action', 'createDramaShots')">生成 8 分镜</button>
@@ -177,7 +192,7 @@ import { currentProject } from '@/stores/projects'
 import { nodes } from '@/stores/canvas'
 import { useComfyStore } from '@/stores/comfy'
 import { COMFY_WRAPPER_TEMPLATES, getComfyShellSummary } from '@/integrations/comfy/yufengComfyShell'
-import { DRAMA_STATUS_LABELS, summarizeDramaProject } from '@/integrations/drama/dramaWorkspace'
+import { DRAMA_STATUS_LABELS, summarizeDramaProject, DRAMA_PIPELINE_STAGES } from '@/integrations/drama/dramaWorkspace'
 
 const emit = defineEmits(['action', 'close'])
 
@@ -198,6 +213,20 @@ const dramaSummary = computed(() => summarizeDramaProject(currentProject.value))
 const shotList = computed(() => Array.isArray(currentProject.value?.drama?.shots) ? currentProject.value.drama.shots : [])
 const statusOptions = computed(() => Object.entries(DRAMA_STATUS_LABELS).map(([value, label]) => ({ value, label })))
 const projectTypeLabel = computed(() => currentProject.value?.type === 'drama' ? '短剧项目' : '可升级为短剧')
+
+const pipelineStages = computed(() => {
+  const s = dramaSummary.value
+  return DRAMA_PIPELINE_STAGES.map((stage) => {
+    let completed = false
+    if (stage.id === 'idea') completed = !!s.premise
+    else if (stage.id === 'bible') completed = s.characterCount > 0
+    else if (stage.id === 'episode') completed = s.episodeCount > 0
+    else if (stage.id === 'shotlist') completed = s.shotCount > 0
+    else if (stage.id === 'firstframes') completed = s.readyShotCount > 0
+    else if (stage.id === 'videos') completed = s.shotCount > 0 && shotList.value.some(sh => sh.status === 'videoReady')
+    return { ...stage, completed }
+  })
+})
 
 async function installDependencies() {
   const result = await comfyStore.doInstallDependencies?.()

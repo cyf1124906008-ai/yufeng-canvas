@@ -17,6 +17,7 @@ import {
 import { PROVIDERS, getProviderList, getDefaultProvider, getProviderConfig, getDefaultBaseUrl } from '@/config/providers'
 import { DISTRIBUTION_CONFIG, getPresetApiKey, getPresetBaseUrl } from '@/config/distribution'
 import { isModelAllowedForCapability } from '@/utils/modelCapability'
+import { normalizeBaseUrl } from '@/utils/request'
 
 const STORAGE_KEYS = {
   PROVIDER: 'api-provider',
@@ -417,7 +418,7 @@ export const useModelStore = defineStore('model', () => {
 
   const setBaseUrlByProvider = (provider, baseUrl, capability = 'default') => {
     const normalizedCapability = API_BASE_URL_CAPABILITIES.includes(capability) ? capability : 'default'
-    const normalizedBaseUrl = baseUrl?.trim?.() || ''
+    const normalizedBaseUrl = normalizeBaseUrl(baseUrl) || ''
     const nextBaseUrl = DISTRIBUTION_CONFIG.api.lockBaseUrl
       ? resolveBaseUrl(provider, {})
       : normalizedBaseUrl

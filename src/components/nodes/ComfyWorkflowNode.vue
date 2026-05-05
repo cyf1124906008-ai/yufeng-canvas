@@ -88,6 +88,62 @@
           </div>
         </div>
 
+        <!-- Professional mode toggle -->
+        <button
+          type="button"
+          class="text-xs text-[var(--text-secondary)] hover:text-[var(--accent-color)] transition-colors"
+          @click="showProMode = !showProMode"
+        >
+          {{ showProMode ? '收起专业参数' : '专业参数' }}
+        </button>
+
+        <!-- Professional params -->
+        <div v-if="showProMode" class="space-y-2 p-2 bg-[var(--bg-tertiary)] rounded border border-[var(--border-color)]">
+          <div v-if="hasBinding('sampler')">
+            <span class="text-xs text-[var(--text-secondary)]">Sampler</span>
+            <select
+              v-model="localSampler"
+              class="w-full mt-1 p-1 text-xs bg-[var(--bg-primary)] text-[var(--text-primary)] border border-[var(--border-color)] rounded"
+              @change="emitUpdate('sampler', localSampler)"
+            >
+              <option v-for="opt in SAMPLER_OPTIONS" :key="opt" :value="opt">{{ opt }}</option>
+            </select>
+          </div>
+          <div v-if="hasBinding('scheduler')">
+            <span class="text-xs text-[var(--text-secondary)]">Scheduler</span>
+            <select
+              v-model="localScheduler"
+              class="w-full mt-1 p-1 text-xs bg-[var(--bg-primary)] text-[var(--text-primary)] border border-[var(--border-color)] rounded"
+              @change="emitUpdate('scheduler', localScheduler)"
+            >
+              <option v-for="opt in SCHEDULER_OPTIONS" :key="opt" :value="opt">{{ opt }}</option>
+            </select>
+          </div>
+          <div v-if="hasBinding('checkpoint') && checkpointOptions.length > 0">
+            <span class="text-xs text-[var(--text-secondary)]">Checkpoint</span>
+            <select
+              v-model="localCheckpoint"
+              class="w-full mt-1 p-1 text-xs bg-[var(--bg-primary)] text-[var(--text-primary)] border border-[var(--border-color)] rounded"
+              @change="emitUpdate('checkpoint', localCheckpoint)"
+            >
+              <option value="">默认</option>
+              <option v-for="opt in checkpointOptions" :key="opt" :value="opt">{{ opt }}</option>
+            </select>
+          </div>
+          <div v-if="hasBinding('denoise')">
+            <span class="text-xs text-[var(--text-secondary)]">Denoise</span>
+            <input
+              v-model.number="localDenoise"
+              type="number"
+              step="0.05"
+              min="0"
+              max="1"
+              class="w-full mt-1 p-1 text-xs bg-[var(--bg-tertiary)] text-[var(--text-primary)] border border-[var(--border-color)] rounded"
+              @change="emitUpdate('denoise', localDenoise)"
+            />
+          </div>
+        </div>
+
         <!-- Status -->
         <div v-if="statusText" class="text-xs px-1" :class="statusClass">{{ statusText }}</div>
 
@@ -124,6 +180,18 @@ import {
   comfyQueuePrompt, comfyGetHistory, comfyFetchImageAsDataUrl,
   extractOutputImages, saveAsset
 } from '@/integrations/comfy/api'
+import { registerTask, updateTask, removeTask } from '@/stores/tasks'
+import { modelScan } from '@/stores/comfy'
+
+const SAMPLER_OPTIONS = [
+  'euler', 'euler_ancestral', 'euler_cfg_pp', 'dpmpp_2m', 'dpmpp_2m_karras',
+  'dpmpp_2m_sde', 'dpmpp_2m_sde_karras', 'dpmpp_3m_sde', 'dpmpp_3m_sde_karras',
+  'ddpm', 'lms', 'lms_karras', 'heun', 'heunpp2', 'dpm_2', 'dpm_2_karras',
+  'dpm_2_ancestral', 'dpm_2_ancestral_karras', 'dpm_fast', 'dpm_adaptive',
+  'dpmpp_2s_ancestral', 'dpmpp_2s_ancestral_karras', 'uni_pc', 'uni_pc_bh2'
+]
+
+const SCHEDULER_OPTIONS = ['normal', 'karras', 'exponential', 'sgm_uniform', 'simple', 'ddim_uniform', 'beta']
 
 const props = defineProps({ id: String, data: Object })
 const { findNode } = useVueFlow()
@@ -136,11 +204,23 @@ const localHeight = ref(props.data.height ?? 512)
 const localSeed = ref(props.data.seed ?? -1)
 const localSteps = ref(props.data.steps ?? 20)
 const localCfg = ref(props.data.cfg ?? 7)
+const localSampler = ref(props.data.sampler ?? 'euler')
+const localScheduler = ref(props.data.scheduler ?? 'normal')
+const localCheckpoint = ref(props.data.checkpoint ?? '')
+const localDenoise = ref(props.data.denoise ?? 1.0)
+const showProMode = ref(false)
+
+const checkpointOptions = computed(() => {
+  const scan = modelScan.value
+  if (!scan?.counts) return []
+  return scan.checkpoints || []
+})
 
 let pollTimer = null
 let startTime = null
 const elapsed = ref(0)
 let elapsedTimer = null
+let backgroundTaskId = null
 
 function hasBinding(key) {
   return props.data.bindings?.[key] != null
@@ -208,7 +288,11 @@ async function handleRun() {
     height: localHeight.value,
     seed: localSeed.value,
     steps: localSteps.value,
-    cfg: localCfg.value
+    cfg: localCfg.value,
+    sampler: localSampler.value,
+    scheduler: localScheduler.value,
+    checkpoint: localCheckpoint.value,
+    denoise: localDenoise.value
   }
   for (const [key, binding] of Object.entries(bindings)) {
     if (workflow[binding.nodeId]?.inputs && overrides[key] != null) {
@@ -226,6 +310,12 @@ async function handleRun() {
   try {
     const promptId = await comfyQueuePrompt(getBaseUrl(), workflow)
     emitUpdate('lastPromptId', promptId)
+    backgroundTaskId = registerTask({
+      type: 'comfy',
+      nodeId: props.id,
+      promptId,
+      baseUrl: getBaseUrl()
+    })
     pollForResult(promptId)
   } catch (e) {
     clearInterval(elapsedTimer)
@@ -242,6 +332,7 @@ function pollForResult(promptId) {
       clearInterval(elapsedTimer)
       emitUpdate('error', 'Comfy 任务超时，请检查原版 ComfyUI 是否报错')
       emitUpdate('status', 'error')
+      if (backgroundTaskId) { updateTask(backgroundTaskId, { status: 'failed', error: '超时' }); removeTask(backgroundTaskId); backgroundTaskId = null }
       return
     }
     try {
@@ -255,6 +346,7 @@ function pollForResult(promptId) {
           const msg = history.status.messages?.map(m => m[1]?.message || m[1]?.exception_message || String(m[1])).join('; ') || 'Comfy 执行出错'
           emitUpdate('error', msg)
           emitUpdate('status', 'error')
+          if (backgroundTaskId) { updateTask(backgroundTaskId, { status: 'failed', error: msg }); removeTask(backgroundTaskId); backgroundTaskId = null }
           return
         }
         // Stop immediately if Comfy finished but produced no images.
@@ -263,6 +355,7 @@ function pollForResult(promptId) {
           clearInterval(elapsedTimer)
           emitUpdate('error', '任务完成，但没有找到图片输出。请检查 SaveImage / PreviewImage 节点。')
           emitUpdate('status', 'error')
+          if (backgroundTaskId) { updateTask(backgroundTaskId, { status: 'failed', error: '无输出图片' }); removeTask(backgroundTaskId); backgroundTaskId = null }
           return
         }
         return
@@ -312,17 +405,32 @@ function pollForResult(promptId) {
       emitUpdate('outputNodeIds', outputNodeIds)
       emitUpdate('lastRunAt', Date.now())
       emitUpdate('error', '')
+      if (backgroundTaskId) { updateTask(backgroundTaskId, { status: 'completed' }); removeTask(backgroundTaskId); backgroundTaskId = null }
     } catch (e) {
       clearInterval(pollTimer)
       clearInterval(elapsedTimer)
       emitUpdate('error', e.message)
       emitUpdate('status', 'error')
+      if (backgroundTaskId) { updateTask(backgroundTaskId, { status: 'failed', error: e.message }); removeTask(backgroundTaskId); backgroundTaskId = null }
     }
   }, 1000)
 }
 
 onMounted(() => {
   window.addEventListener(RUN_COMFY_WORKFLOW_EVENT, handleRunCommand)
+  // Resume polling if status was 'running' before page refresh
+  if (props.data.status === 'running' && props.data.lastPromptId && !pollTimer) {
+    startTime = props.data.startedAt || Date.now()
+    elapsed.value = 0
+    elapsedTimer = setInterval(() => { elapsed.value = Date.now() - startTime }, 1000)
+    backgroundTaskId = registerTask({
+      type: 'comfy',
+      nodeId: props.id,
+      promptId: props.data.lastPromptId,
+      baseUrl: getBaseUrl()
+    })
+    pollForResult(props.data.lastPromptId)
+  }
 })
 
 onBeforeUnmount(() => {

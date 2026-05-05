@@ -158,6 +158,7 @@ import { NIcon, NSpin } from 'naive-ui'
 import { TrashOutline, ExpandOutline, VideocamOutline, CopyOutline, CloseCircleOutline, DownloadOutline, EyeOutline, CreateOutline } from '@vicons/ionicons5'
 import { updateNode, removeNode, duplicateNode, addNode, addEdge, nodes } from '../../stores/canvas'
 import { useVideoGeneration } from '../../hooks/useApi'
+import { registerTask, updateTask, getTaskByNodeId, removeTask } from '../../stores/tasks'
 import NodeHandleMenu from './NodeHandleMenu.vue'
 
 const props = defineProps({
@@ -187,6 +188,7 @@ const operations = [
 
 // Polling state | 轮询状态
 const isPolling = ref(false)
+const backgroundTaskId = ref(null)
 const isActiveGeneration = computed(() => Boolean(isPolling.value || props.data?.loading))
 const elapsedSeconds = ref(0)
 let elapsedTimer = null
@@ -246,12 +248,14 @@ watch(() => [props.data?.taskId, props.data?.loading], ([taskId, loading]) => {
 })
 
 // 页面刷新后恢复轮询 | Resume polling after page refresh
+// Note: cleanNodeForStorage strips 'loading' but preserves 'taskId'
+// so we check taskId && !url instead of requiring loading
 onMounted(() => {
-  const { taskId, url, loading } = props.data || {}
-  if (taskId && loading && !url && !isPolling.value) {
+  const { taskId, url } = props.data || {}
+  if (taskId && !url && !isPolling.value) {
     startPolling(taskId)
   }
-  if (loading || isPolling.value) startElapsedTimer()
+  if (props.data?.loading || isPolling.value) startElapsedTimer()
 })
 
 onUnmounted(() => {
@@ -269,19 +273,31 @@ const startPolling = async (taskId) => {
     updatedAt: Date.now()
   })
 
+  // Register background task for recovery after refresh
+  if (!backgroundTaskId.value) {
+    backgroundTaskId.value = registerTask({
+      type: 'video',
+      nodeId: props.id,
+      taskId,
+      taskEndpoint: props.data?.taskEndpoint,
+      videoProtocol: props.data?.videoProtocol
+    })
+  }
+
   try {
     const result = await pollVideoTask(taskId, (attempt, percentage) => {
-      // 更新进度
       updateNode(props.id, {
         progress: percentage,
         attempt
       })
+      if (backgroundTaskId.value) {
+        updateTask(backgroundTaskId.value, { progress: percentage })
+      }
     }, {
       taskEndpoint: props.data?.taskEndpoint,
       videoProtocol: props.data?.videoProtocol,
       model: props.data?.model
     })
-    // 轮询成功，更新视频节点
     updateNode(props.id, {
       url: result.url,
       loading: false,
@@ -289,11 +305,14 @@ const startPolling = async (taskId) => {
       progress: 100,
       label: '视频生成',
       finishedAt: Date.now(),
-      taskId: null  // 清除 taskId
+      taskId: null
     })
-    // Success bubble already shown by useApi
+    if (backgroundTaskId.value) {
+      updateTask(backgroundTaskId.value, { status: 'completed', result: { url: result.url } })
+      removeTask(backgroundTaskId.value)
+      backgroundTaskId.value = null
+    }
   } catch (err) {
-    // 轮询失败
     updateNode(props.id, {
       loading: false,
       error: err.message || '生成失败',
@@ -301,7 +320,11 @@ const startPolling = async (taskId) => {
       finishedAt: Date.now(),
       taskId
     })
-    // Error bubble already shown by useApi
+    if (backgroundTaskId.value) {
+      updateTask(backgroundTaskId.value, { status: 'failed', error: err.message || '生成失败' })
+      removeTask(backgroundTaskId.value)
+      backgroundTaskId.value = null
+    }
   } finally {
     isPolling.value = false
   }

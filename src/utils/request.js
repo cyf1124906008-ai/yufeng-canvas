@@ -6,6 +6,37 @@ import axios from 'axios'
 import { getRuntimeApiKey, getRuntimeBaseUrl, getRuntimeProvider } from './runtimeConfig'
 import { addRuntimeLog } from '@/stores/canvas'
 
+/**
+ * Normalize a base URL: strip trailing slashes, add protocol, validate format.
+ */
+export function normalizeBaseUrl(url) {
+  if (!url || typeof url !== 'string') return ''
+  let normalized = url.trim()
+  if (!normalized) return ''
+  // Add https:// if no protocol
+  if (!/^https?:\/\//i.test(normalized)) {
+    normalized = 'https://' + normalized
+  }
+  // Strip trailing slashes
+  normalized = normalized.replace(/\/+$/, '')
+  return normalized
+}
+
+/**
+ * Get a Chinese error message for common HTTP status codes.
+ */
+export function getChineseHttpError(status, message) {
+  if (status === 401) return 'API Key 无效或已过期'
+  if (status === 403) return '没有访问权限，请检查 API Key 和账户状态'
+  if (status === 404) return '模型不存在或暂不可用，请检查模型名称'
+  if (status === 400) return '参数不合法，请检查尺寸、数量等参数是否在支持范围内'
+  if (status === 429) return '请求过于频繁，请稍后再试'
+  if (status === 451) return '内容被安全策略拦截，请修改提示词'
+  if (status === 500) return '服务端内部错误，请稍后重试'
+  if (status === 502 || status === 503) return '服务暂时不可用，请稍后重试'
+  return message || '请求失败'
+}
+
 const getNow = () => {
   if (typeof performance !== 'undefined' && performance.now) {
     return performance.now()
@@ -115,13 +146,7 @@ instance.interceptors.response.use(
 
       // Image/video generation: silent here — useApi.js handles friendly Chinese bubbles + fallback.
       if (capability !== 'image' && capability !== 'video') {
-        if (status === 401) {
-          window.$message?.error('API Key 无效或已过期')
-        } else if (status === 429) {
-          window.$message?.error('请求过于频繁，请稍后再试')
-        } else {
-          window.$message?.error(message || '请求失败')
-        }
+        window.$message?.error(getChineseHttpError(status, message))
       }
     } else {
       const durationMs = getRequestDuration(error.config)
