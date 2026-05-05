@@ -1,5 +1,5 @@
 /**
- * Image API | 鍥剧墖鐢熸垚 API
+ * Image API | 图片生成 API
  */
 
 import { request } from '@/utils'
@@ -88,7 +88,7 @@ export const buildImageEditFormData = async (params) => {
 }
 
 export const generateImageWithChat = async (data, options = {}) => {
-  const { endpoint = '/v1/chat/completions' } = options
+  const { endpoint = '/v1/chat/completions', _taskId } = options
 
   const ipc = window.desktopApp?.imageGen
   if (ipc) {
@@ -100,7 +100,7 @@ export const generateImageWithChat = async (data, options = {}) => {
     const headers = { 'Content-Type': 'application/json' }
     if (apiKey) headers.Authorization = `Bearer ${apiKey}`
 
-    return ipcGenerateImage(fullUrl, headers, data, `chat_img_${Date.now()}`)
+    return ipcGenerateImage(fullUrl, headers, data, _taskId || `chat_img_${Date.now()}`)
   }
 
   return request({
@@ -110,6 +110,88 @@ export const generateImageWithChat = async (data, options = {}) => {
     headers: { 'Content-Type': 'application/json' },
     metadata: { capability: 'image' }
   })
+}
+
+/**
+ * Send a FormData (image-edit) request through Electron main process.
+ * The main process keeps the request alive even if renderer crashes.
+ */
+const ipcFormDataGenerate = async (fullUrl, authHeaders, formData, taskId) => {
+  const ipc = window.desktopApp?.imageGen
+  if (!ipc) return null
+
+  // Convert FormData to a multipart serialisable form for IPC transport
+  const parts = []
+  for (const [key, value] of formData.entries()) {
+    if (value instanceof Blob) {
+      const buffer = await value.arrayBuffer()
+      parts.push({
+        key,
+        type: 'blob',
+        mimeType: value.type || 'application/octet-stream',
+        filename: value.name || 'file',
+        data: Buffer.from(buffer).toString('base64')
+      })
+    } else {
+      parts.push({ key, type: 'text', value: String(value) })
+    }
+  }
+
+  const { ipcImageGenerate } = await import('@/integrations/imageGeneration/client')
+  const result = await ipcImageGenerate({
+    url: fullUrl,
+    method: 'POST',
+    headers: authHeaders,
+    body: JSON.stringify(parts),
+    taskId,
+    isFormData: true
+  })
+
+  if (!result) return null
+
+  if (!result.ok) {
+    const error = new Error(result.error)
+    error.status = result.status
+    error.response = { status: result.status, data: result.data }
+    throw error
+  }
+
+  return result.data
+}
+
+/**
+ * Reconstruct FormData from IPC-serialised parts in main process result.
+ * (Used by main process to rebuild the request body.)
+ */
+
+/**
+ * Route a JSON image generation request through Electron main process.
+ * Falls back to renderer-side request when not in Electron desktop.
+ */
+const ipcGenerateImage = async (fullUrl, headers, body, taskId) => {
+  const ipc = window.desktopApp?.imageGen
+  if (!ipc) return null
+
+  const { ipcImageGenerate } = await import('@/integrations/imageGeneration/client')
+
+  const result = await ipcImageGenerate({
+    url: fullUrl,
+    method: 'POST',
+    headers,
+    body,
+    taskId
+  })
+
+  if (!result) return null
+
+  if (!result.ok) {
+    const error = new Error(result.error)
+    error.status = result.status
+    error.response = { status: result.status, data: result.data }
+    throw error
+  }
+
+  return result.data
 }
 
 const parseJsonSafely = async (response) => {
@@ -126,14 +208,25 @@ const parseJsonSafely = async (response) => {
   }
 }
 
-const requestImageEdit = async (endpoint, formData) => {
+const requestImageEdit = async (endpoint, formData, _taskId) => {
   const provider = getRuntimeProvider()
   const apiKey = getRuntimeApiKey(provider, 'image')
   const resolvedEndpoint = /^https?:\/\//.test(endpoint)
     ? endpoint
     : `${getRuntimeBaseUrl(provider, 'image')}${endpoint}`
-  const headers = {}
 
+  // Route FormData through Electron main process when available
+  const ipc = window.desktopApp?.imageGen
+  if (ipc) {
+    const authHeaders = {}
+    if (apiKey) authHeaders.Authorization = `Bearer ${apiKey}`
+
+    const result = await ipcFormDataGenerate(resolvedEndpoint, authHeaders, formData, _taskId || `edit_${Date.now()}`)
+    if (result !== null) return result
+  }
+
+  // Fallback: renderer-side fetch
+  const headers = {}
   if (apiKey) {
     headers.Authorization = `Bearer ${apiKey}`
   }
@@ -160,39 +253,12 @@ const requestImageEdit = async (endpoint, formData) => {
   return payload
 }
 
-/**
- * Route a JSON image generation request through Electron main process.
- * Falls back to renderer-side request when not in Electron desktop.
- */
-const ipcGenerateImage = async (fullUrl, headers, body, taskId) => {
-  const ipc = window.desktopApp?.imageGen
-  if (!ipc) return null
-
-  const result = await ipc.generate({
-    url: fullUrl,
-    method: 'POST',
-    headers,
-    body,
-    timeout: 240000,
-    taskId
-  })
-
-  if (!result.ok) {
-    const error = new Error(result.error)
-    error.status = result.status
-    error.response = { status: result.status, data: result.data }
-    throw error
-  }
-
-  return result.data
-}
-
-// 鐢熸垚鍥剧墖
+// 生成图片
 export const generateImage = async (data, options = {}) => {
-  const { endpoint = '/images/generations' } = options
+  const { endpoint = '/images/generations', _taskId } = options
 
   if (typeof FormData !== 'undefined' && data instanceof FormData) {
-    return requestImageEdit(endpoint, data)
+    return requestImageEdit(endpoint, data, _taskId)
   }
 
   // Route through main process when in Electron desktop for stability
@@ -206,7 +272,7 @@ export const generateImage = async (data, options = {}) => {
     const headers = { 'Content-Type': 'application/json' }
     if (apiKey) headers.Authorization = `Bearer ${apiKey}`
 
-    return ipcGenerateImage(fullUrl, headers, data, `img_${Date.now()}`)
+    return ipcGenerateImage(fullUrl, headers, data, _taskId || `img_${Date.now()}`)
   }
 
   return request({

@@ -633,7 +633,8 @@ const normalizeModelPayload = (payload) => {
 const handleSyncModels = async () => {
   const provider = persistFormConfig()
   const apiKey = formData.apiKey || formData.chatApiKey || formData.imageApiKey || formData.videoApiKey
-  const baseUrl = trimTrailingSlash(formData.baseUrl || resolvedBaseUrl.value)
+  const rawUrl = formData.baseUrl || resolvedBaseUrl.value
+  const baseUrl = rawUrl ? rawUrl.replace(/\/+$/, '').replace(/\/(v1\/(images\/generations|chat\/completions|models|videos|embeddings)|api\/v1)\/?$/i, '') : ''
 
   if (!baseUrl) {
     window.$message?.warning('请先填写 Base URL')

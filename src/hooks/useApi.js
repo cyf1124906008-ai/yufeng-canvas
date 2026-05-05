@@ -836,7 +836,8 @@ export const useImageGeneration = () => {
             }
           ]
         }, {
-          endpoint: modelStore.getChatEndpoint()
+          endpoint: modelStore.getChatEndpoint(),
+          _taskId: params._taskId
         })
 
         return normalizeGeminiImageResponse(response)
@@ -846,11 +847,13 @@ export const useImageGeneration = () => {
         const response = hasImages(payload)
           ? await generateImage(await buildImageEditFormData(payload), {
               requestType: 'formdata',
-              endpoint: modelStore.getImageEditEndpoint()
+              endpoint: modelStore.getImageEditEndpoint(),
+              _taskId: params._taskId
             })
           : await generateImage(payload, {
               requestType: 'json',
-              endpoint: modelStore.getImageEndpoint()
+              endpoint: modelStore.getImageEndpoint(),
+              _taskId: params._taskId
             })
 
         return adaptResponse('image', response)

@@ -366,7 +366,7 @@ onMounted(async () => {
       updateTask(runningTask.id, { status: 'completed' })
       removeTask(runningTask.id)
       // Apply the recovered result to connected output image node
-      const outputId = props.data?.outputNodeId
+      const outputId = runningTask.outputNodeId || props.data?.outputNodeId
       if (outputId) {
         updateNode(outputId, {
           loading: false,
@@ -788,12 +788,35 @@ const handleGenerate = async (mode = 'auto') => {
       params.image = refImages
     }
 
-    const bgTaskId = registerTask({ type: 'image', nodeId: imageNodeId, projectId: currentProjectId.value || '' })
+    // Generate a deterministic taskId for main-process recovery
+    const ipcTaskId = `imggen_${props.id}_${Date.now()}`
+
+    const bgTaskId = registerTask({
+      type: 'image',
+      nodeId: props.id, // Bind to config node (stable across refreshes)
+      projectId: currentProjectId.value || '',
+      taskId: ipcTaskId, // Main-process task ID for recovery
+      outputNodeId: imageNodeId // Output image node to apply result to
+    })
+
+    // Pass taskId through to API layer for main-process routing
+    params._taskId = ipcTaskId
 
     let result
     try {
       result = await generate(params)
     } catch (genErr) {
+      // Frontend timeout: main process is still running, keep task as 'running' for recovery
+      if (genErr._frontendTimeout) {
+        updateNode(imageNodeId, {
+          loading: false,
+          error: '等待超时，后台仍在生成中，刷新页面可恢复结果',
+          updatedAt: Date.now()
+        })
+        window.$message?.warning('前端等待超时，供应商请求仍在后台继续，刷新页面后可恢复结果')
+        // Do NOT mark as failed — the task is still running in main process
+        return
+      }
       if (bgTaskId) { updateTask(bgTaskId, { status: 'failed', error: genErr.message }); removeTask(bgTaskId) }
       throw genErr
     }
