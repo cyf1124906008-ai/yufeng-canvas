@@ -475,6 +475,7 @@
           @click="showEngineWorkspace = true"
         >
           Comfy / Drama
+          <span class="ml-1 text-[10px] text-cyan-200/65">{{ compactEngineStatus }}</span>
         </button>
       </div>
 
@@ -487,7 +488,7 @@
                 <span class="inline-flex h-8 w-8 items-center justify-center rounded-2xl bg-emerald-400 text-slate-950 font-bold">Y</span>
                 <div>
                   <div class="text-sm font-semibold">YUFENG AI 创作工作区</div>
-                  <div class="text-[11px] text-emerald-100/75">ComfyUI · Canvas Action Protocol · Drama Workspace</div>
+                  <div class="text-[11px] text-emerald-100/75">内置 ComfyUI · AI 操控画布 · Huobao Drama 核心</div>
                 </div>
               </div>
             </div>
@@ -749,6 +750,7 @@ import { CANVAS_PROMPT_SUGGESTIONS } from '../config/promptLibrary'
 import { buildCanvasSnapshot, buildCanvasAgentSystemPrompt, parseAgentCommandResponse, classifyCommandRisk, buildLocalCommandPlan } from '../integrations/canvas/agentPlanner'
 import { buildDefaultComfyWrapperData } from '../integrations/comfy/yufengComfyShell'
 import { executeCommandBatch, validateCommandBatch } from '../integrations/canvas/commands'
+import { useComfyStore } from '../stores/comfy'
 
 // API Config state | API 配置状态
 const modelStore = useModelStore()
@@ -879,6 +881,12 @@ const showRuntimeLogs = ref(false)
 const showCanvasTour = ref(false)
 const pendingCommandPlan = ref(null)
 const showCommandConfirmModal = ref(false)
+const {
+  state: comfyState,
+  modelScan: comfyModelScan,
+  refreshStatus: refreshComfyStatus,
+  scanModels: scanComfyModels
+} = useComfyStore()
 const showAgentPanel = ref(false)
 const showInspectorPanel = ref(true)
 const inspectorCollapsed = ref(false)
@@ -978,6 +986,13 @@ const studioStats = computed(() => ({
   comfyCount: nodes.value.filter(node => node.type === 'comfyWorkflow').length,
   shotCount: Array.isArray(currentProject.value?.drama?.shots) ? currentProject.value.drama.shots.length : 0
 }))
+
+const compactEngineStatus = computed(() => {
+  if (!comfyState.value?.installed) return '装载中'
+  if (comfyState.value?.running) return '运行中'
+  if (comfyModelScan.value?.missing?.length) return '缺模型'
+  return '已内置'
+})
 
 const selectedNode = computed(() =>
   nodes.value.find((node) => node.id === selectedNodeId.value) || null
@@ -2528,6 +2543,8 @@ onMounted(() => {
 
   // Initialize projects store | 初始化项目存储
   initProjectsStore()
+  refreshComfyStatus()
+  scanComfyModels()
 
   // Load project data | 加载项目数据
   loadProjectById(route.params.id)

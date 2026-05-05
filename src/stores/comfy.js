@@ -1,12 +1,14 @@
 import { ref, computed } from 'vue'
 import {
   comfyGetStatus, comfySetConfig, comfyInstall, comfyStart,
-  comfyStop, comfyTestConnection, comfyGetLogs, comfyOpenFolder
+  comfyStop, comfyTestConnection, comfyGetLogs, comfyOpenFolder,
+  comfyInstallDependencies, comfyScanModels
 } from '@/integrations/comfy/client'
 
 const state = ref(null)
 const loading = ref(false)
 const logs = ref([])
+const modelScan = ref(null)
 
 const isDesktop = computed(() => !!window.desktopApp?.comfy)
 
@@ -42,6 +44,18 @@ export async function doInstall() {
   }
 }
 
+export async function doInstallDependencies() {
+  if (!isDesktop.value) return
+  return await comfyInstallDependencies()
+}
+
+export async function scanModels() {
+  if (!isDesktop.value) return null
+  const result = await comfyScanModels()
+  if (result?.ok) modelScan.value = result
+  return result
+}
+
 export async function doStart() {
   if (!isDesktop.value) return
   await comfyStart()
@@ -73,10 +87,13 @@ export function useComfyStore() {
     state,
     loading,
     logs,
+    modelScan,
     isDesktop,
     refreshStatus,
     updateConfig,
     doInstall,
+    doInstallDependencies,
+    scanModels,
     doStart,
     doStop,
     doTestConnection,

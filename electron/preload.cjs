@@ -26,6 +26,8 @@ contextBridge.exposeInMainWorld('desktopApp', {
     getStatus: () => ipcRenderer.invoke('app:comfy:get-status'),
     setConfig: (config) => ipcRenderer.invoke('app:comfy:set-config', config),
     install: () => ipcRenderer.invoke('app:comfy:install'),
+    installDependencies: () => ipcRenderer.invoke('app:comfy:install-dependencies'),
+    scanModels: () => ipcRenderer.invoke('app:comfy:scan-models'),
     start: () => ipcRenderer.invoke('app:comfy:start'),
     stop: () => ipcRenderer.invoke('app:comfy:stop'),
     testConnection: (baseUrl) => ipcRenderer.invoke('app:comfy:test-connection', baseUrl),

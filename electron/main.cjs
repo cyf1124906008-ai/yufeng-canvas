@@ -842,6 +842,7 @@ function createWindow() {
 app.whenReady().then(() => {
   migrateLegacyUserDataStorage()
   setupAutoUpdater()
+  comfyInstaller.autoInstallIfAvailable()
 
   ipcMain.handle('app:get-version', () => packageJson.version)
   ipcMain.handle('app:get-update-status', () => updateState)
@@ -952,6 +953,8 @@ app.whenReady().then(() => {
   ipcMain.handle('app:comfy:get-status', () => comfyManager.getStatus())
   ipcMain.handle('app:comfy:set-config', (_event, config) => comfyManager.setConfig(config))
   ipcMain.handle('app:comfy:install', () => comfyInstaller.install())
+  ipcMain.handle('app:comfy:install-dependencies', () => comfyInstaller.installDependencies())
+  ipcMain.handle('app:comfy:scan-models', () => comfyInstaller.scanModels())
   ipcMain.handle('app:comfy:start', () => comfyProcess.start())
   ipcMain.handle('app:comfy:stop', () => comfyProcess.stop())
   ipcMain.handle('app:comfy:test-connection', (_event, baseUrl) => comfyProcess.testConnection(baseUrl))

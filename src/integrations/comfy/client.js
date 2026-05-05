@@ -12,6 +12,14 @@ export async function comfyInstall() {
   return desktop()?.install() ?? null
 }
 
+export async function comfyInstallDependencies() {
+  return desktop()?.installDependencies() ?? null
+}
+
+export async function comfyScanModels() {
+  return desktop()?.scanModels() ?? null
+}
+
 export async function comfyStart() {
   return desktop()?.start() ?? null
 }

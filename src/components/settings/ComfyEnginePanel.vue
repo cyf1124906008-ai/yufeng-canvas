@@ -11,12 +11,13 @@
         <n-spin v-if="loading" :size="14" />
       </div>
 
+      <n-alert type="info" class="mb-4">
+        YUFENG 已随应用内置 ComfyUI 源码。首次打开会自动装载到本机引擎目录；你只需要补 Python 依赖和模型权重。
+      </n-alert>
+
       <template v-if="!state?.installed">
-        <n-alert type="info" class="mb-4">
-          YUFENG 已内置 ComfyUI 源码。点击下方按钮会把内置 ComfyUI 安装到本机应用数据目录，并创建 input / output / models / custom_nodes 等运行目录。模型权重不打包，需要放到模型目录。
-        </n-alert>
         <n-button type="primary" :loading="loading" @click="handleInstall">
-          安装内置 ComfyUI 引擎
+          立即装载内置 ComfyUI
         </n-button>
       </template>
 
@@ -42,15 +43,27 @@
         <div class="flex flex-wrap gap-2 mb-4">
           <n-button type="primary" @click="handleStart" :disabled="state.running">启动内置 ComfyUI</n-button>
           <n-button @click="handleStop" :disabled="!state.running">停止</n-button>
+          <n-button @click="handleInstallDependencies">安装 Python 依赖</n-button>
+          <n-button @click="handleScanModels">扫描模型</n-button>
           <n-button @click="handleTestConnection" :loading="testing">测试连接</n-button>
           <n-button @click="openFolder('outputs')">输出目录</n-button>
-          <n-button @click="openFolder('engine')">源码目录</n-button>
         </div>
 
         <n-alert v-if="state.objectInfoCount > 0 && !state.error" type="success" class="mb-4">
           已连接内置 ComfyUI，检测到 {{ state.objectInfoCount }} 个节点类型。
         </n-alert>
         <n-alert v-if="state.error" type="error" class="mb-4">{{ state.error }}</n-alert>
+
+        <n-alert v-if="modelScan?.missing?.length" type="warning" class="mb-4">
+          <div v-for="item in modelScan.missing" :key="item">{{ item }}</div>
+        </n-alert>
+        <div v-if="modelScan" class="model-scan mb-4">
+          <div>Checkpoints：{{ modelScan.counts.checkpoints }}</div>
+          <div>Diffusion Models：{{ modelScan.counts.diffusionModels }}</div>
+          <div>LoRA：{{ modelScan.counts.loras }}</div>
+          <div>ControlNet：{{ modelScan.counts.controlnet }}</div>
+          <div>VAE：{{ modelScan.counts.vae }}</div>
+        </div>
 
         <n-divider title-placement="left" class="!my-3">
           <span class="text-xs text-[var(--text-secondary)]">运行日志</span>
@@ -72,7 +85,12 @@ import { ref, computed, onMounted } from 'vue'
 import { NAlert, NButton, NDivider, NForm, NFormItem, NInput, NSpin, NTag } from 'naive-ui'
 import { useComfyStore } from '@/stores/comfy'
 
-const { state, loading, logs, isDesktop, refreshStatus, updateConfig, doInstall, doStart, doStop, doTestConnection, refreshLogs, openFolder } = useComfyStore()
+const {
+  state, loading, logs, modelScan, isDesktop,
+  refreshStatus, updateConfig, doInstall, doInstallDependencies,
+  doStart, doStop, doTestConnection, refreshLogs, openFolder, scanModels
+} = useComfyStore()
+
 const baseUrlInput = ref('http://127.0.0.1:8188')
 const testing = ref(false)
 
@@ -80,9 +98,10 @@ const statusLabel = computed(() => {
   if (!state.value) return '未知'
   if (state.value.error) return '出错'
   if (state.value.running) return '运行中'
-  if (state.value.installed) return '已安装'
-  return '未安装'
+  if (state.value.installed) return '已装载'
+  return '未装载'
 })
+
 const statusTagType = computed(() => {
   if (!state.value) return 'default'
   if (state.value.error) return 'error'
@@ -90,25 +109,98 @@ const statusTagType = computed(() => {
   if (state.value.installed) return 'info'
   return 'default'
 })
-async function handleInstall() { await doInstall(); await refreshLogs() }
-async function handleStart() { await doStart(); await refreshStatus(); await refreshLogs() }
-async function handleStop() { await doStop(); await refreshStatus(); await refreshLogs() }
+
+async function handleInstall() {
+  await doInstall()
+  await refreshLogs()
+  await handleScanModels()
+}
+
+async function handleInstallDependencies() {
+  await doInstallDependencies()
+  await refreshStatus()
+  await refreshLogs()
+}
+
+async function handleScanModels() {
+  await scanModels()
+}
+
+async function handleStart() {
+  await doStart()
+  await refreshStatus()
+  await refreshLogs()
+}
+
+async function handleStop() {
+  await doStop()
+  await refreshStatus()
+  await refreshLogs()
+}
+
 async function handleTestConnection() {
   testing.value = true
-  try { await doTestConnection(baseUrlInput.value); await refreshStatus(); await refreshLogs() } finally { testing.value = false }
+  try {
+    await doTestConnection(baseUrlInput.value)
+    await refreshStatus()
+    await refreshLogs()
+  } finally {
+    testing.value = false
+  }
 }
+
 async function saveBaseUrl() {
   const url = baseUrlInput.value.trim()
   if (url) await updateConfig({ baseUrl: url, port: extractPort(url) })
 }
-function extractPort(url) { try { return new URL(url).port || 8188 } catch { return 8188 } }
-function formatTime(ts) { return new Date(ts).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }) }
-function logLevelClass(level) { return level === 'error' ? 'text-red-400' : level === 'warn' ? 'text-yellow-400' : 'text-[var(--text-secondary)]' }
-onMounted(async () => { await refreshStatus(); await refreshLogs(); if (state.value?.baseUrl) baseUrlInput.value = state.value.baseUrl })
+
+function extractPort(url) {
+  try { return new URL(url).port || 8188 } catch { return 8188 }
+}
+
+function formatTime(ts) {
+  return new Date(ts).toLocaleString('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  })
+}
+
+function logLevelClass(level) {
+  return level === 'error' ? 'text-red-400' : level === 'warn' ? 'text-yellow-400' : 'text-[var(--text-secondary)]'
+}
+
+onMounted(async () => {
+  await refreshStatus()
+  await refreshLogs()
+  await scanModels()
+  if (state.value?.baseUrl) baseUrlInput.value = state.value.baseUrl
+})
 </script>
 
 <style scoped>
 .comfy-engine-panel { padding: 4px 0; }
-.comfy-logs { max-height: 240px; overflow-y: auto; font-size: 12px; font-family: var(--font-mono, monospace); }
-.comfy-log-item { display: flex; gap: 8px; padding: 2px 0; }
+.comfy-logs {
+  max-height: 240px;
+  overflow-y: auto;
+  font-size: 12px;
+  font-family: var(--font-mono, monospace);
+}
+.comfy-log-item {
+  display: flex;
+  gap: 8px;
+  padding: 2px 0;
+}
+.model-scan {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
 </style>
