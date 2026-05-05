@@ -22,7 +22,7 @@ import {
 import { PROJECT_TYPES, createEmptyProjectStructure } from '@/config/projectSchema'
 import { buildComfyWorkflowNodeData, isComfyApiWorkflow } from '@/integrations/comfy/workflowAdapter'
 import { buildDefaultComfyWrapperData } from '@/integrations/comfy/yufengComfyShell'
-import { createDramaShotSeed } from '@/integrations/drama/dramaWorkspace'
+import { createHuobaoDramaProjectSeed, createHuobaoStoryboards, normalizeHuobaoShotToYufengShot } from '@/integrations/drama/huobaoDramaCore'
 
 const ALLOWED_NODE_TYPES = new Set(['text', 'imageConfig', 'image', 'videoConfig', 'video', 'llmConfig', 'comfyWorkflow'])
 
@@ -272,6 +272,7 @@ export function executeCreateDramaProject(params = {}) {
   if (err) return err
   const { projectId, project, created } = ensureProject({ name: params.title || '短剧项目', type: PROJECT_TYPES.DRAMA })
   const base = createEmptyProjectStructure(PROJECT_TYPES.DRAMA)
+  const seed = createHuobaoDramaProjectSeed(params.premise || params.title || '短剧项目')
   const now = Date.now()
   updateProject(projectId, {
     type: PROJECT_TYPES.DRAMA,
@@ -279,7 +280,10 @@ export function executeCreateDramaProject(params = {}) {
     drama: {
       ...base.drama,
       ...(project?.drama || {}),
-      premise: params.premise || project?.drama?.premise || ''
+      premise: params.premise || project?.drama?.premise || seed.premise,
+      characters: project?.drama?.characters?.length ? project.drama.characters : seed.characters,
+      locations: project?.drama?.locations?.length ? project.drama.locations : seed.locations,
+      episodes: project?.drama?.episodes?.length ? project.drama.episodes : seed.episodes
     },
     aiWorkspace: {
       ...base.aiWorkspace,
@@ -303,10 +307,8 @@ export function executeCreateCharacterBible(params = {}) {
   const err = validateCreateCharacterBible(params)
   if (err) return err
   const { projectId, project } = ensureProject({ name: params.title || '短剧项目', type: PROJECT_TYPES.DRAMA })
-  const characters = params.characters?.length ? params.characters : [
-    { id: `char_${Date.now()}_1`, name: '女主', role: '主角', description: '目标明确、外形稳定、适合做角色一致性参考。' },
-    { id: `char_${Date.now()}_2`, name: '男主', role: '主角', description: '与女主形成关系张力，服装和气质需要固定。' }
-  ]
+  const seed = createHuobaoDramaProjectSeed(project?.drama?.premise || params.title || '短剧项目')
+  const characters = params.characters?.length ? params.characters : (project?.drama?.characters?.length ? project.drama.characters : seed.characters)
   updateProject(projectId, {
     type: PROJECT_TYPES.DRAMA,
     drama: { ...(project?.drama || {}), characters }
@@ -330,12 +332,11 @@ export function executeCreateSceneBible(params = {}) {
   const err = validateCreateSceneBible(params)
   if (err) return err
   const { projectId, project } = ensureProject({ name: params.title || '短剧项目', type: PROJECT_TYPES.DRAMA })
-  const locations = params.locations?.length ? params.locations : [
-    { id: `loc_${Date.now()}_1`, name: '主场景', description: params.description || '主要剧情发生地，统一时代、色彩和光影。' }
-  ]
+  const seed = createHuobaoDramaProjectSeed(project?.drama?.premise || params.title || '短剧项目')
+  const locations = params.locations?.length ? params.locations : (project?.drama?.locations?.length ? project.drama.locations : seed.locations)
   updateProject(projectId, { type: PROJECT_TYPES.DRAMA, drama: { ...(project?.drama || {}), locations } })
   const y = nodes.value.length ? Math.max(...nodes.value.map(n => Number(n.position?.y) || 0)) + 220 : 180
-  const nodeId = addLinkedNode('text', { x: 120, y }, { label: '场景 Bible', content: locations.map(l => `${l.name}：${l.description}`).join('\n') })
+  const nodeId = addLinkedNode('text', { x: 120, y }, { label: '场景 Bible', content: locations.map(l => `${l.name || l.location}：${l.description || l.prompt || ''}`).join('\n') })
   persistCurrentCanvas(projectId)
   return ok('场景库已创建', { projectId, nodeIds: [nodeId] })
 }
@@ -364,20 +365,31 @@ export function executeCreateShotList(params = {}) {
   if (err) return err
   const { projectId, project } = ensureProject({ name: params.title || '短剧项目', type: PROJECT_TYPES.DRAMA })
   const premise = params.premise || project?.drama?.premise || '短剧项目'
-  const incomingShots = params.shots?.length ? params.shots : createDramaShotSeed(premise, Number(params.count || 8))
+  const incomingShots = params.shots?.length ? params.shots : createHuobaoStoryboards(premise, Number(params.count || 8))
   const now = Date.now()
-  const shots = incomingShots.map((shot, index) => ({
+  const shots = incomingShots.map((rawShot, index) => {
+    const shot = normalizeHuobaoShotToYufengShot(rawShot)
+    return ({
     id: shot.id || `shot_${now}_${index + 1}`,
     index: index + 1,
     title: shot.title || `镜头 ${index + 1}`,
     description: shot.description || '',
     prompt: shot.prompt || shot.description || `${premise}，镜头 ${index + 1}，电影感短剧首帧`,
+    imagePrompt: shot.imagePrompt || shot.prompt || shot.description || `${premise}，镜头 ${index + 1}，电影感短剧首帧`,
     videoPrompt: shot.videoPrompt || `${premise}，镜头 ${index + 1}，自然镜头运动，画面稳定`,
+    shotType: shot.shotType,
+    angle: shot.angle,
+    movement: shot.movement,
+    location: shot.location,
+    time: shot.time,
+    bgmPrompt: shot.bgmPrompt,
+    soundEffect: shot.soundEffect,
     duration: shot.duration || 5,
     status: shot.status || 'pending',
     createdAt: now,
     updatedAt: now
-  }))
+  })
+  })
 
   const baseY = nodes.value.length ? Math.max(...nodes.value.map(n => Number(n.position?.y) || 0)) + 220 : 180
   const nodeIds = []
@@ -386,7 +398,7 @@ export function executeCreateShotList(params = {}) {
     const y = baseY + i * 190
     const shot = shots[i]
     const textId = addLinkedNode('text', { x: 120, y }, { label: `${shot.title} 镜头描述`, content: `${shot.description || shot.prompt}\n\n视频：${shot.videoPrompt}` })
-    const imageId = addLinkedNode('imageConfig', { x: 540, y }, { label: `${shot.title} 首帧`, prompt: shot.prompt, size: '1920x1080', quality: 'high' })
+    const imageId = addLinkedNode('imageConfig', { x: 540, y }, { label: `${shot.title} 首帧`, prompt: shot.imagePrompt || shot.prompt, size: '1920x1080', quality: 'high' })
     const videoId = addLinkedNode('videoConfig', { x: 920, y }, { label: `${shot.title} 视频`, prompt: shot.videoPrompt, ratio: '16:9', duration: shot.duration })
     const edge1 = addEdge({ source: textId, target: imageId, sourceHandle: 'right', targetHandle: 'left' })
     const edge2 = addEdge({ source: imageId, target: videoId, sourceHandle: 'right', targetHandle: 'left' })

@@ -1,0 +1,6 @@
+﻿[submodule ".reference-repos/ComfyUI"]
+	path = .reference-repos/ComfyUI
+	url = https://github.com/Comfy-Org/ComfyUI.git
+[submodule ".reference-repos/huobao-drama"]
+	path = .reference-repos/huobao-drama
+	url = https://github.com/chatfire-AI/huobao-drama.git

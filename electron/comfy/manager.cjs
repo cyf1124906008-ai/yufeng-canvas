@@ -14,6 +14,8 @@ const defaultState = {
   enginePath: '',
   modelsPath: '',
   outputsPath: '',
+  inputPath: '',
+  bundledSource: '',
   version: '',
   objectInfoCount: 0,
   lastCheckedAt: 0,
@@ -36,6 +38,9 @@ function getStatus() {
     state.enginePath = paths.getComfyEnginePath()
     state.modelsPath = paths.getComfyModelsPath()
     state.outputsPath = paths.getComfyOutputsPath()
+    state.inputPath = paths.getComfyInputPath()
+    state.bundledSource = config.bundledSource || paths.getBundledComfySourcePath()
+    state.running = config.running ?? false
     state.version = config.version || ''
     state.error = config.error || ''
     state.objectInfoCount = config.objectInfoCount || 0
@@ -47,6 +52,8 @@ function getStatus() {
     state.enginePath = paths.getComfyEnginePath()
     state.modelsPath = paths.getComfyModelsPath()
     state.outputsPath = paths.getComfyOutputsPath()
+    state.inputPath = paths.getComfyInputPath()
+    state.bundledSource = state.bundledSource || paths.getBundledComfySourcePath()
   }
 
   state.lastCheckedAt = Date.now()

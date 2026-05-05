@@ -87,7 +87,34 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true
-    }
+    },
+    "extraResources": [
+      {
+        "from": ".reference-repos/ComfyUI",
+        "to": "engines/ComfyUI",
+        "filter": [
+          "**/*",
+          "!**/.git/**",
+          "!**/.github/**",
+          "!models/**",
+          "!input/**",
+          "!output/**",
+          "!tests/**",
+          "!tests-unit/**"
+        ]
+      },
+      {
+        "from": ".reference-repos/huobao-drama",
+        "to": "engines/huobao-drama",
+        "filter": [
+          "**/*",
+          "!**/.git/**",
+          "!data/**",
+          "!frontend/node_modules/**",
+          "!backend/node_modules/**"
+        ]
+      }
+    ]
   },
   "pnpm": {
     "onlyBuiltDependencies": [
