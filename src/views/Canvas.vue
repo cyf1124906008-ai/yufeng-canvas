@@ -523,6 +523,8 @@
         </div>
       </section>
 
+      <YufengEngineWorkspace @action="handleEngineWorkspaceAction" />
+
       <!-- Bottom AI composer | 底部 AI 输入：默认收起，按 Ctrl/⌘+K 呼出 -->
       <div
         class="composer-dock absolute bottom-4 left-1/2 -translate-x-1/2 z-20"
@@ -719,10 +721,12 @@ import { projects, initProjectsStore, updateProject, renameProject, deleteProjec
 import ApiSettings from '../components/ApiSettings.vue'
 import DownloadModal from '../components/DownloadModal.vue'
 import WorkflowPanel from '../components/WorkflowPanel.vue'
+import YufengEngineWorkspace from '../components/workspace/YufengEngineWorkspace.vue'
 import AppHeader from '../components/AppHeader.vue'
 import GuidedTour from '../components/GuidedTour.vue'
 import { CANVAS_PROMPT_SUGGESTIONS } from '../config/promptLibrary'
 import { buildCanvasSnapshot, buildCanvasAgentSystemPrompt, parseAgentCommandResponse, classifyCommandRisk, buildLocalCommandPlan } from '../integrations/canvas/agentPlanner'
+import { buildDefaultComfyWrapperData } from '../integrations/comfy/yufengComfyShell'
 import { executeCommandBatch, validateCommandBatch } from '../integrations/canvas/commands'
 
 // API Config state | API 配置状态
@@ -2168,6 +2172,63 @@ const runStudioAction = (actionId) => {
   if (!plan) return
   const executed = executeCanvasCommandPlan(plan)
   if (executed) nextTick(() => fitView({ padding: 0.18, duration: 500 }))
+}
+
+
+const handleEngineWorkspaceAction = (action, payload) => {
+  if (action === 'openComfySettings') {
+    showApiSettings.value = true
+    window.$message?.info('?? API ??????Comfy ???????????????? ComfyUI?')
+    return
+  }
+
+  if (action === 'openWorkflowImport') {
+    showWorkflowPanel.value = true
+    return
+  }
+
+  if (action === 'createComfyWrapper') {
+    const y = nodes.value.length
+      ? Math.max(...nodes.value.map(node => Number(node.position?.y) || 0)) + 240
+      : 180
+    const wrapperData = buildDefaultComfyWrapperData(payload || 'txt2img-basic')
+    const plan = makeStudioNodePlan(`??? ${wrapperData.wrapperTemplateTitle} Comfy ????`, [
+      {
+        name: 'addNode',
+        params: {
+          ref: 'comfyShellNote',
+          type: 'text',
+          position: { x: 120, y },
+          data: {
+            label: 'ComfyUI ????',
+            content: '?????? ComfyUI workflow?YUFENG ?????????????????????? Canvas Action Protocol ???'
+          }
+        }
+      },
+      {
+        name: 'addNode',
+        params: {
+          ref: 'comfyShellNode',
+          type: 'comfyWorkflow',
+          position: { x: 560, y },
+          data: wrapperData
+        }
+      },
+      { name: 'connectNodes', params: { source: 'comfyShellNote', target: 'comfyShellNode' } }
+    ])
+    const executed = executeCanvasCommandPlan(plan)
+    if (executed) nextTick(() => fitView({ padding: 0.18, duration: 500 }))
+    return
+  }
+
+  if (action === 'createDramaWorkspace' || action === 'createDramaShots') {
+    runCanvasQuickAction('????????????????8??????????????????')
+    return
+  }
+
+  if (action === 'createCharacterBible') {
+    runStudioAction('characterBible')
+  }
 }
 
 const runCanvasQuickAction = (prompt) => {
