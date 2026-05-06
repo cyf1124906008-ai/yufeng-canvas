@@ -139,14 +139,13 @@ import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { NIcon } from 'naive-ui'
 import { TrashOutline, ChevronDownOutline, ChevronForwardOutline, VideocamOutline } from '@vicons/ionicons5'
-import { useVueFlow as useVF } from '@vue-flow/core'
 import NodeHandleMenu from './NodeHandleMenu.vue'
-import { updateNode, addNode, addEdge, nodes, edges, removeNode, duplicateNode, currentProjectId } from '../../stores/canvas'
+import { updateNode, addNode, addEdge, nodes, edges, removeNode, currentProjectId } from '../../stores/canvas'
 import { useModelStore } from '../../stores/pinia'
 import { useImageGeneration } from '../../hooks/useApi'
-import { registerTask, updateTask, removeTask } from '../../stores/tasks'
+import { registerTask, updateTask, getTaskByNodeId, removeTask } from '../../stores/tasks'
+import { ipcGetPendingResult } from '../../integrations/imageGeneration/client'
 import { saveAsset } from '../../integrations/comfy/api'
-import { IMAGE_MODELS, DEFAULT_IMAGE_MODEL } from '../../config/models'
 import { getCapabilityLabel, getModelCapabilityConflict } from '../../utils/modelCapability'
 
 const SAMPLER_OPTIONS = ['euler', 'euler_a', 'dpmpp_2m', 'dpmpp_2m_sde', 'dpmpp_3m_sde', 'ddim', 'uni_pc']
@@ -165,6 +164,7 @@ const editingLabelValue = ref('')
 const labelInputRef = ref(null)
 const elapsedText = ref('')
 let elapsedTimer = null
+let recoveryTimer = null
 
 const localPrompt = ref(props.data.prompt ?? '')
 const localNegPrompt = ref(props.data.negativePrompt ?? '')
@@ -181,7 +181,7 @@ const createdImageNodeId = ref(null)
 const imageModelOptions = computed(() => modelStore.imageModelOptions)
 const isConfigured = computed(() => !!modelStore.currentImageApiKey)
 const isSelected = computed(() => false)
-const imageSizeOptions = ['1024x1024', '1024x1792', '1792x1024', '512x512', '768x1344', '1344x768', '1920x1080', '1080x1920']
+const imageSizeOptions = ['1024x1024', '1024x1792', '1792x1024', '512x512', '768x1344', '1344x768', '1920x1080', '1080x1920', '1440x2560', '2560x1440', '2048x2048']
 
 const modelCapabilityConflict = computed(() => {
   if (!localModel.value) return null
@@ -191,11 +191,6 @@ const modelCapabilityConflict = computed(() => {
 const capabilityConflictMessage = computed(() => {
   if (!modelCapabilityConflict.value) return ''
   return `当前选择的是${getCapabilityLabel(modelCapabilityConflict.value)}模型，请选择图片模型`
-})
-
-const selectedImageModel = computed(() => {
-  if (!localModel.value) return null
-  return modelStore.availableImageModels?.find(m => m.key === localModel.value) || null
 })
 
 const connectedPromptCount = computed(() => {
@@ -214,7 +209,6 @@ const connectedRefImageCount = computed(() => {
   }).length
 })
 
-// Sync data to store
 const emitUpdate = (key, value) => {
   updateNode(props.id, { [key]: value, updatedAt: Date.now() })
 }
@@ -230,7 +224,6 @@ watch(localSampler, v => emitUpdate('sampler', v))
 watch(localScheduler, v => emitUpdate('scheduler', v))
 watch(localDenoise, v => emitUpdate('denoise', v))
 
-// NodeHandleMenu operations
 const operations = [
   { type: 'image', label: '输出到图片节点' },
   { type: 'videoConfig', label: '生视频', icon: VideocamOutline }
@@ -266,6 +259,7 @@ function finishEditLabel() {
 
 function handleDelete() {
   if (elapsedTimer) clearInterval(elapsedTimer)
+  if (recoveryTimer) clearInterval(recoveryTimer)
   removeNode(props.id)
 }
 
@@ -287,7 +281,6 @@ function stopElapsed() {
   elapsedText.value = ''
 }
 
-// Get prompt from connected nodes
 function getEffectivePrompt() {
   const incoming = edges.value.filter(e => e.target === props.id)
   const prompts = []
@@ -318,6 +311,76 @@ function getRefImages() {
     }
   }
   return images
+}
+
+function extractImageUrl(rawData) {
+  const visit = (value) => {
+    if (!value) return null
+    if (typeof value === 'string') {
+      const mdMatch = value.match(/!\[[^\]]*]\(([^)]+)\)/)
+      if (mdMatch) return mdMatch[1]
+      const htmlMatch = value.match(/<img[^>]+src=["']([^"']+)["']/i)
+      if (htmlMatch) return htmlMatch[1]
+      const dataMatch = value.match(/data:image\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=]+/)
+      if (dataMatch) return dataMatch[0]
+      return null
+    }
+    if (Array.isArray(value)) {
+      for (const item of value) { const r = visit(item); if (r) return r }
+      return null
+    }
+    if (typeof value === 'object') {
+      if (value.image_url?.url) return value.image_url.url
+      if (value.url) return value.url
+      if (value.b64_json) return `data:image/png;base64,${value.b64_json}`
+      if (value.text) { const r = visit(value.text); if (r) return r }
+      if (value.content) { const r = visit(value.content); if (r) return r }
+      if (value.data) { const r = visit(value.data); if (r) return r }
+      if (value.choices) { const r = visit(value.choices); if (r) return r }
+      if (value.message) { const r = visit(value.message); if (r) return r }
+    }
+    return null
+  }
+  return visit(rawData)
+}
+
+async function applyRecoveredResult(outputId, rawData) {
+  const imageUrl = extractImageUrl(rawData)
+  if (!imageUrl || !outputId) return
+
+  const imageData = { loading: false, error: '', label: '图片结果', updatedAt: Date.now(), finishedAt: Date.now() }
+
+  if (!imageUrl.startsWith('data:') && !imageUrl.startsWith('blob:')) {
+    try {
+      const projectId = currentProjectId.value || 'canvas-default'
+      const resp = await fetch(imageUrl)
+      const blob = await resp.blob()
+      const dataUrl = await new Promise((resolve) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(reader.result)
+        reader.readAsDataURL(blob)
+      })
+      const asset = await saveAsset(dataUrl, projectId)
+      if (asset?.assetPath) { imageData.assetPath = asset.assetPath; imageData.url = dataUrl }
+      else { imageData.url = imageUrl }
+    } catch {
+      console.warn(`[CloudImageWorkflow] CORS 下载失败，保留远程 URL: ${imageUrl.slice(0, 80)}...`)
+      imageData.url = imageUrl
+    }
+  } else {
+    imageData.url = imageUrl
+    if (imageUrl?.startsWith('data:')) {
+      try {
+        const asset = await saveAsset(imageUrl, currentProjectId.value || 'canvas-default')
+        if (asset?.assetPath) imageData.assetPath = asset.assetPath
+      } catch { /* keep data URL */ }
+    }
+  }
+
+  updateNode(outputId, imageData)
+  emitUpdate('executed', true)
+  emitUpdate('status', 'success')
+  emitUpdate('error', '')
 }
 
 async function handleGenerate() {
@@ -351,7 +414,6 @@ async function handleGenerate() {
   emitUpdate('error', '')
   startElapsed()
 
-  // Find or create output node
   let imageNodeId = createdImageNodeId.value
   const existingOutput = edges.value.find(e => e.source === props.id && nodes.value.find(n => n.id === e.target && n.type === 'image'))
   if (existingOutput) {
@@ -372,7 +434,18 @@ async function handleGenerate() {
   updateNode(props.id, { outputNodeId: imageNodeId, updatedAt: Date.now() })
 
   try {
-    const params = { model: localModel.value, prompt, size: localSize.value, n: 1 }
+    // Build params including professional parameters
+    const params = {
+      model: localModel.value,
+      prompt,
+      size: localSize.value,
+      n: 1,
+      steps: Number(localSteps.value) || 20,
+      cfg_scale: Number(localCfg.value) || 7,
+      sampler: localSampler.value || 'euler',
+      scheduler: localScheduler.value || 'normal',
+      denoising_strength: Number(localDenoise.value) ?? 1.0
+    }
     if (localSeed.value && String(localSeed.value).trim()) params.seed = String(localSeed.value).trim()
     if (localNegPrompt.value && String(localNegPrompt.value).trim()) params.negative_prompt = String(localNegPrompt.value).trim()
     if (refImages.length > 0) params.image = refImages
@@ -389,6 +462,7 @@ async function handleGenerate() {
       result = await generate(params)
     } catch (genErr) {
       if (genErr._frontendTimeout) {
+        // Do NOT mark task as failed — keep running so refresh can recover
         updateNode(imageNodeId, { loading: false, error: '等待超时，后台仍在生成中，刷新页面可恢复结果', updatedAt: Date.now() })
         window.$message?.warning('前端等待超时，供应商请求仍在后台继续，刷新后可恢复结果')
         stopElapsed()
@@ -407,11 +481,16 @@ async function handleGenerate() {
         try {
           const projectId = currentProjectId.value || 'canvas-default'
           const resp = await fetch(imageUrl)
+          if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
           const blob = await resp.blob()
           const dataUrl = await new Promise((resolve) => { const r = new FileReader(); r.onload = () => resolve(r.result); r.readAsDataURL(blob) })
           const asset = await saveAsset(dataUrl, projectId)
-          if (asset?.assetPath) { imageData.assetPath = asset.assetPath; imageData.url = dataUrl } else { imageData.url = imageUrl }
-        } catch { imageData.url = imageUrl }
+          if (asset?.assetPath) { imageData.assetPath = asset.assetPath; imageData.url = dataUrl }
+          else { imageData.url = imageUrl }
+        } catch (saveErr) {
+          console.warn(`[CloudImageWorkflow] 资产保存失败，保留远程 URL: ${saveErr.message}`)
+          imageData.url = imageUrl
+        }
       } else {
         imageData.url = imageUrl
         if (imageUrl?.startsWith('data:')) {
@@ -437,18 +516,78 @@ async function handleGenerate() {
   stopElapsed()
 }
 
-// Listen for run events from commands.js
 function handleRunCommand(event) {
   if (event?.detail?.nodeId === props.id) handleGenerate()
 }
 
-onMounted(() => {
+onMounted(async () => {
   window.addEventListener('yufeng:run-cloud-image-workflow', handleRunCommand)
+
+  // Auto-select first available model if none set
+  const availableModels = modelStore.availableImageModels
+  if (!localModel.value || !availableModels.some(m => m.key === localModel.value)) {
+    localModel.value = availableModels[0]?.key || ''
+    if (localModel.value) updateNode(props.id, { model: localModel.value })
+  }
+
+  // Recover running image task after page refresh
+  const runningTask = getTaskByNodeId(props.id).value
+  if (runningTask?.status === 'running' && runningTask.taskId) {
+    const outputId = runningTask.outputNodeId || props.data?.outputNodeId
+
+    if (outputId) {
+      updateNode(outputId, { loading: true, error: '', updatedAt: Date.now() })
+    }
+
+    emitUpdate('status', 'running')
+    startElapsed()
+
+    let attempts = 0
+    const maxAttempts = 600 // 600 * 3s = 30 min
+    recoveryTimer = setInterval(async () => {
+      attempts++
+      try {
+        const pendingResult = await ipcGetPendingResult(runningTask.taskId)
+        if (pendingResult?.ok && pendingResult.data) {
+          clearInterval(recoveryTimer)
+          recoveryTimer = null
+          stopElapsed()
+          updateTask(runningTask.id, { status: 'completed' })
+          removeTask(runningTask.id)
+          await applyRecoveredResult(outputId, pendingResult.data)
+          window.$message?.success('后台云端工作流任务已完成，结果已恢复到画布')
+        } else if (attempts >= maxAttempts) {
+          clearInterval(recoveryTimer)
+          recoveryTimer = null
+          stopElapsed()
+          updateTask(runningTask.id, { status: 'failed', error: '恢复超时，主进程未返回结果' })
+          removeTask(runningTask.id)
+          if (outputId) {
+            updateNode(outputId, { loading: false, error: '后台生成结果恢复超时', updatedAt: Date.now() })
+          }
+          emitUpdate('status', 'error')
+          emitUpdate('error', '后台生成结果恢复超时')
+        }
+      } catch {
+        clearInterval(recoveryTimer)
+        recoveryTimer = null
+        stopElapsed()
+        updateTask(runningTask.id, { status: 'failed', error: '恢复时 IPC 通信失败' })
+        removeTask(runningTask.id)
+        if (outputId) {
+          updateNode(outputId, { loading: false, error: '恢复结果时发生错误', updatedAt: Date.now() })
+        }
+        emitUpdate('status', 'error')
+        emitUpdate('error', '恢复结果时 IPC 通信失败')
+      }
+    }, 3000)
+  }
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('yufeng:run-cloud-image-workflow', handleRunCommand)
   stopElapsed()
+  if (recoveryTimer) { clearInterval(recoveryTimer); recoveryTimer = null }
 })
 </script>
 

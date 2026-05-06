@@ -191,6 +191,15 @@ const normalizeImageGenerationParams = (params, imageModel, modelConfig) => {
     requestData.image = params.image
   }
 
+  // Cloud workflow professional params — pass through when present
+  if (params.steps != null) requestData.steps = Number(params.steps)
+  if (params.cfg_scale != null) requestData.cfg_scale = Number(params.cfg_scale)
+  if (params.sampler) requestData.sampler = params.sampler
+  if (params.scheduler) requestData.scheduler = params.scheduler
+  if (params.denoising_strength != null) requestData.denoising_strength = Number(params.denoising_strength)
+  if (params.seed != null) requestData.seed = Number(params.seed)
+  if (params.negative_prompt) requestData.negative_prompt = params.negative_prompt
+
   return requestData
 }
 
