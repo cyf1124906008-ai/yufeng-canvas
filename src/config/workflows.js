@@ -104,6 +104,51 @@ const createTextToImagePreset = ({
   }
 }
 
+const createCloudWorkflowPreset = ({
+  prompt,
+  promptLabel,
+  configLabel,
+  resultLabel,
+  size = '1440x2560',
+  steps = 20,
+  cfg = 7,
+  sampler = 'euler',
+  scheduler = 'normal',
+  denoise = 1.0
+}) => (startPosition) => {
+  const getNodeId = createIdFactory()
+  const textId = getNodeId()
+  const configId = getNodeId()
+  const resultId = getNodeId()
+
+  return {
+    nodes: [
+      {
+        id: textId,
+        type: 'text',
+        position: { x: startPosition.x, y: startPosition.y },
+        data: { content: prompt, label: promptLabel }
+      },
+      {
+        id: configId,
+        type: 'cloudImageWorkflow',
+        position: { x: startPosition.x + 420, y: startPosition.y },
+        data: { label: configLabel, size, steps, cfg, sampler, scheduler, denoise }
+      },
+      {
+        id: resultId,
+        type: 'image',
+        position: { x: startPosition.x + 820, y: startPosition.y },
+        data: { url: '', label: resultLabel }
+      }
+    ],
+    edges: [
+      connect(textId, configId, { type: 'promptOrder', data: { promptOrder: 1 } }),
+      connect(configId, resultId)
+    ]
+  }
+}
+
 const createTextToVideoPreset = ({
   prompt,
   ratio = '16:9',
@@ -1826,6 +1871,104 @@ WORKFLOW_TEMPLATES.push(
         { label: '抖音封面', size: '1440x2560', prompt: '抖音短视频封面，大字标题“这杯青梅茶太会了”，强对比、产品特写、人物反应，留出标题区。' },
         { label: '电商活动', size: '1440x2560', prompt: '电商促销活动图，组合套餐、优惠券、限时文案、商品卡片和购买按钮，中文 UI 清晰，真实平台感。' }
       ]
+    })
+  }
+)
+
+WORKFLOW_TEMPLATES.push(
+  {
+    id: 'cloud-txt2img-pro',
+    name: '云端专业文生图',
+    description: '使用云端模型的高级参数（Steps、CFG、Sampler）生成高质量图片',
+    icon: 'ImageOutline',
+    category: 'cloud',
+    cover: coverSocialPoster,
+    createNodes: createCloudWorkflowPreset({
+      promptLabel: '专业提示词',
+      configLabel: '云端专业文生图',
+      resultLabel: '生成结果',
+      size: '1440x2560',
+      prompt: '高质量视觉作品，精细画面，专业摄影质感，电影级光影',
+      steps: 30,
+      cfg: 7,
+      sampler: 'euler_a',
+      scheduler: 'karras',
+      denoise: 1.0
+    })
+  },
+  {
+    id: 'cloud-img2img-pro',
+    name: '云端专业图生图',
+    description: '上传参考图后用专业参数重绘，保持构图同时提升质量',
+    icon: 'ImageOutline',
+    category: 'cloud',
+    cover: coverCameraExplodedView,
+    createNodes: (startPosition) => {
+      const getNodeId = createIdFactory()
+      const imageId = getNodeId()
+      const textId = getNodeId()
+      const configId = getNodeId()
+      const resultId = getNodeId()
+
+      return {
+        nodes: [
+          { id: imageId, type: 'image', position: { x: startPosition.x, y: startPosition.y }, data: { url: '', label: '参考图' } },
+          { id: textId, type: 'text', position: { x: startPosition.x, y: startPosition.y + 200 }, data: { content: '保持参考图构图，提升画质和细节，增强光影效果', label: '重绘提示词' } },
+          { id: configId, type: 'cloudImageWorkflow', position: { x: startPosition.x + 420, y: startPosition.y + 80 }, data: { label: '云端图生图', size: '1440x2560', steps: 25, cfg: 7, sampler: 'dpmpp_2m', scheduler: 'karras', denoise: 0.6 } },
+          { id: resultId, type: 'image', position: { x: startPosition.x + 820, y: startPosition.y + 80 }, data: { url: '', label: '重绘结果' } }
+        ],
+        edges: [
+          connect(imageId, configId, { type: 'imageOrder', data: { imageOrder: 1 } }),
+          connect(textId, configId, { type: 'promptOrder', data: { promptOrder: 1 } }),
+          connect(configId, resultId)
+        ]
+      }
+    }
+  },
+  {
+    id: 'cloud-hd-upscale',
+    name: '云端高清放大',
+    description: '低分辨率图片通过高 Denoise 重绘提升到高清',
+    icon: 'ImageOutline',
+    category: 'cloud',
+    cover: coverFashionCampaign,
+    createNodes: (startPosition) => {
+      const getNodeId = createIdFactory()
+      const imageId = getNodeId()
+      const configId = getNodeId()
+      const resultId = getNodeId()
+
+      return {
+        nodes: [
+          { id: imageId, type: 'image', position: { x: startPosition.x, y: startPosition.y }, data: { url: '', label: '原图' } },
+          { id: configId, type: 'cloudImageWorkflow', position: { x: startPosition.x + 420, y: startPosition.y }, data: { label: '高清放大', size: '2048x2048', steps: 35, cfg: 8, sampler: 'dpmpp_sde', scheduler: 'karras', denoise: 0.45, prompt: '超高清，精细纹理，无损放大，保持原始构图和色彩' } },
+          { id: resultId, type: 'image', position: { x: startPosition.x + 820, y: startPosition.y }, data: { url: '', label: '高清结果' } }
+        ],
+        edges: [
+          connect(imageId, configId, { type: 'imageOrder', data: { imageOrder: 1 } }),
+          connect(configId, resultId)
+        ]
+      }
+    }
+  },
+  {
+    id: 'cloud-portrait-pro',
+    name: '人像精修 Pro',
+    description: '高 Steps + DPM++ SDE 生成电影级人像，支持参考图风格迁移',
+    icon: 'PersonOutline',
+    category: 'cloud',
+    cover: coverCharacter,
+    createNodes: createCloudWorkflowPreset({
+      promptLabel: '人像提示词',
+      configLabel: '人像精修 Pro',
+      resultLabel: '人像结果',
+      size: '1440x2560',
+      prompt: '电影级人像摄影，自然光线，浅景深，皮肤纹理真实，杂志编辑大片质感，面部细节清晰，无水印',
+      steps: 40,
+      cfg: 8,
+      sampler: 'dpmpp_sde',
+      scheduler: 'karras',
+      denoise: 1.0
     })
   }
 )

@@ -353,6 +353,22 @@ const getDefaultNodeData = (type) => {
         lastRunAt: null,
         baseUrl: 'http://127.0.0.1:8188'
       }
+    case 'cloudImageWorkflow':
+      return {
+        label: '云端专业工作流',
+        prompt: '',
+        negativePrompt: '',
+        model: '',
+        size: '1440x2560',
+        seed: -1,
+        steps: 20,
+        cfg: 7,
+        sampler: 'euler',
+        scheduler: 'normal',
+        denoise: 1.0,
+        status: 'idle',
+        error: ''
+      }
     default:
       return {}
   }

@@ -228,6 +228,7 @@
 
               <div class="integrated-inline-actions">
                 <button @click.stop="createIntegratedProject('dramaShots')">内置短剧项目：生成 8 分镜</button>
+                <button @click.stop="createIntegratedProject('cloudProWorkflow')">云端专业文生图</button>
                 <button @click.stop="createIntegratedProject('image2video')">首帧到视频链路</button>
               </div>
 
@@ -1139,6 +1140,13 @@ const integratedLaunchCards = [
     title: '短剧项目 + 8 分镜',
     desc: '创建角色库、场景库、镜头表、首帧节点、视频节点和连线。',
     action: '生成短剧结构'
+  },
+  {
+    id: 'cloudProWorkflow',
+    badge: 'Cloud Professional',
+    title: '云端专业文生图',
+    desc: '使用云端模型专业参数（Steps、CFG、Sampler）生成高质量图片。',
+    action: '创建专业工作流'
   },
   {
     id: 'productLaunch',
@@ -2100,6 +2108,11 @@ const createIntegratedProject = (actionId) => {
       name: '短剧 8 分镜项目',
       type: PROJECT_TYPES.DRAMA,
       action: 'dramaShots'
+    },
+    cloudProWorkflow: {
+      name: '云端专业文生图',
+      type: PROJECT_TYPES.MIXED,
+      action: 'cloudProWorkflow'
     },
     productLaunch: {
       name: '产品发布全套物料',

@@ -780,6 +780,7 @@ import ImageNode from '../components/nodes/ImageNode.vue'
 import VideoConfigNode from '../components/nodes/VideoConfigNode.vue'
 import LLMConfigNode from '../components/nodes/LLMConfigNode.vue'
 import ComfyWorkflowNode from '../components/nodes/ComfyWorkflowNode.vue'
+import CloudImageWorkflowNode from '../components/nodes/CloudImageWorkflowNode.vue'
 import ImageRoleEdge from '../components/edges/ImageRoleEdge.vue'
 import PromptOrderEdge from '../components/edges/PromptOrderEdge.vue'
 import ImageOrderEdge from '../components/edges/ImageOrderEdge.vue'
@@ -798,7 +799,8 @@ const nodeTypes = {
   image: markRaw(ImageNode),
   videoConfig: markRaw(VideoConfigNode),
   llmConfig: markRaw(LLMConfigNode),
-  comfyWorkflow: markRaw(ComfyWorkflowNode)
+  comfyWorkflow: markRaw(ComfyWorkflowNode),
+  cloudImageWorkflow: markRaw(CloudImageWorkflowNode)
 }
 
 // Register custom edge types | 注册自定义边类型
@@ -916,7 +918,7 @@ const contextNode = computed(() =>
   nodes.value.find((node) => node.id === contextNodeId.value) || null
 )
 
-const executableNodeTypes = new Set(['llmConfig', 'imageConfig', 'videoConfig'])
+const executableNodeTypes = new Set(['llmConfig', 'imageConfig', 'videoConfig', 'cloudImageWorkflow'])
 
 const contextNodeCanRun = computed(() =>
   executableNodeTypes.has(contextNode.value?.type)
@@ -935,7 +937,8 @@ const nodeTypeLabel = (type) => ({
   image: 'Output Node',
   imageConfig: 'Image Generation Node',
   video: 'Video Output Node',
-  videoConfig: 'Video Generation Node'
+  videoConfig: 'Video Generation Node',
+  cloudImageWorkflow: 'Cloud Professional Workflow'
 }[type] || '节点')
 
 const commonImageSizes = [
@@ -1381,6 +1384,7 @@ const nodeTypeOptions = [
   { type: 'text', category: 'prompt', name: '提示词 / 文本', description: '写 Prompt、分镜、备注，可连接生图/视频节点', icon: TextOutline, color: '#38bdf8' },
   { type: 'llmConfig', category: 'agent', name: '文本模型', description: '让语言模型润色提示词、拆方向、生成文案', icon: ChatbubbleOutline, color: '#a78bfa' },
   { type: 'imageConfig', category: 'generate', name: '图片生成', description: '文生图 / 图生图配置，支持模型、比例、数量参数', icon: ColorPaletteOutline, color: '#22c55e' },
+  { type: 'cloudImageWorkflow', category: 'generate', name: '云端专业工作流', description: '高级参数节点：Steps、CFG、Sampler、Scheduler、Denoise', icon: ColorPaletteOutline, color: '#14b8a6' },
   { type: 'videoConfig', category: 'generate', name: '视频生成', description: '文生视频 / 图生视频，支持首帧、尾帧、比例、时长', icon: VideocamOutline, color: '#f59e0b' },
   { type: 'image', category: 'output', name: '图片输出 / 参考图', description: '承载生成结果或参考图，可继续图生图/图生视频', icon: ImageOutline, color: '#8b5cf6' },
   { type: 'video', category: 'output', name: '视频输出', description: '承载视频结果，支持预览、下载、继续编排', icon: VideocamOutline, color: '#ef4444' }
@@ -2105,6 +2109,11 @@ const runStudioAction = (actionId) => {
     ]),
     characterBible: makeStudioNodePlan('已创建角色库和一致性工作流', [
       { name: 'createCharacterBible', params: {} }
+    ]),
+    cloudProWorkflow: makeStudioNodePlan('已创建云端专业文生图工作流', [
+      { name: 'addNode', params: { ref: 'prompt', type: 'text', position: { x: 120, y }, data: { label: '专业提示词', content: '描述你想生成的画面，越详细越好。' } } },
+      { name: 'addNode', params: { ref: 'cloudImg', type: 'cloudImageWorkflow', position: { x: 520, y }, data: { label: '云端专业文生图', prompt: '', steps: 20, cfg: 7, sampler: 'euler', scheduler: 'normal' } } },
+      { name: 'connectNodes', params: { source: 'prompt', target: 'cloudImg' } }
     ])
   }
 
@@ -2195,6 +2204,17 @@ const handleEngineWorkspaceAction = (action, payload) => {
   if (action === 'createCharacterBible') {
     runStudioAction('characterBible')
   }
+
+  if (action === 'createCloudImageWorkflow') {
+    const plan = makeStudioNodePlan('创建云端专业工作流', [
+      { name: 'addNode', params: { ref: 'prompt', type: 'text', position: { x: 120, y: 200 }, data: { label: '提示词', content: '描述你想生成的画面' } } },
+      { name: 'addNode', params: { ref: 'cloudImg', type: 'cloudImageWorkflow', position: { x: 520, y: 200 }, data: { label: '云端专业文生图', prompt: '', steps: 20, cfg: 7 } } },
+      { name: 'connectNodes', params: { source: 'prompt', target: 'cloudImg' } }
+    ])
+    const executed = executeCanvasCommandPlan(plan)
+    if (executed) nextTick(() => fitView({ padding: 0.18, duration: 500 }))
+    return
+  }
 }
 
 const runCanvasQuickAction = (prompt) => {
@@ -2217,7 +2237,7 @@ const handleInitialCanvasAction = (rawAction) => {
     action = rawAction
   }
 
-  const allowed = new Set(['dramaShots', 'productLaunch', 'image2video', 'txt2img', 'characterBible'])
+  const allowed = new Set(['dramaShots', 'productLaunch', 'image2video', 'txt2img', 'characterBible', 'cloudProWorkflow'])
   if (!allowed.has(action)) return
 
   runStudioAction(action)

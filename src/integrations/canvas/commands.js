@@ -24,7 +24,7 @@ import { buildComfyWorkflowNodeData, isComfyApiWorkflow } from '@/integrations/c
 import { buildDefaultComfyWrapperData } from '@/integrations/comfy/yufengComfyShell'
 import { createHuobaoDramaProjectSeed, createHuobaoStoryboards, normalizeHuobaoShotToYufengShot } from '@/integrations/drama/huobaoDramaCore'
 
-const ALLOWED_NODE_TYPES = new Set(['text', 'imageConfig', 'image', 'videoConfig', 'video', 'llmConfig', 'comfyWorkflow'])
+const ALLOWED_NODE_TYPES = new Set(['text', 'imageConfig', 'image', 'videoConfig', 'video', 'llmConfig', 'comfyWorkflow', 'cloudImageWorkflow'])
 
 const ALLOWED_DATA_FIELDS = {
   text: ['content', 'label'],
@@ -33,7 +33,8 @@ const ALLOWED_DATA_FIELDS = {
   videoConfig: ['prompt', 'label', 'model', 'ratio', 'duration'],
   video: ['label', 'source', 'duration'],
   llmConfig: ['systemPrompt', 'label', 'model', 'outputFormat'],
-  comfyWorkflow: ['prompt', 'negativePrompt', 'width', 'height', 'seed', 'steps', 'cfg', 'label']
+  comfyWorkflow: ['prompt', 'negativePrompt', 'width', 'height', 'seed', 'steps', 'cfg', 'label'],
+  cloudImageWorkflow: ['prompt', 'negativePrompt', 'label', 'model', 'size', 'seed', 'steps', 'cfg', 'sampler', 'scheduler', 'denoise']
 }
 
 const BLOCKED_DATA_FIELDS = new Set([
@@ -444,6 +445,51 @@ export function executeCreateVideoWorkflow(params = {}) {
   return ok('视频工作流已创建', { nodeIds: [nodeId] })
 }
 
+// --- Cloud Image Workflow ---
+export function validateCreateCloudImageWorkflow(params = {}) {
+  const posErr = validatePosition(params.position)
+  if (posErr) return posErr
+  return null
+}
+
+export function executeCreateCloudImageWorkflow(params = {}) {
+  const err = validateCreateCloudImageWorkflow(params)
+  if (err) return err
+  const y = nodes.value.length ? Math.max(...nodes.value.map(n => Number(n.position?.y) || 0)) + 220 : 180
+  const nodeId = addLinkedNode('cloudImageWorkflow', params.position || { x: 420, y }, {
+    label: params.label || '云端专业工作流',
+    prompt: params.prompt || '',
+    negativePrompt: params.negativePrompt || '',
+    size: params.size || '1440x2560',
+    steps: Number(params.steps) || 20,
+    cfg: Number(params.cfg) || 7,
+    sampler: params.sampler || 'euler',
+    scheduler: params.scheduler || 'normal',
+    denoise: params.denoise != null ? Number(params.denoise) : 1.0,
+    seed: params.seed != null ? Number(params.seed) : -1
+  })
+  persistCurrentCanvas()
+  return ok('云端专业工作流节点已创建', { nodeIds: [nodeId] })
+}
+
+export function validateRunCloudImageWorkflow(params = {}) {
+  if (!params.nodeId || typeof params.nodeId !== 'string') return fail('nodeId 必须是非空字符串')
+  const node = getNodeById(params.nodeId)
+  if (!node) return fail(`节点不存在: ${params.nodeId}`)
+  if (node.type !== 'cloudImageWorkflow') return fail('该节点不是云端专业工作流节点')
+  return null
+}
+
+export function executeRunCloudImageWorkflow(params = {}) {
+  const err = validateRunCloudImageWorkflow(params)
+  if (err) return err
+  if (typeof window === 'undefined' || typeof window.dispatchEvent !== 'function') {
+    return fail('当前环境无法触发云端工作流运行')
+  }
+  window.dispatchEvent(new CustomEvent('yufeng:run-cloud-image-workflow', { detail: { nodeId: params.nodeId } }))
+  return ok('云端专业工作流运行请求已发送', { nodeIds: [params.nodeId] })
+}
+
 // --- assets/error helpers ---
 export function validateSaveAsset(params = {}) {
   if (!params.assetId && !params.nodeId) return fail('saveAsset 需要 assetId 或 nodeId')
@@ -479,6 +525,8 @@ const COMMAND_MAP = {
   createShotList: { validate: validateCreateShotList, execute: executeCreateShotList },
   createFirstFrameWorkflow: { validate: validateCreateFirstFrameWorkflow, execute: executeCreateFirstFrameWorkflow },
   createVideoWorkflow: { validate: validateCreateVideoWorkflow, execute: executeCreateVideoWorkflow },
+  createCloudImageWorkflow: { validate: validateCreateCloudImageWorkflow, execute: executeCreateCloudImageWorkflow },
+  runCloudImageWorkflow: { validate: validateRunCloudImageWorkflow, execute: executeRunCloudImageWorkflow },
   fixWorkflowError: { validate: validateFixWorkflowError, execute: executeFixWorkflowError },
   saveAsset: { validate: validateSaveAsset, execute: executeSaveAsset }
 }

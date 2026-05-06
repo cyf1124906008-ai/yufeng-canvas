@@ -42,6 +42,7 @@
           </p>
           <div class="mt-3 flex flex-wrap gap-2">
             <button class="shell-action" @click="$emit('action', 'openCloudModelSettings')">模型 API 设置</button>
+            <button class="shell-action primary" @click="$emit('action', 'createCloudImageWorkflow')">创建云端专业工作流</button>
           </div>
         </div>
 
