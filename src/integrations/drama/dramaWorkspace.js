@@ -43,10 +43,15 @@ export const DRAMA_PIPELINE_STAGES = [
 ]
 
 export const DRAMA_STATUS_LABELS = {
+  idle: '空闲',
   pending: '未生成',
+  queued: '排队中',
+  generating: '生成中',
   firstFrameReady: '首帧完成',
   videoRunning: '视频生成中',
   videoReady: '视频完成',
+  completed: '已完成',
+  failed: '失败',
   redo: '需要重做',
   locked: '已锁定'
 }
@@ -66,12 +71,17 @@ export function createDramaShotSeed(premise = '短剧项目', count = 8) {
 
 export function summarizeDramaProject(project) {
   const drama = project?.drama || {}
+  const scenes = Array.isArray(drama.scenes) ? drama.scenes : Array.isArray(drama.locations) ? drama.locations : []
   return {
     premise: drama.premise || '',
+    genre: drama.genre || '',
+    style: drama.style || 'realistic',
     characterCount: Array.isArray(drama.characters) ? drama.characters.length : 0,
-    locationCount: Array.isArray(drama.locations) ? drama.locations.length : 0,
+    locationCount: scenes.length,
+    sceneCount: scenes.length,
     episodeCount: Array.isArray(drama.episodes) ? drama.episodes.length : 0,
     shotCount: Array.isArray(drama.shots) ? drama.shots.length : 0,
-    readyShotCount: Array.isArray(drama.shots) ? drama.shots.filter(shot => ['firstFrameReady', 'videoReady', 'locked'].includes(shot.status)).length : 0
+    readyShotCount: Array.isArray(drama.shots) ? drama.shots.filter(shot => ['firstFrameReady', 'videoReady', 'completed', 'locked'].includes(shot.status)).length : 0,
+    dramaGenerationSettings: drama.dramaGenerationSettings || {}
   }
 }

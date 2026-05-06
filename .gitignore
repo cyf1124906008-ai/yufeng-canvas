@@ -26,3 +26,9 @@ appdata-backup-*/
 *.njsproj
 *.sln
 *.sw?
+
+# 临时截图和调试文件
+current-*.png
+dataeyes-*.json
+leftover-titles.txt
+title-list.txt

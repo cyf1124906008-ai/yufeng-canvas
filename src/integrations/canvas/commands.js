@@ -22,9 +22,9 @@ import {
 import { PROJECT_TYPES, createEmptyProjectStructure } from '@/config/projectSchema'
 import { buildComfyWorkflowNodeData, isComfyApiWorkflow } from '@/integrations/comfy/workflowAdapter'
 import { buildDefaultComfyWrapperData } from '@/integrations/comfy/yufengComfyShell'
-import { createHuobaoDramaProjectSeed, createHuobaoStoryboards, normalizeHuobaoShotToYufengShot } from '@/integrations/drama/huobaoDramaCore'
+import { createHuobaoDramaProjectSeed, createHuobaoStoryboards, normalizeHuobaoShotToYufengShot, addShot, removeShot, duplicateShot } from '@/integrations/drama/huobaoDramaCore'
 
-const ALLOWED_NODE_TYPES = new Set(['text', 'imageConfig', 'image', 'videoConfig', 'video', 'llmConfig', 'comfyWorkflow', 'cloudImageWorkflow'])
+const ALLOWED_NODE_TYPES = new Set(['text', 'imageConfig', 'image', 'videoConfig', 'video', 'llmConfig', 'comfyWorkflow', 'cloudImageWorkflow', 'dramaShot'])
 
 const ALLOWED_DATA_FIELDS = {
   text: ['content', 'label'],
@@ -34,7 +34,8 @@ const ALLOWED_DATA_FIELDS = {
   video: ['label', 'source', 'duration'],
   llmConfig: ['systemPrompt', 'label', 'model', 'outputFormat'],
   comfyWorkflow: ['prompt', 'negativePrompt', 'width', 'height', 'seed', 'steps', 'cfg', 'label'],
-  cloudImageWorkflow: ['prompt', 'negativePrompt', 'label', 'model', 'size', 'seed', 'steps', 'cfg', 'sampler', 'scheduler', 'denoise']
+  cloudImageWorkflow: ['prompt', 'negativePrompt', 'label', 'model', 'size', 'seed', 'steps', 'cfg', 'sampler', 'scheduler', 'denoise'],
+  dramaShot: ['label', 'shotId', 'shotIndex', 'shotTitle', 'shotType', 'angle', 'movement', 'sceneName', 'characterNames', 'description', 'dialogue', 'status', 'firstFrameStatus', 'videoStatus', 'firstFrameNodeId', 'videoNodeId']
 }
 
 const BLOCKED_DATA_FIELDS = new Set([
@@ -273,7 +274,8 @@ export function executeCreateDramaProject(params = {}) {
   if (err) return err
   const { projectId, project, created } = ensureProject({ name: params.title || '短剧项目', type: PROJECT_TYPES.DRAMA })
   const base = createEmptyProjectStructure(PROJECT_TYPES.DRAMA)
-  const seed = createHuobaoDramaProjectSeed(params.premise || params.title || '短剧项目')
+  const settings = params.settings || {}
+  const seed = createHuobaoDramaProjectSeed(params.premise || params.title || '短剧项目', settings)
   const now = Date.now()
   updateProject(projectId, {
     type: PROJECT_TYPES.DRAMA,
@@ -282,9 +284,12 @@ export function executeCreateDramaProject(params = {}) {
       ...base.drama,
       ...(project?.drama || {}),
       premise: params.premise || project?.drama?.premise || seed.premise,
+      genre: project?.drama?.genre || seed.genre || '',
+      style: project?.drama?.style || seed.style || 'realistic',
       characters: project?.drama?.characters?.length ? project.drama.characters : seed.characters,
-      locations: project?.drama?.locations?.length ? project.drama.locations : seed.locations,
-      episodes: project?.drama?.episodes?.length ? project.drama.episodes : seed.episodes
+      scenes: project?.drama?.scenes?.length ? project.drama.scenes : seed.scenes,
+      episodes: project?.drama?.episodes?.length ? project.drama.episodes : seed.episodes,
+      dramaGenerationSettings: settings || seed.dramaGenerationSettings || base.drama?.dramaGenerationSettings || {}
     },
     aiWorkspace: {
       ...base.aiWorkspace,
@@ -366,46 +371,93 @@ export function executeCreateShotList(params = {}) {
   if (err) return err
   const { projectId, project } = ensureProject({ name: params.title || '短剧项目', type: PROJECT_TYPES.DRAMA })
   const premise = params.premise || project?.drama?.premise || '短剧项目'
-  const incomingShots = params.shots?.length ? params.shots : createHuobaoStoryboards(premise, Number(params.count || 8))
+  const characters = project?.drama?.characters || []
+  const scenes = project?.drama?.scenes || []
+  const incomingShots = params.shots?.length ? params.shots : createHuobaoStoryboards(premise, Number(params.count || project?.drama?.dramaGenerationSettings?.shotCount || 8), characters, scenes)
   const now = Date.now()
+
   const shots = incomingShots.map((rawShot, index) => {
     const shot = normalizeHuobaoShotToYufengShot(rawShot)
-    return ({
-    id: shot.id || `shot_${now}_${index + 1}`,
-    index: index + 1,
-    title: shot.title || `镜头 ${index + 1}`,
-    description: shot.description || '',
-    prompt: shot.prompt || shot.description || `${premise}，镜头 ${index + 1}，电影感短剧首帧`,
-    imagePrompt: shot.imagePrompt || shot.prompt || shot.description || `${premise}，镜头 ${index + 1}，电影感短剧首帧`,
-    videoPrompt: shot.videoPrompt || `${premise}，镜头 ${index + 1}，自然镜头运动，画面稳定`,
-    shotType: shot.shotType,
-    angle: shot.angle,
-    movement: shot.movement,
-    location: shot.location,
-    time: shot.time,
-    bgmPrompt: shot.bgmPrompt,
-    soundEffect: shot.soundEffect,
-    duration: shot.duration || 5,
-    status: shot.status || 'pending',
-    createdAt: now,
-    updatedAt: now
-  })
+    return {
+      id: shot.id || `shot_${now}_${index + 1}`,
+      index: index + 1,
+      storyboardNumber: index + 1,
+      title: shot.title || `镜头 ${index + 1}`,
+      shotType: shot.shotType || '',
+      angle: shot.angle || '',
+      movement: shot.movement || '',
+      sceneId: shot.sceneId || '',
+      location: shot.location || '',
+      time: shot.time || '',
+      characterIds: shot.characterIds || [],
+      action: shot.action || '',
+      dialogue: shot.dialogue || '',
+      description: shot.description || '',
+      result: shot.result || '',
+      atmosphere: shot.atmosphere || '',
+      imagePrompt: shot.imagePrompt || shot.prompt || shot.description || '',
+      prompt: shot.prompt || shot.imagePrompt || shot.description || '',
+      firstFramePrompt: shot.firstFramePrompt || shot.imagePrompt || shot.description || '',
+      videoPrompt: shot.videoPrompt || '',
+      bgmPrompt: shot.bgmPrompt || '',
+      soundEffect: shot.soundEffect || '',
+      duration: shot.duration || 5,
+      status: 'idle',
+      firstFrameStatus: 'idle',
+      videoStatus: 'idle',
+      nodeIds: {},
+      firstFrameNodeId: '',
+      videoNodeId: '',
+      assetIds: [],
+      episodeId: shot.episodeId || '',
+      createdAt: now,
+      updatedAt: now
+    }
   })
 
+  // Create DramaShotNode for each shot
   const baseY = nodes.value.length ? Math.max(...nodes.value.map(n => Number(n.position?.y) || 0)) + 220 : 180
   const nodeIds = []
   const edgeIds = []
   for (let i = 0; i < shots.length; i++) {
-    const y = baseY + i * 190
+    const y = baseY + i * 160
+    const x = 300
     const shot = shots[i]
-    const textId = addLinkedNode('text', { x: 120, y }, { label: `${shot.title} 镜头描述`, content: `${shot.description || shot.prompt}\n\n视频：${shot.videoPrompt}` })
-    const imageId = addLinkedNode('imageConfig', { x: 540, y }, { label: `${shot.title} 首帧`, prompt: shot.imagePrompt || shot.prompt, size: '1920x1080', quality: 'high' })
-    const videoId = addLinkedNode('videoConfig', { x: 920, y }, { label: `${shot.title} 视频`, prompt: shot.videoPrompt, ratio: '16:9', duration: shot.duration })
-    const edge1 = addEdge({ source: textId, target: imageId, sourceHandle: 'right', targetHandle: 'left' })
-    const edge2 = addEdge({ source: imageId, target: videoId, sourceHandle: 'right', targetHandle: 'left' })
-    shot.nodeIds = { text: textId, firstFrame: imageId, video: videoId }
-    nodeIds.push(textId, imageId, videoId)
-    edgeIds.push(edge1, edge2)
+    const characterNames = shot.characterIds
+      .map(cid => characters.find(c => c.id === cid))
+      .filter(Boolean)
+      .map(c => c.name)
+      .join('、')
+    const sceneObj = scenes.find(s => s.id === shot.sceneId)
+    const sceneName = sceneObj?.name || shot.location || ''
+
+    const dramaShotNodeId = addLinkedNode('dramaShot', { x, y }, {
+      label: shot.title,
+      shotId: shot.id,
+      shotIndex: shot.index,
+      shotTitle: shot.title,
+      shotType: shot.shotType,
+      angle: shot.angle,
+      movement: shot.movement,
+      sceneName,
+      characterNames,
+      description: shot.description,
+      dialogue: shot.dialogue,
+      status: 'idle',
+      firstFrameStatus: 'idle',
+      videoStatus: 'idle',
+      firstFrameNodeId: '',
+      videoNodeId: ''
+    })
+    shot.nodeIds = { text: dramaShotNodeId }
+    nodeIds.push(dramaShotNodeId)
+
+    // Connect sequential shots
+    if (i > 0 && nodeIds.length >= 2) {
+      const prevNodeId = nodeIds[nodeIds.length - 2]
+      const edgeId = addEdge({ source: prevNodeId, target: dramaShotNodeId, sourceHandle: 'right', targetHandle: 'left' })
+      edgeIds.push(edgeId)
+    }
   }
 
   updateProject(projectId, {
@@ -417,7 +469,7 @@ export function executeCreateShotList(params = {}) {
     }
   })
   persistCurrentCanvas(projectId)
-  return ok(`已创建 ${shots.length} 个镜头、首帧和视频节点`, { projectId, shotIds: shots.map(shot => shot.id), nodeIds, edgeIds })
+  return ok(`已创建 ${shots.length} 个镜头节点`, { projectId, shotIds: shots.map(shot => shot.id), nodeIds, edgeIds })
 }
 
 export function validateCreateFirstFrameWorkflow(params = {}) {
@@ -443,6 +495,201 @@ export function executeCreateVideoWorkflow(params = {}) {
   const nodeId = addLinkedNode('videoConfig', { x: 900, y }, { label: params.label || '视频生成', prompt: params.prompt || '自然镜头运动，画面稳定，保持主体一致性', ratio: params.ratio || '16:9', duration: params.duration || 5 })
   persistCurrentCanvas()
   return ok('视频工作流已创建', { nodeIds: [nodeId] })
+}
+
+// --- Drama Shot Commands ---
+
+export function validateUpdateDramaShot(params = {}) {
+  if (!params?.shotId || typeof params.shotId !== 'string') return fail('shotId 必须是非空字符串')
+  return null
+}
+
+export function executeUpdateDramaShot(params = {}) {
+  const err = validateUpdateDramaShot(params)
+  if (err) return err
+  const project = getCurrentProject()
+  if (!project?.drama?.shots) return fail('当前项目没有短剧数据')
+  const shot = project.drama.shots.find(s => s.id === params.shotId)
+  if (!shot) return fail(`镜头不存在: ${params.shotId}`)
+
+  const patch = params.patch || {}
+  if (params.field && params.value != null) {
+    patch[params.field] = params.value
+  }
+  Object.assign(shot, patch, { updatedAt: Date.now() })
+
+  // Sync DramaShotNode data
+  const nodeId = shot.nodeIds?.text
+  if (nodeId) {
+    const characters = project.drama.characters || []
+    const scenes = project.drama.scenes || []
+    const characterNames = (shot.characterIds || [])
+      .map(cid => characters.find(c => c.id === cid))
+      .filter(Boolean)
+      .map(c => c.name)
+      .join('、')
+    const sceneObj = scenes.find(s => s.id === shot.sceneId)
+    const sceneName = sceneObj?.name || shot.location || ''
+
+    updateNode(nodeId, {
+      label: shot.title,
+      shotTitle: shot.title,
+      shotType: shot.shotType,
+      angle: shot.angle,
+      movement: shot.movement,
+      sceneName,
+      characterNames,
+      description: shot.description,
+      dialogue: shot.dialogue,
+      status: shot.status,
+      firstFrameStatus: shot.firstFrameStatus,
+      videoStatus: shot.videoStatus,
+      firstFrameNodeId: shot.firstFrameNodeId || '',
+      videoNodeId: shot.videoNodeId || ''
+    })
+    window.dispatchEvent(new CustomEvent(`yufeng:update-drama-shot-${params.shotId}`, { detail: { shot } }))
+  }
+
+  updateProject(project.id, { drama: { ...project.drama } })
+  persistCurrentCanvas(project.id)
+  return ok('镜头已更新', { shotId: params.shotId })
+}
+
+export function validateLocateDramaShot(params = {}) {
+  if (!params?.shotId || typeof params.shotId !== 'string') return fail('shotId 必须是非空字符串')
+  return null
+}
+
+export function executeLocateDramaShot(params = {}) {
+  const err = validateLocateDramaShot(params)
+  if (err) return err
+  const project = getCurrentProject()
+  const shot = project?.drama?.shots?.find(s => s.id === params.shotId)
+  if (!shot) return fail(`镜头不存在: ${params.shotId}`)
+  const nodeId = shot.nodeIds?.text || shot.firstFrameNodeId || shot.videoNodeId
+  if (!nodeId) return fail('该镜头没有关联节点')
+  const node = getNodeById(nodeId)
+  if (!node) return fail(`节点不存在: ${nodeId}`)
+  return ok('已定位镜头节点', { nodeId, shotId: params.shotId })
+}
+
+export function validateAddDramaShot(params = {}) {
+  return null
+}
+
+export function executeAddDramaShot(params = {}) {
+  const project = getCurrentProject()
+  if (!project) return fail('没有当前项目')
+  if (!project.drama) {
+    updateProject(project.id, { type: PROJECT_TYPES.DRAMA, drama: { ...createEmptyProjectStructure(PROJECT_TYPES.DRAMA).drama } })
+  }
+  const freshProject = getCurrentProject()
+  const shot = addShot(freshProject, params.shotData || {})
+  if (!shot) return fail('添加镜头失败')
+
+  // Create DramaShotNode
+  const baseY = nodes.value.length ? Math.max(...nodes.value.map(n => Number(n.position?.y) || 0)) + 160 : 180
+  const characters = freshProject.drama.characters || []
+  const scenes = freshProject.drama.scenes || []
+  const characterNames = (shot.characterIds || [])
+    .map(cid => characters.find(c => c.id === cid))
+    .filter(Boolean)
+    .map(c => c.name)
+    .join('、')
+  const sceneObj = scenes.find(s => s.id === shot.sceneId)
+  const sceneName = sceneObj?.name || shot.location || ''
+
+  const nodeId = addLinkedNode('dramaShot', { x: 300, y: baseY }, {
+    label: shot.title,
+    shotId: shot.id,
+    shotIndex: shot.index,
+    shotTitle: shot.title,
+    shotType: shot.shotType,
+    angle: shot.angle,
+    movement: shot.movement,
+    sceneName,
+    characterNames,
+    description: shot.description,
+    dialogue: shot.dialogue,
+    status: 'idle',
+    firstFrameStatus: 'idle',
+    videoStatus: 'idle'
+  })
+  shot.nodeIds = { text: nodeId }
+
+  updateProject(freshProject.id, { drama: { ...freshProject.drama } })
+  persistCurrentCanvas(freshProject.id)
+  return ok('镜头已添加', { shotId: shot.id, nodeIds: [nodeId] })
+}
+
+export function validateRemoveDramaShot(params = {}) {
+  if (!params?.shotId || typeof params.shotId !== 'string') return fail('shotId 必须是非空字符串')
+  return null
+}
+
+export function executeRemoveDramaShot(params = {}) {
+  const project = getCurrentProject()
+  if (!project?.drama?.shots) return fail('当前项目没有短剧数据')
+  const shot = project.drama.shots.find(s => s.id === params.shotId)
+  if (!shot) return fail(`镜头不存在: ${params.shotId}`)
+
+  // Remove associated nodes
+  const nodeIdsToRemove = []
+  if (shot.nodeIds?.text) nodeIdsToRemove.push(shot.nodeIds.text)
+  if (shot.firstFrameNodeId && !nodeIdsToRemove.includes(shot.firstFrameNodeId)) nodeIdsToRemove.push(shot.firstFrameNodeId)
+  if (shot.videoNodeId && !nodeIdsToRemove.includes(shot.videoNodeId)) nodeIdsToRemove.push(shot.videoNodeId)
+  nodeIdsToRemove.forEach(nid => removeNode(nid))
+
+  removeShot(project, params.shotId)
+  updateProject(project.id, { drama: { ...project.drama } })
+  persistCurrentCanvas(project.id)
+  return ok('镜头已删除', { shotId: params.shotId, removedNodeIds: nodeIdsToRemove })
+}
+
+export function validateDuplicateDramaShot(params = {}) {
+  if (!params?.shotId || typeof params.shotId !== 'string') return fail('shotId 必须是非空字符串')
+  return null
+}
+
+export function executeDuplicateDramaShot(params = {}) {
+  const project = getCurrentProject()
+  if (!project?.drama?.shots) return fail('当前项目没有短剧数据')
+  const newShot = duplicateShot(project, params.shotId)
+  if (!newShot) return fail(`复制镜头失败: ${params.shotId}`)
+
+  // Create DramaShotNode for the duplicate
+  const baseY = nodes.value.length ? Math.max(...nodes.value.map(n => Number(n.position?.y) || 0)) + 160 : 180
+  const characters = project.drama.characters || []
+  const scenes = project.drama.scenes || []
+  const characterNames = (newShot.characterIds || [])
+    .map(cid => characters.find(c => c.id === cid))
+    .filter(Boolean)
+    .map(c => c.name)
+    .join('、')
+  const sceneObj = scenes.find(s => s.id === newShot.sceneId)
+  const sceneName = sceneObj?.name || newShot.location || ''
+
+  const nodeId = addLinkedNode('dramaShot', { x: 300, y: baseY }, {
+    label: newShot.title,
+    shotId: newShot.id,
+    shotIndex: newShot.index,
+    shotTitle: newShot.title,
+    shotType: newShot.shotType,
+    angle: newShot.angle,
+    movement: newShot.movement,
+    sceneName,
+    characterNames,
+    description: newShot.description,
+    dialogue: newShot.dialogue,
+    status: 'idle',
+    firstFrameStatus: 'idle',
+    videoStatus: 'idle'
+  })
+  newShot.nodeIds = { text: nodeId }
+
+  updateProject(project.id, { drama: { ...project.drama } })
+  persistCurrentCanvas(project.id)
+  return ok('镜头已复制', { shotId: newShot.id, nodeIds: [nodeId] })
 }
 
 // --- Cloud Image Workflow ---
@@ -527,6 +774,11 @@ const COMMAND_MAP = {
   createVideoWorkflow: { validate: validateCreateVideoWorkflow, execute: executeCreateVideoWorkflow },
   createCloudImageWorkflow: { validate: validateCreateCloudImageWorkflow, execute: executeCreateCloudImageWorkflow },
   runCloudImageWorkflow: { validate: validateRunCloudImageWorkflow, execute: executeRunCloudImageWorkflow },
+  updateDramaShot: { validate: validateUpdateDramaShot, execute: executeUpdateDramaShot },
+  locateDramaShot: { validate: validateLocateDramaShot, execute: executeLocateDramaShot },
+  addDramaShot: { validate: validateAddDramaShot, execute: executeAddDramaShot },
+  removeDramaShot: { validate: validateRemoveDramaShot, execute: executeRemoveDramaShot },
+  duplicateDramaShot: { validate: validateDuplicateDramaShot, execute: executeDuplicateDramaShot },
   fixWorkflowError: { validate: validateFixWorkflowError, execute: executeFixWorkflowError },
   saveAsset: { validate: validateSaveAsset, execute: executeSaveAsset }
 }

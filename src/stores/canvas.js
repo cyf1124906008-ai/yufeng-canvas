@@ -369,6 +369,25 @@ const getDefaultNodeData = (type) => {
         status: 'idle',
         error: ''
       }
+    case 'dramaShot':
+      return {
+        label: '镜头',
+        shotId: '',
+        shotIndex: 0,
+        shotTitle: '',
+        shotType: '',
+        angle: '',
+        movement: '',
+        sceneName: '',
+        characterNames: '',
+        description: '',
+        dialogue: '',
+        status: 'idle',
+        firstFrameStatus: 'idle',
+        videoStatus: 'idle',
+        firstFrameNodeId: '',
+        videoNodeId: ''
+      }
     default:
       return {}
   }

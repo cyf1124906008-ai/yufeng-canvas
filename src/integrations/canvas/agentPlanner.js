@@ -8,7 +8,8 @@ const NODE_DATA_KEYS = {
   video: ['label', 'source', 'duration'],
   llmConfig: ['label', 'systemPrompt', 'outputFormat'],
   comfyWorkflow: ['label', 'prompt', 'negativePrompt', 'width', 'height', 'seed', 'steps', 'cfg', 'status'],
-  cloudImageWorkflow: ['label', 'prompt', 'negativePrompt', 'model', 'size', 'seed', 'steps', 'cfg', 'sampler', 'scheduler', 'denoise', 'status']
+  cloudImageWorkflow: ['label', 'prompt', 'negativePrompt', 'model', 'size', 'seed', 'steps', 'cfg', 'sampler', 'scheduler', 'denoise', 'status'],
+  dramaShot: ['label', 'shotId', 'shotIndex', 'shotTitle', 'shotType', 'angle', 'movement', 'sceneName', 'characterNames', 'description', 'status', 'firstFrameStatus', 'videoStatus']
 }
 
 function summarizeValue(value) {
@@ -37,7 +38,7 @@ export function buildCanvasAgentSystemPrompt(snapshot) {
 当前画布状态：
 ${JSON.stringify(snapshot, null, 2)}
 
-可用命令：createProject, addNode, updateNode, removeNode, connectNodes, createDramaProject, createCharacterBible, createSceneBible, createEpisodeOutline, createShotList, createFirstFrameWorkflow, createVideoWorkflow, createCloudImageWorkflow, runCloudImageWorkflow, fixWorkflowError。注意：importComfyWorkflow 和 runComfyWorkflow 是高级本地 Comfy 兼容命令，仅供已有本地 ComfyUI 的用户，不要对普通用户使用。普通用户图片生成请使用 cloudImageWorkflow 节点。
+可用命令：createProject, addNode, updateNode, removeNode, connectNodes, createDramaProject, createCharacterBible, createSceneBible, createEpisodeOutline, createShotList, createFirstFrameWorkflow, createVideoWorkflow, createCloudImageWorkflow, runCloudImageWorkflow, updateDramaShot, locateDramaShot, addDramaShot, removeDramaShot, duplicateDramaShot, fixWorkflowError。注意：importComfyWorkflow 和 runComfyWorkflow 是高级本地 Comfy 兼容命令，仅供已有本地 ComfyUI 的用户，不要对普通用户使用。普通用户图片生成请使用 cloudImageWorkflow 节点。Drama 命令：addDramaShot 添加镜头、removeDramaShot 删除镜头、duplicateDramaShot 复制镜头、updateDramaShot 更新镜头（shotId + patch）。
 
 规则：只返回 JSON；addNode 后要连接时使用 ref；updateNode 只能修改用户可见字段；删除需要确认。
 返回格式：{"summary":"一句话说明","commands":[{"name":"addNode","params":{}}],"requiresConfirmation":false}`
@@ -61,7 +62,7 @@ export function parseAgentCommandResponse(text) {
 export function classifyCommandRisk(commands) {
   const risks = { safe: [], destructive: [], execution: [] }
   for (const cmd of commands) {
-    if (cmd.name === 'removeNode') risks.destructive.push(cmd)
+    if (cmd.name === 'removeNode' || cmd.name === 'removeDramaShot') risks.destructive.push(cmd)
     else if (cmd.name === 'runComfyWorkflow' || cmd.name === 'runCloudImageWorkflow') risks.execution.push(cmd)
     else risks.safe.push(cmd)
   }

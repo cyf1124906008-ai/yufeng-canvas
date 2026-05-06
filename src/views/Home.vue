@@ -2105,7 +2105,7 @@ const createNewProject = () => {
 const createIntegratedProject = (actionId) => {
   const specs = {
     dramaShots: {
-      name: '短剧 8 分镜项目',
+      name: '短剧创作项目',
       type: PROJECT_TYPES.DRAMA,
       action: 'dramaShots'
     },

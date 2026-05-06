@@ -720,7 +720,8 @@ import GuidedTour from '../components/GuidedTour.vue'
 import { CANVAS_PROMPT_SUGGESTIONS } from '../config/promptLibrary'
 import { buildCanvasSnapshot, buildCanvasAgentSystemPrompt, parseAgentCommandResponse, classifyCommandRisk, buildLocalCommandPlan } from '../integrations/canvas/agentPlanner'
 
-import { executeCommandBatch, validateCommandBatch } from '../integrations/canvas/commands'
+import { executeCommandBatch, validateCommandBatch, executeCommand } from '../integrations/canvas/commands'
+import { generateDramaContent, convertGeneratedDataToProject } from '../integrations/drama/dramaGenerator'
 
 
 // API Config state | API 配置状态
@@ -781,6 +782,7 @@ import VideoConfigNode from '../components/nodes/VideoConfigNode.vue'
 import LLMConfigNode from '../components/nodes/LLMConfigNode.vue'
 import ComfyWorkflowNode from '../components/nodes/ComfyWorkflowNode.vue'
 import CloudImageWorkflowNode from '../components/nodes/CloudImageWorkflowNode.vue'
+import DramaShotNode from '../components/nodes/DramaShotNode.vue'
 import ImageRoleEdge from '../components/edges/ImageRoleEdge.vue'
 import PromptOrderEdge from '../components/edges/PromptOrderEdge.vue'
 import ImageOrderEdge from '../components/edges/ImageOrderEdge.vue'
@@ -800,7 +802,8 @@ const nodeTypes = {
   videoConfig: markRaw(VideoConfigNode),
   llmConfig: markRaw(LLMConfigNode),
   comfyWorkflow: markRaw(ComfyWorkflowNode),
-  cloudImageWorkflow: markRaw(CloudImageWorkflowNode)
+  cloudImageWorkflow: markRaw(CloudImageWorkflowNode),
+  dramaShot: markRaw(DramaShotNode)
 }
 
 // Register custom edge types | 注册自定义边类型
@@ -2184,6 +2187,55 @@ const handleEngineWorkspaceAction = (action, payload) => {
     return
   }
 
+  // Drama workspace actions
+  if (action === 'updateDramaPremise') {
+    const project = currentProject.value
+    if (project) {
+      updateProject(project.id, { drama: { ...project.drama, premise: payload } })
+      window.$message?.success('故事设定已保存')
+    }
+    return
+  }
+
+  if (action === 'updateDramaSettings') {
+    const project = currentProject.value
+    if (project) {
+      updateProject(project.id, { drama: { ...project.drama, dramaGenerationSettings: { ...project.drama.dramaGenerationSettings, ...payload } } })
+      window.$message?.success('生成设置已保存')
+    }
+    return
+  }
+
+  if (action === 'addShot' || action === 'removeShot' || action === 'duplicateShot' || action === 'updateShot') {
+    const cmdMap = { addShot: 'addDramaShot', removeShot: 'removeDramaShot', duplicateShot: 'duplicateDramaShot', updateShot: 'updateDramaShot' }
+    const result = executeCommand(cmdMap[action], payload)
+    if (!result.ok) window.$message?.warning(result.message)
+    else if (result.nodeIds?.length) nextTick(() => focusCanvasNodeById(result.nodeIds[0]))
+    return
+  }
+
+  if (action === 'locateDramaShot') {
+    const result = executeCommand('locateDramaShot', { shotId: payload })
+    if (result.ok && result.nodeId) focusCanvasNodeById(result.nodeId)
+    else window.$message?.warning(result.message || '未找到镜头节点')
+    return
+  }
+
+  if (action === 'createFirstFrameWorkflow') {
+    handleDramaCreateFirstFrame(payload)
+    return
+  }
+
+  if (action === 'createVideoWorkflow') {
+    handleDramaCreateVideo(payload)
+    return
+  }
+
+  if (action === 'generateDramaShots') {
+    handleGenerateDramaShots(payload)
+    return
+  }
+
   if (action === 'createDramaWorkspace') {
     const plan = makeStudioNodePlan('已创建短剧工作区', [
       { name: 'createDramaProject', params: { title: 'AI 短剧项目', premise: '一个可继续扩展的 YUFENG 短剧项目。' } },
@@ -2217,6 +2269,175 @@ const handleEngineWorkspaceAction = (action, payload) => {
   }
 }
 
+const handleDramaCreateFirstFrame = (shotId) => {
+  const project = currentProject.value
+  if (!project?.drama?.shots) return
+  const shot = project.drama.shots.find(s => s.id === shotId)
+  if (!shot) return
+
+  const dramaShotNodeId = shot.nodeIds?.text
+  if (!dramaShotNodeId) return
+  const dramaShotNode = nodes.value.find(n => n.id === dramaShotNodeId)
+  if (!dramaShotNode) return
+
+  const prompt = shot.firstFramePrompt || shot.imagePrompt || shot.description || ''
+  const y = (dramaShotNode.position?.y || 180)
+  const x = (dramaShotNode.position?.x || 300) + 320
+
+  const cloudNodeId = addNode('cloudImageWorkflow', { x, y }, {
+    label: `${shot.title} 首帧`,
+    prompt,
+    negativePrompt: '',
+    size: '1440x2560',
+    steps: 20,
+    cfg: 7,
+    sampler: 'euler',
+    scheduler: 'normal',
+    denoise: 1.0,
+    seed: -1
+  })
+  addEdge({ source: dramaShotNodeId, target: cloudNodeId, sourceHandle: 'right', targetHandle: 'left' })
+
+  shot.firstFrameNodeId = cloudNodeId
+  shot.nodeIds.firstFrame = cloudNodeId
+  executeCommand('updateDramaShot', { shotId, patch: { firstFrameNodeId: cloudNodeId } })
+  saveProject()
+  nextTick(() => focusCanvasNodeById(cloudNodeId))
+}
+
+const handleDramaCreateVideo = (shotId) => {
+  const project = currentProject.value
+  if (!project?.drama?.shots) return
+  const shot = project.drama.shots.find(s => s.id === shotId)
+  if (!shot) return
+
+  const dramaShotNodeId = shot.nodeIds?.text
+  if (!dramaShotNodeId) return
+  const dramaShotNode = nodes.value.find(n => n.id === dramaShotNodeId)
+  if (!dramaShotNode) return
+
+  const prompt = shot.videoPrompt || shot.description || ''
+  const firstFrameNodeId = shot.firstFrameNodeId
+  const sourceX = firstFrameNodeId
+    ? (nodes.value.find(n => n.id === firstFrameNodeId)?.position?.x || dramaShotNode.position?.x || 300)
+    : (dramaShotNode.position?.x || 300)
+  const y = (dramaShotNode.position?.y || 180)
+  const x = sourceX + 380
+
+  const videoNodeId = addNode('videoConfig', { x, y }, {
+    label: `${shot.title} 视频`,
+    prompt,
+    ratio: project.drama.dramaGenerationSettings?.aspectRatio || '9:16',
+    duration: shot.duration || 5
+  })
+
+  if (firstFrameNodeId) {
+    addEdge({ source: firstFrameNodeId, target: videoNodeId, sourceHandle: 'right', targetHandle: 'left' })
+  } else {
+    addEdge({ source: dramaShotNodeId, target: videoNodeId, sourceHandle: 'right', targetHandle: 'left' })
+  }
+
+  shot.videoNodeId = videoNodeId
+  shot.nodeIds.video = videoNodeId
+  executeCommand('updateDramaShot', { shotId, patch: { videoNodeId } })
+  saveProject()
+  nextTick(() => focusCanvasNodeById(videoNodeId))
+}
+
+const handleGenerateDramaShots = async (payload) => {
+  const { userInput, settings } = payload || {}
+  if (!userInput) {
+    window.$message?.warning('请输入故事创意')
+    return
+  }
+
+  const project = currentProject.value
+  if (!project) {
+    const result = executeCommand('createProject', { name: '短剧项目', type: 'drama' })
+    if (!result.ok) { window.$message?.warning(result.message); return }
+  }
+
+  window.$message?.info('正在生成短剧方案，请稍候...')
+  const result = await generateDramaContent(userInput, settings)
+  if (!result.ok) {
+    window.$message?.error(result.error)
+    return
+  }
+
+  const converted = convertGeneratedDataToProject(result.data, settings)
+  const freshProject = currentProject.value
+  if (!freshProject) return
+
+  updateProject(freshProject.id, {
+    type: 'drama',
+    drama: {
+      ...freshProject.drama,
+      premise: converted.premise || freshProject.drama.premise,
+      genre: converted.genre || freshProject.drama.genre,
+      style: converted.style || freshProject.drama.style,
+      characters: converted.characters.length ? converted.characters : freshProject.drama.characters,
+      scenes: converted.scenes.length ? converted.scenes : freshProject.drama.scenes,
+      episodes: converted.episodes.length ? converted.episodes : freshProject.drama.episodes,
+      shots: [...(freshProject.drama.shots || []), ...converted.shots]
+    }
+  })
+
+  // Create DramaShotNodes for generated shots
+  const updatedProject = currentProject.value
+  const newShots = converted.shots
+  const characters = updatedProject.drama.characters || []
+  const scenes = updatedProject.drama.scenes || []
+  const baseY = nodes.value.length ? Math.max(...nodes.value.map(n => Number(n.position?.y) || 0)) + 220 : 180
+  const nodeIds = []
+
+  for (let i = 0; i < newShots.length; i++) {
+    const shot = newShots[i]
+    const y = baseY + i * 160
+    const characterNames = (shot.characterIds || [])
+      .map(cid => characters.find(c => c.id === cid))
+      .filter(Boolean)
+      .map(c => c.name)
+      .join('、')
+    const sceneObj = scenes.find(s => s.id === shot.sceneId)
+    const sceneName = sceneObj?.name || shot.location || ''
+
+    const nodeId = addNode('dramaShot', { x: 300, y }, {
+      label: shot.title,
+      shotId: shot.id,
+      shotIndex: shot.index,
+      shotTitle: shot.title,
+      shotType: shot.shotType,
+      angle: shot.angle,
+      movement: shot.movement,
+      sceneName,
+      characterNames,
+      description: shot.description,
+      dialogue: shot.dialogue,
+      status: 'idle',
+      firstFrameStatus: 'idle',
+      videoStatus: 'idle'
+    })
+    shot.nodeIds = { text: nodeId }
+    nodeIds.push(nodeId)
+
+    if (i > 0 && nodeIds.length >= 2) {
+      addEdge({ source: nodeIds[nodeIds.length - 2], target: nodeId, sourceHandle: 'right', targetHandle: 'left' })
+    }
+  }
+
+  // Update shots with node references
+  updateProject(updatedProject.id, { drama: { ...updatedProject.drama, shots: [...updatedProject.drama.shots] } })
+  saveProject()
+  window.$message?.success(`已生成 ${newShots.length} 个镜头`)
+  nextTick(() => fitView({ padding: 0.18, duration: 500 }))
+}
+
+// Handle drama actions from DramaShotNode via window events
+const handleDramaNodeAction = (e) => {
+  const { action, payload, nodeId } = e.detail || {}
+  handleEngineWorkspaceAction(action, payload)
+}
+
 const runCanvasQuickAction = (prompt) => {
   const plan = buildLocalCommandPlan(prompt, buildCanvasSnapshot())
   if (!plan) {
@@ -2239,6 +2460,14 @@ const handleInitialCanvasAction = (rawAction) => {
 
   const allowed = new Set(['dramaShots', 'productLaunch', 'image2video', 'txt2img', 'characterBible', 'cloudProWorkflow'])
   if (!allowed.has(action)) return
+
+  if (action === 'dramaShots') {
+    executeCommand('createDramaProject', { title: '短剧创作项目', premise: '' })
+    showEngineWorkspace.value = true
+    showStudioCockpit.value = false
+    window.$message?.success('已创建短剧项目，请在工作区中设置参数并生成')
+    return
+  }
 
   runStudioAction(action)
   showStudioCockpit.value = false
@@ -2474,6 +2703,7 @@ onMounted(() => {
   }
   window.addEventListener('resize', checkMobile)
   window.addEventListener('keydown', handleCanvasKeydown)
+  window.addEventListener('yufeng:drama-action', handleDramaNodeAction)
 
   // Initialize projects store | 初始化项目存储
   initProjectsStore()
@@ -2516,6 +2746,7 @@ onUnmounted(() => {
   stopRuntimeTicker()
   window.removeEventListener('resize', checkMobile)
   window.removeEventListener('keydown', handleCanvasKeydown)
+  window.removeEventListener('yufeng:drama-action', handleDramaNodeAction)
   // Save project before leaving | 离开前保存项目
   saveProject()
 })
