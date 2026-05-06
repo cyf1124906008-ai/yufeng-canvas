@@ -268,7 +268,7 @@ async function handleRun() {
   if (props.data.status === 'running') return
 
   if (!window.desktopApp?.comfyRuntime) {
-    emitUpdate('error', '请先在模型与本地引擎设置里连接 ComfyUI')
+    emitUpdate('error', '请先在高级本地 Comfy 设置里连接已有 ComfyUI，普通云端工作流请使用模型 API 节点执行')
     emitUpdate('status', 'error')
     return
   }
