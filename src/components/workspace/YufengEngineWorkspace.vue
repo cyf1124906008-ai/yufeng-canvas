@@ -1,5 +1,5 @@
 <template>
-  <aside class="engine-workspace-panel absolute right-4 top-20 z-20 w-[380px] max-h-[calc(100vh-8rem)] overflow-hidden rounded-3xl border border-white/10 bg-slate-950/[0.88] text-white shadow-2xl backdrop-blur-xl">
+  <aside class="engine-workspace-panel absolute right-4 top-20 z-20 w-[340px] max-h-[calc(100vh-12rem)] overflow-hidden rounded-3xl border border-white/10 bg-slate-950/[0.88] text-white shadow-2xl backdrop-blur-xl">
     <div class="border-b border-white/10 bg-gradient-to-r from-cyan-500/15 via-emerald-500/10 to-transparent p-3">
       <div class="flex items-start justify-between gap-3">
         <div>
@@ -30,7 +30,7 @@
       </div>
     </div>
 
-    <div class="max-h-[calc(100vh-15rem)] overflow-y-auto p-3">
+    <div class="max-h-[calc(100vh-18rem)] overflow-y-auto p-3">
       <section v-if="activeTab === 'comfy'" class="space-y-3">
         <div class="rounded-2xl border border-white/10 bg-white/[0.06] p-3">
           <div class="mb-2 flex items-center justify-between gap-2">
@@ -38,7 +38,7 @@
             <span class="rounded-full bg-emerald-300/15 px-2 py-0.5 text-[10px] text-emerald-100">API 优先</span>
           </div>
           <p class="text-[11px] leading-relaxed text-white/62">
-            这里不是让用户部署本地 ComfyUI，而是吸收 ComfyUI 的专业参数和工作流结构，用你配置的云端图片/视频模型执行。
+            使用你配置的云端图片/视频模型执行专业参数工作流。在设置中配置 API Key 和 Base URL 即可开始。
           </p>
           <div class="mt-3 flex flex-wrap gap-2">
             <button class="shell-action primary" @click="$emit('action', 'createComfyWrapper')">创建专业参数节点</button>
@@ -90,20 +90,6 @@
             </button>
           </div>
         </div>
-
-        <details class="rounded-2xl border border-white/10 bg-white/[0.04] p-3 text-[11px] text-white/55">
-          <summary class="cursor-pointer text-white/70">高级用户：连接已有本地 ComfyUI（可选）</summary>
-          <p class="mt-2 leading-relaxed">
-            普通用户不需要本地部署。只有已经自己运行 ComfyUI 的专业用户，才需要在这里测试 localhost 连接或导入 API workflow。
-          </p>
-          <div class="mt-3 flex flex-wrap gap-2">
-            <button class="shell-action" @click="$emit('action', 'openComfySettings')">本地连接设置</button>
-            <button class="shell-action" @click="scanModels">检查本地模型目录</button>
-          </div>
-          <p v-if="modelScan?.missing?.length" class="mt-2 rounded-xl bg-amber-300/10 px-2 py-1 text-amber-100">
-            本地模式缺少模型权重：{{ modelScan.missing.join('、') }}
-          </p>
-        </details>
       </section>
 
       <section v-else class="space-y-3">
@@ -202,7 +188,6 @@ onMounted(() => {
 })
 
 const comfyTemplates = COMFY_WRAPPER_TEMPLATES
-const modelScan = computed(() => comfyStore.modelScan.value)
 const comfyNodes = computed(() => nodes.value.filter(node => node.type === 'comfyWorkflow'))
 const assetNodes = computed(() => nodes.value.filter(node => ['image', 'video'].includes(node.type) && (node.data?.url || node.data?.assetPath)))
 const dramaSummary = computed(() => summarizeDramaProject(currentProject.value))
@@ -223,37 +208,6 @@ const pipelineStages = computed(() => {
     return { ...stage, completed }
   })
 })
-
-async function installDependencies() {
-  const result = await comfyStore.doInstallDependencies?.()
-  await comfyStore.refreshStatus?.()
-  if (result?.ok === false) {
-    window.$message?.error(result.error || '依赖安装启动失败')
-    return
-  }
-  window.$message?.success('已开始安装本地 ComfyUI Python 依赖，进度可在日志里查看')
-}
-
-async function startComfy() {
-  await comfyStore.doInstall?.()
-  await comfyStore.doStart?.()
-  await comfyStore.refreshStatus?.()
-  await comfyStore.scanModels?.()
-  if (comfyStore.state.value?.error) {
-    window.$message?.error(comfyStore.state.value.error)
-    return
-  }
-  window.$message?.success('已启动本地 ComfyUI')
-}
-
-async function scanModels() {
-  const result = await comfyStore.scanModels?.()
-  if (result?.ok === false) {
-    window.$message?.error(result.error || '扫描模型失败')
-    return
-  }
-  window.$message?.success('模型目录扫描完成')
-}
 
 function updateShotStatus(shot, status) {
   emit('action', 'updateDramaShotStatus', { shotId: shot.id, status })

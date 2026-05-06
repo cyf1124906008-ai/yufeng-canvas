@@ -26,14 +26,6 @@
           运行中 {{ activeRunLabel }}
         </span>
         <button
-          @click="showAgentPanel = !showAgentPanel"
-          class="p-2 hover:bg-[var(--bg-tertiary)] rounded-lg transition-colors"
-          :class="{ 'text-[var(--accent-color)]': showAgentPanel }"
-          title="多 Agent 任务面板"
-        >
-          <n-icon :size="20"><SparklesOutline /></n-icon>
-        </button>
-        <button
           @click="startCanvasTour"
           class="p-2 hover:bg-[var(--bg-tertiary)] rounded-lg transition-colors"
           title="使用指引"
@@ -279,36 +271,6 @@
         </div>
       </div>
 
-      <aside v-if="showAgentPanel" class="agent-task-panel absolute left-24 top-4 z-30">
-        <div class="agent-panel-head">
-          <div>
-            <p>AGENT TASK</p>
-            <h3>多 Agent 任务拆解</h3>
-          </div>
-          <button @click="showAgentPanel = false">×</button>
-        </div>
-        <article
-          v-for="agent in agentTasks"
-          :key="agent.id"
-          class="agent-card"
-          :class="`is-${agent.status}`"
-        >
-          <div>
-            <strong>{{ agent.name }}</strong>
-            <span>{{ agent.statusLabel }}</span>
-          </div>
-          <p>{{ agent.summary }}</p>
-          <details>
-            <summary>展开详情</summary>
-            <small>{{ agent.detail }}</small>
-          </details>
-          <div class="agent-actions">
-            <button @click="rerunAgent(agent)">重新执行</button>
-            <button @click="applyAgentResult(agent)">应用结果</button>
-          </div>
-        </article>
-      </aside>
-
       <aside v-if="showRuntimeLogs" class="runtime-log-panel absolute right-4 top-4 z-30" data-tour="runtime-log-panel">
         <div class="runtime-log-head">
           <div>
@@ -483,7 +445,6 @@
           @click="showEngineWorkspace = true"
         >
           云端工作流 + 短剧
-          <span class="ml-1 text-[10px] text-cyan-200/65">{{ compactEngineStatus }}</span>
         </button>
       </div>
 
@@ -739,8 +700,7 @@ import {
   AppsOutline,
   ChatbubbleOutline,
   DocumentTextOutline,
-  HelpCircleOutline,
-  SparklesOutline
+  HelpCircleOutline
 } from '@vicons/ionicons5'
 import { nodes, edges, runtimeLogs, clearRuntimeLogs, addRuntimeLog, addNode, addNodes, addEdge, addEdges, updateNode, removeNode, duplicateNode, initSampleData, loadProject, saveProject, detachCurrentProject, canvasViewport, updateViewport, undo, redo, canUndo, canRedo, manualSaveHistory, startBatchOperation, endBatchOperation } from '../stores/canvas'
 import { loadAllModels } from '../stores/models'
@@ -759,9 +719,9 @@ import AppHeader from '../components/AppHeader.vue'
 import GuidedTour from '../components/GuidedTour.vue'
 import { CANVAS_PROMPT_SUGGESTIONS } from '../config/promptLibrary'
 import { buildCanvasSnapshot, buildCanvasAgentSystemPrompt, parseAgentCommandResponse, classifyCommandRisk, buildLocalCommandPlan } from '../integrations/canvas/agentPlanner'
-import { buildDefaultComfyWrapperData } from '../integrations/comfy/yufengComfyShell'
+
 import { executeCommandBatch, validateCommandBatch } from '../integrations/canvas/commands'
-import { useComfyStore } from '../stores/comfy'
+
 
 // API Config state | API 配置状态
 const modelStore = useModelStore()
@@ -858,6 +818,8 @@ const defaultEdgeOptions = {
 
 // UI state | UI状态
 const showNodeMenu = ref(false)
+const showEngineWorkspace = ref(false)
+const showStudioCockpit = ref(false)
 const chatInput = ref('')
 const autoExecute = ref(false)
 const showCanvasComposer = ref(false)
@@ -895,13 +857,6 @@ const showRuntimeLogs = ref(false)
 const showCanvasTour = ref(false)
 const pendingCommandPlan = ref(null)
 const showCommandConfirmModal = ref(false)
-const {
-  state: comfyState,
-  modelScan: comfyModelScan,
-  refreshStatus: refreshComfyStatus,
-  scanModels: scanComfyModels
-} = useComfyStore()
-const showAgentPanel = ref(false)
 const showInspectorPanel = ref(true)
 const inspectorCollapsed = ref(false)
 const selectedNodeId = ref(null)
@@ -911,48 +866,6 @@ const runtimeNow = ref(Date.now())
 const processingStartedAt = ref(0)
 let runtimeTicker = null
 
-const agentTasks = ref([
-  {
-    id: 'director',
-    name: '创意总监 Agent',
-    status: 'done',
-    statusLabel: '已完成',
-    summary: '负责判断用户目标、画面主题和商业表达方向。',
-    detail: '后续会接入真实任务拆解；当前先作为前端结构，承载方向摘要和应用入口。'
-  },
-  {
-    id: 'prompt',
-    name: 'Prompt 专家 Agent',
-    status: 'running',
-    statusLabel: '进行中',
-    summary: '把自然语言需求整理成可执行 Prompt、Negative Prompt 和风格约束。',
-    detail: '会与生图专家模式联动，把输出直接填入 Prompt 工作区。'
-  },
-  {
-    id: 'image',
-    name: '生图专家 Agent',
-    status: 'waiting',
-    statusLabel: '等待中',
-    summary: '检查模型、比例、参考图和生成数量，准备执行图片任务。',
-    detail: '后续会根据图片模型能力推荐参数。'
-  },
-  {
-    id: 'review',
-    name: '审核 Agent',
-    status: 'waiting',
-    statusLabel: '等待中',
-    summary: '对结果做清晰度、主体一致性、构图和可用性检查。',
-    detail: '后续可以输出改图建议或自动生成变化版本。'
-  },
-  {
-    id: 'workflow',
-    name: '工作流 Agent',
-    status: 'waiting',
-    statusLabel: '等待中',
-    summary: '把最终 Prompt、参数和输出组织进节点画布。',
-    detail: '后续会自动生成可编辑节点流。'
-  }
-])
 
 
 const studioActions = [
@@ -967,12 +880,6 @@ const studioActions = [
     title: '图到视频链路',
     badge: 'Video',
     desc: '创建图片生成到视频生成的连续生产流程。'
-  },
-  {
-    id: 'comfyWrapper',
-    title: '专业参数节点',
-    badge: 'Cloud',
-    desc: '把 ComfyUI 风格的专业参数包装成云端模型可执行表单。'
   },
   {
     id: 'dramaShots',
@@ -1000,13 +907,6 @@ const studioStats = computed(() => ({
   comfyCount: nodes.value.filter(node => node.type === 'comfyWorkflow').length,
   shotCount: Array.isArray(currentProject.value?.drama?.shots) ? currentProject.value.drama.shots.length : 0
 }))
-
-const compactEngineStatus = computed(() => {
-  if (!comfyState.value?.installed) return '装载中'
-  if (comfyState.value?.running) return '运行中'
-  if (comfyModelScan.value?.missing?.length) return '缺模型'
-  return '已内置'
-})
 
 const selectedNode = computed(() =>
   nodes.value.find((node) => node.id === selectedNodeId.value) || null
@@ -1202,20 +1102,6 @@ const createSelectedImageWorkflow = (mode) => {
   showInspectorPanel.value = true
   window.setTimeout(() => updateNodeInternals([textNodeId, configNodeId]), 50)
   window.$message?.success(isVideo ? '已创建图生视频工作流' : '已创建图生图工作流')
-}
-
-const rerunAgent = (agent) => {
-  agent.status = 'running'
-  agent.statusLabel = '进行中'
-  window.setTimeout(() => {
-    agent.status = 'done'
-    agent.statusLabel = '已完成'
-  }, 900)
-}
-
-const applyAgentResult = (agent) => {
-  chatInput.value = `${agent.name} 建议：${agent.summary}`
-  window.$message?.success('已把 Agent 输出放入画布输入框')
 }
 
 const hasWebGLSupport = () => {
@@ -2208,9 +2094,6 @@ const runStudioAction = (actionId) => {
       { name: 'connectNodes', params: { source: 'prompt', target: 'image' } },
       { name: 'connectNodes', params: { source: 'image', target: 'video' } }
     ]),
-    comfyWrapper: makeStudioNodePlan('已创建云端专业参数节点', [
-      { name: 'createComfyWrapper', params: { templateId: 'txt2img-basic', position: { x: 560, y } } }
-    ]),
     productLaunch: makeStudioNodePlan('已创建产品发布全套物料工作流', [
       { name: 'addNode', params: { ref: 'brief', type: 'text', position: { x: 120, y }, data: { label: '产品 Brief', content: '产品名称、卖点、人群、使用场景、品牌色、投放平台。' } } },
       { name: 'addNode', params: { ref: 'packshot', type: 'imageConfig', position: { x: 500, y }, data: { label: '产品主图', prompt: '商业产品摄影，干净背景，质感真实，适合电商主图', size: '1024x1024', quality: 'high' } } },
@@ -2355,7 +2238,7 @@ const handleInitialCanvasAction = (rawAction) => {
     action = rawAction
   }
 
-  const allowed = new Set(['comfyWrapper', 'dramaShots', 'productLaunch', 'image2video', 'txt2img', 'characterBible'])
+  const allowed = new Set(['dramaShots', 'productLaunch', 'image2video', 'txt2img', 'characterBible'])
   if (!allowed.has(action)) return
 
   runStudioAction(action)
@@ -2596,8 +2479,6 @@ onMounted(() => {
   // Initialize projects store | 初始化项目存储
   initProjectsStore()
   initTaskStore()
-  refreshComfyStatus()
-  scanComfyModels()
 
   // Load project data | 加载项目数据
   loadProjectById(route.params.id)

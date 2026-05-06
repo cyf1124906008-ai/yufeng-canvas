@@ -231,7 +231,7 @@ export function executeCreateComfyWrapper(params = {}) {
       cfg: { virtual: true }
     },
     status: 'idle',
-    error: '这是 YUFENG 简化包装节点。要真实运行，请导入 Comfy API workflow JSON 或在专业模式绑定底层 workflow。'
+    error: '这是旧版工作流包装节点。可导入工作流配置后在高级设置中使用，普通用户请使用云端 ImageConfig 节点。'
   })
   persistCurrentCanvas()
   return ok('Comfy 包装节点已创建', { nodeIds: [nodeId] })

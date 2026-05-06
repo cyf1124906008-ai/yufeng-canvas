@@ -180,7 +180,7 @@
       <!-- Handles | 连接点 -->
       <span class="node-port-label node-port-label-in">Prompt / 参考图</span>
       <Handle type="target" :position="Position.Left" id="left" class="!bg-[var(--accent-color)]" />
-      <NodeHandleMenu :nodeId="id" nodeType="imageConfig" output-label="结果" :visible="showHandleMenu" :operations="operations" @select="handleSelect" />
+      <NodeHandleMenu :nodeId="id" nodeType="imageConfig" output-label="图片结果" :visible="showHandleMenu" :operations="operations" @select="handleSelect" />
     </div>
 
   </div>
@@ -194,7 +194,7 @@
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { NIcon, NDropdown, NSpin } from 'naive-ui'
-import { ChevronDownOutline, ChevronForwardOutline, CopyOutline, TrashOutline, RefreshOutline, AddOutline, ImageOutline, CreateOutline } from '@vicons/ionicons5'
+import { ChevronDownOutline, ChevronForwardOutline, CopyOutline, TrashOutline, RefreshOutline, AddOutline, ImageOutline, CreateOutline, VideocamOutline } from '@vicons/ionicons5'
 import { useImageGeneration } from '../../hooks'
 import { updateNode, addNode, addEdge, nodes, edges, duplicateNode, removeNode, currentProjectId } from '../../stores/canvas'
 import { saveAsset } from '../../integrations/comfy/api'
@@ -240,34 +240,32 @@ const labelInputRef = ref(null)
 
 // ImageConfig node menu operations | 图片配置节点菜单操作
 const operations = [
-  // { type: 'imageConfig', label: '图生图', icon: ImageOutline, action: 'imageConfig_imageConfig' }
+  { type: 'videoConfig', label: '生视频', icon: VideocamOutline }
 ]
 
 // Handle menu select | 处理菜单选择
 const handleSelect = (item) => {
-  const action = item.action
+  const currentNode = nodes.value.find(n => n.id === props.id)
+  const nodeX = currentNode?.position?.x || 0
+  const nodeY = currentNode?.position?.y || 0
 
-  if (action === 'imageConfig_imageConfig') {
-    // Image-to-image (create new image node for editing) | 图生图（创建新图片节点用于编辑）
-    const currentNode = nodes.value.find(n => n.id === props.id)
-    const nodeX = currentNode?.position?.x || 0
-    const nodeY = currentNode?.position?.y || 0
-
-    // Create new image node for editing
-    const imageNodeId = addNode('image', { x: nodeX + 400, y: nodeY }, {
-      label: '图片编辑'
+  if (item.type === 'videoConfig') {
+    const videoConfigId = addNode('videoConfig', { x: nodeX + 400, y: nodeY }, {
+      label: '图生视频',
+      prompt: '自然镜头运动，画面稳定',
+      ratio: '16:9',
+      duration: 5
     })
-
-    // Connect current config to new image node
     addEdge({
       source: props.id,
-      target: imageNodeId,
+      target: videoConfigId,
       sourceHandle: 'right',
-      targetHandle: 'left'
+      targetHandle: 'left',
+      type: 'imageRole',
+      data: { imageRole: 'first_frame_image' }
     })
-
-    setTimeout(() => updateNodeInternals(imageNodeId), 50)
-    window.$message?.success('已创建图片编辑节点')
+    setTimeout(() => updateNodeInternals(videoConfigId), 50)
+    window.$message?.success('已创建图生视频节点')
   }
 }
 

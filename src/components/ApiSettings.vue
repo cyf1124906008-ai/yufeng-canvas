@@ -319,7 +319,7 @@
         </div>
       </n-tab-pane>
 
-      <n-tab-pane name="comfy" tab="高级：本地 Comfy">
+      <n-tab-pane name="comfy" tab="高级实验：本地 ComfyUI">
         <ComfyEnginePanel />
       </n-tab-pane>
     </n-tabs>

@@ -28,11 +28,11 @@ export const COMFY_SHELL_LAYERS = [
 export const COMFY_WRAPPER_TEMPLATES = [
   {
     id: 'txt2img-basic',
-    title: '本地文生图',
+    title: '文生图',
     level: '小白',
     tags: ['SD', 'Flux', '基础生成'],
     fields: ['模型', '提示词', '反向提示词', '尺寸', 'Seed', 'Steps', 'CFG'],
-    outputs: ['图片节点', '本地资产']
+    outputs: ['图片节点']
   },
   {
     id: 'reference-character',
@@ -105,7 +105,7 @@ export function buildDefaultComfyWrapperData(templateId = 'txt2img-basic') {
     },
     apiWorkflow: null,
     status: 'idle',
-    error: '这是 YUFENG 简化包装节点。要真实运行，请导入 Comfy API workflow JSON 或在专业模式绑定底层 workflow。',
+    error: '这是旧版工作流包装节点。可导入工作流配置后在高级设置中使用，普通用户请使用云端 ImageConfig 节点。',
     wrapperTemplateId: template.id,
     wrapperTemplateTitle: template.title,
     yufengShell: true

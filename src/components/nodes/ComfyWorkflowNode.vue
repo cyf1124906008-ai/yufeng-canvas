@@ -163,8 +163,10 @@
       </div>
 
       <!-- Handles -->
+      <span class="node-port-label node-port-label-in">输入</span>
       <Handle type="target" :position="Position.Left" id="left" class="!bg-[var(--accent-color)]" />
       <Handle type="source" :position="Position.Right" id="right" class="!bg-[var(--accent-color)]" />
+      <span class="node-port-label" style="left: auto; right: -10px; transform: translate(100%, -50%); top: 50%;">结果</span>
     </div>
   </div>
 </template>
@@ -268,13 +270,13 @@ async function handleRun() {
   if (props.data.status === 'running') return
 
   if (!window.desktopApp?.comfyRuntime) {
-    emitUpdate('error', '请先在高级本地 Comfy 设置里连接已有 ComfyUI，普通云端工作流请使用模型 API 节点执行')
+    emitUpdate('error', '这是旧版本地 Comfy 节点，可在高级设置中启用本地 ComfyUI 使用；普通用户请使用云端专业工作流节点（ImageConfig）。')
     emitUpdate('status', 'error')
     return
   }
 
   if (!props.data.apiWorkflow || typeof props.data.apiWorkflow !== 'object') {
-    emitUpdate('error', '请先导入 Comfy API workflow JSON，或在专业模式绑定底层 workflow')
+    emitUpdate('error', '请先导入工作流配置，或在高级设置中连接本地 ComfyUI')
     emitUpdate('status', 'error')
     return
   }
