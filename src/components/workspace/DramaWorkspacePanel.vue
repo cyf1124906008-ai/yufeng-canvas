@@ -140,23 +140,57 @@
         <div v-for="shot in shotList" :key="shot.id" class="dws-shot-row">
           <div class="dws-shot-top">
             <span class="dws-shot-num">#{{ shot.index }}</span>
-            <select class="dws-shot-scene" :value="shot.sceneId" @change="updateShotField(shot, 'sceneId', $event.target.value)">
+            <select class="dws-shot-scene" :value="shot.sceneId" @change="updateShotScene(shot, $event.target.value)">
               <option value="">无场景</option>
               <option v-for="s in scenes" :key="s.id" :value="s.id">{{ s.name }}</option>
             </select>
-            <span class="dws-shot-badge" :class="`badge-${shot.status}`">{{ statusLabel(shot.status) }}</span>
+            <select class="dws-shot-status-sel" :value="shot.status" @change="updateShotField(shot, 'status', $event.target.value)">
+              <option v-for="(label, key) in DRAMA_STATUS_LABELS" :key="key" :value="key">{{ label }}</option>
+            </select>
           </div>
+
+          <!-- 角色多选 -->
+          <div class="dws-shot-chars">
+            <span class="dws-label-inline">角色</span>
+            <label v-for="c in characters" :key="c.id" class="dws-char-check">
+              <input type="checkbox" :checked="(shot.characterIds || []).includes(c.id)" @change="toggleCharInShot(shot, c.id)" />
+              <span>{{ c.name }}</span>
+            </label>
+          </div>
+
           <textarea class="dws-shot-desc" rows="1" :value="shot.description" @blur="updateShotField(shot, 'description', $event.target.value)" placeholder="镜头描述" />
+
+          <div class="dws-shot-cam-row">
+            <select class="dws-shot-cam-sel" :value="shot.shotType" @change="updateShotField(shot, 'shotType', $event.target.value)">
+              <option value="">景别</option>
+              <option v-for="st in shotTypeOptions" :key="st" :value="st">{{ st }}</option>
+            </select>
+            <select class="dws-shot-cam-sel" :value="shot.angle" @change="updateShotField(shot, 'angle', $event.target.value)">
+              <option value="">角度</option>
+              <option v-for="a in angleOptions" :key="a" :value="a">{{ a }}</option>
+            </select>
+            <select class="dws-shot-cam-sel" :value="shot.movement" @change="updateShotField(shot, 'movement', $event.target.value)">
+              <option value="">运镜</option>
+              <option v-for="m in movementOptions" :key="m" :value="m">{{ m }}</option>
+            </select>
+          </div>
+
           <div class="dws-shot-row-2">
             <input class="dws-shot-input" :value="shot.dialogue" @blur="updateShotField(shot, 'dialogue', $event.target.value)" placeholder="台词" />
+          </div>
+          <div class="dws-shot-row-2">
+            <input class="dws-shot-input" :value="shot.firstFramePrompt || shot.imagePrompt" @blur="updateShotField(shot, 'firstFramePrompt', $event.target.value)" placeholder="首帧 Prompt" />
+          </div>
+          <div class="dws-shot-row-2">
             <input class="dws-shot-input" :value="shot.videoPrompt" @blur="updateShotField(shot, 'videoPrompt', $event.target.value)" placeholder="视频 Prompt" />
           </div>
+
           <div class="dws-shot-actions">
             <button class="dws-btn-xs" @click="emitAction('locateDramaShot', shot.id)">定位</button>
             <button class="dws-btn-xs" @click="emitAction('createFirstFrameWorkflow', shot.id)">首帧</button>
             <button class="dws-btn-xs" @click="emitAction('createVideoWorkflow', shot.id)">视频</button>
-            <button class="dws-btn-xs" @click="handleDuplicateShot(shot.id)">复制</button>
-            <button class="dws-btn-xs del" @click="handleRemoveShot(shot.id)">删除</button>
+            <button class="dws-btn-xs" @click="emitAction('duplicateShot', { shotId: shot.id })">复制</button>
+            <button class="dws-btn-xs del" @click="emitAction('removeShot', { shotId: shot.id })">删除</button>
           </div>
         </div>
       </section>
@@ -223,8 +257,6 @@
 import { ref, computed, watch } from 'vue'
 import { currentProject, updateProject } from '@/stores/projects'
 import { DRAMA_STATUS_LABELS } from '@/integrations/drama/dramaWorkspace'
-import { addCharacter, removeCharacter, updateCharacter, addScene, removeScene, updateScene, addEpisode, removeEpisode, addShot, removeShot, duplicateShot } from '@/integrations/drama/huobaoDramaCore'
-import { generateDramaContent, convertGeneratedDataToProject } from '@/integrations/drama/dramaGenerator'
 
 const emit = defineEmits(['action', 'close'])
 
@@ -246,6 +278,9 @@ const styleOptions = [
   { value: 'comic', label: '漫画' }
 ]
 const timeOptions = ['清晨', '白天', '傍晚', '夜晚', '深夜']
+const shotTypeOptions = ['远景', '全景', '中景', '近景', '特写']
+const angleOptions = ['平视', '俯视', '仰视', '轻微俯视']
+const movementOptions = ['固定镜头', '缓慢推进', '跟拍', '横移', '摇镜', '升降']
 
 const activeTab = ref('shots')
 const generating = ref(false)
@@ -279,8 +314,6 @@ watch(drama, (d) => {
   }
 }, { immediate: true })
 
-function statusLabel(s) { return DRAMA_STATUS_LABELS[s] || s || '空闲' }
-
 function emitAction(action, payload) { emit('action', action, payload) }
 
 function emitProjectUpdate() {
@@ -295,14 +328,25 @@ function savePremise() {
   updateProject(currentProject.value.id, { drama: d })
 }
 
-// Characters
+// Characters — direct project mutations (no nodes involved)
 function handleAddCharacter() {
-  addCharacter(currentProject.value, { name: `角色${characters.value.length + 1}` })
-  emitProjectUpdate()
+  const p = currentProject.value
+  if (!p) return
+  const chars = p.drama.characters || []
+  const now = Date.now()
+  const newChar = {
+    id: `char_${now}_${chars.length}`,
+    name: `角色${chars.length + 1}`,
+    role: '配角',
+    appearance: '', personality: '', voiceStyle: '',
+    seedValue: null, referenceImages: [], imageUrl: '', description: ''
+  }
+  updateProject(p.id, { drama: { ...p.drama, characters: [...chars, newChar] } })
 }
 function handleRemoveCharacter(id) {
-  removeCharacter(currentProject.value, id)
-  emitProjectUpdate()
+  const p = currentProject.value
+  if (!p) return
+  updateProject(p.id, { drama: { ...p.drama, characters: p.drama.characters.filter(c => c.id !== id) } })
 }
 function startEditChar(c) {
   editingId.value = c.id
@@ -310,19 +354,31 @@ function startEditChar(c) {
   editForm.value = { name: c.name, role: c.role, appearance: c.appearance || '', personality: c.personality || '' }
 }
 function saveEditChar() {
-  updateCharacter(currentProject.value, editingId.value, { ...editForm.value })
+  const p = currentProject.value
+  if (!p) return
+  const chars = p.drama.characters.map(c => c.id === editingId.value ? { ...c, ...editForm.value } : c)
+  updateProject(p.id, { drama: { ...p.drama, characters: chars } })
   editingId.value = null
-  emitProjectUpdate()
 }
 
-// Scenes
+// Scenes — direct project mutations
 function handleAddScene() {
-  addScene(currentProject.value, { name: `场景${scenes.value.length + 1}` })
-  emitProjectUpdate()
+  const p = currentProject.value
+  if (!p) return
+  const sc = p.drama.scenes || []
+  const now = Date.now()
+  const newScene = {
+    id: `scene_${now}_${sc.length}`,
+    name: `场景${sc.length + 1}`,
+    location: `场景${sc.length + 1}`,
+    time: '白天', prompt: '', imageUrl: '', status: 'idle'
+  }
+  updateProject(p.id, { drama: { ...p.drama, scenes: [...sc, newScene] } })
 }
 function handleRemoveScene(id) {
-  removeScene(currentProject.value, id)
-  emitProjectUpdate()
+  const p = currentProject.value
+  if (!p) return
+  updateProject(p.id, { drama: { ...p.drama, scenes: p.drama.scenes.filter(s => s.id !== id) } })
 }
 function startEditScene(s) {
   editingId.value = s.id
@@ -330,71 +386,70 @@ function startEditScene(s) {
   editForm.value = { name: s.name, location: s.location || '', time: s.time || '白天', prompt: s.prompt || '' }
 }
 function saveEditScene() {
-  updateScene(currentProject.value, editingId.value, { ...editForm.value })
+  const p = currentProject.value
+  if (!p) return
+  const sc = p.drama.scenes.map(s => s.id === editingId.value ? { ...s, ...editForm.value } : s)
+  updateProject(p.id, { drama: { ...p.drama, scenes: sc } })
   editingId.value = null
-  emitProjectUpdate()
 }
 
-// Episodes
+// Episodes — direct project mutations
 function handleAddEpisode() {
-  addEpisode(currentProject.value)
-  emitProjectUpdate()
+  const p = currentProject.value
+  if (!p) return
+  const eps = p.drama.episodes || []
+  const idx = eps.length + 1
+  const now = Date.now()
+  const newEp = { id: `ep_${now}_${eps.length}`, index: idx, title: `第${idx}集`, summary: '', status: 'draft' }
+  updateProject(p.id, { drama: { ...p.drama, episodes: [...eps, newEp] } })
 }
 function handleRemoveEpisode(id) {
-  removeEpisode(currentProject.value, id)
-  emitProjectUpdate()
+  const p = currentProject.value
+  if (!p) return
+  const eps = p.drama.episodes.filter(e => e.id !== id)
+  eps.forEach((e, i) => { e.index = i + 1 })
+  updateProject(p.id, { drama: { ...p.drama, episodes: eps } })
 }
 
-// Shots
+// Shots — ALL mutations via emit, Canvas/commands owns data + nodes
 function handleAddShot() {
-  const shot = addShot(currentProject.value, { episodeId: episodes.value[0]?.id || '' })
-  emitAction('addShot', shot)
-}
-function handleRemoveShot(id) {
-  removeShot(currentProject.value, id)
-  emitAction('removeShot', id)
-}
-function handleDuplicateShot(id) {
-  const shot = duplicateShot(currentProject.value, id)
-  if (shot) emitAction('addShot', shot)
-}
-function updateShotField(shot, field, value) {
-  shot[field] = value
-  shot.updatedAt = Date.now()
-  // Sync scene name to shot
-  if (field === 'sceneId') {
-    const scene = scenes.value.find(s => s.id === value)
-    shot.location = scene?.name || ''
-    shot.time = scene?.time || ''
-  }
-  emitAction('updateShot', { shotId: shot.id, patch: { [field]: value, location: shot.location, time: shot.time } })
+  emitAction('addShot', { shotData: { episodeId: episodes.value[0]?.id || '' } })
 }
 
-// AI Generate
-async function handleGenerate() {
+function handleGenerate() {
   generating.value = true
   errorMessage.value = ''
-  const premise = localPremise.value || '都市短剧'
-  const settings = { ...localSettings.value }
-  const result = await generateDramaContent(premise, settings)
-  generating.value = false
+  emitAction('generateDramaShots', {
+    userInput: localPremise.value || '都市短剧',
+    settings: { ...localSettings.value },
+    _panelCallback: (ok, error) => {
+      generating.value = false
+      if (!ok) errorMessage.value = error || '生成失败'
+    }
+  })
+}
 
-  if (!result.ok) {
-    errorMessage.value = result.error
-    return
+// Shot field updates — emit to Canvas, no direct data mutation
+function updateShotField(shot, field, value) {
+  const patch = { [field]: value }
+  if (field === 'firstFramePrompt') {
+    patch.imagePrompt = value
   }
+  emitAction('updateShot', { shotId: shot.id, patch })
+}
 
-  const converted = convertGeneratedDataToProject(result.data, settings)
-  const d = { ...currentProject.value.drama }
-  d.premise = converted.premise || d.premise
-  d.characters = converted.characters
-  d.scenes = converted.scenes
-  d.episodes = converted.episodes
-  d.shots = converted.shots
-  updateProject(currentProject.value.id, { drama: d })
+function updateShotScene(shot, sceneId) {
+  const scene = scenes.value.find(s => s.id === sceneId)
+  emitAction('updateShot', {
+    shotId: shot.id,
+    patch: { sceneId, location: scene?.name || '', time: scene?.time || '' }
+  })
+}
 
-  // Emit to Canvas.vue to create nodes
-  emitAction('generateDramaShots', { shots: converted.shots })
+function toggleCharInShot(shot, charId) {
+  const current = shot.characterIds || []
+  const next = current.includes(charId) ? current.filter(id => id !== charId) : [...current, charId]
+  emitAction('updateShot', { shotId: shot.id, patch: { characterIds: next } })
 }
 
 // Settings
@@ -439,6 +494,7 @@ function saveSettings() {
 .dws-body { flex: 1; overflow-y: auto; padding: 10px 12px; }
 .dws-section { display: flex; flex-direction: column; gap: 8px; }
 .dws-label { font-size: 10px; color: rgba(255,255,255,0.45); display: block; margin-bottom: 2px; }
+.dws-label-inline { font-size: 9px; color: rgba(255,255,255,0.35); margin-right: 4px; }
 .dws-textarea { width: 100%; border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; background: rgba(0,0,0,0.2); color: white; font-size: 11px; padding: 8px; resize: vertical; outline: none; font-family: inherit; }
 .dws-textarea:focus { border-color: rgba(52,211,153,0.3); }
 .dws-input { width: 100%; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; background: rgba(0,0,0,0.2); color: white; font-size: 11px; padding: 6px 8px; outline: none; }
@@ -470,16 +526,16 @@ function saveSettings() {
 /* Shot rows */
 .dws-shot-row { border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; background: rgba(255,255,255,0.03); padding: 8px; margin-bottom: 6px; }
 .dws-shot-top { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
-.dws-shot-num { font-weight: 800; font-size: 13px; color: #34d399; }
-.dws-shot-scene { max-width: 100px; border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; background: rgba(15,23,42,0.8); color: white; font-size: 10px; padding: 2px 4px; outline: none; }
-.dws-shot-badge { font-size: 9px; padding: 2px 6px; border-radius: 999px; white-space: nowrap; }
-.badge-idle, .badge-pending { background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.4); }
-.badge-queued { background: rgba(251,191,36,0.12); color: #fbbf24; }
-.badge-generating { background: rgba(96,165,250,0.12); color: #60a5fa; }
-.badge-completed, .badge-firstFrameReady, .badge-videoReady { background: rgba(52,211,153,0.12); color: #34d399; }
-.badge-failed { background: rgba(248,113,113,0.12); color: #f87171; }
+.dws-shot-num { font-weight: 800; font-size: 13px; color: #34d399; min-width: 24px; }
+.dws-shot-scene { max-width: 90px; border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; background: rgba(15,23,42,0.8); color: white; font-size: 10px; padding: 2px 4px; outline: none; }
+.dws-shot-status-sel { max-width: 80px; border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; background: rgba(15,23,42,0.8); color: white; font-size: 9px; padding: 2px 4px; outline: none; margin-left: auto; }
+.dws-shot-chars { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-bottom: 4px; }
+.dws-char-check { display: flex; align-items: center; gap: 2px; font-size: 9px; color: rgba(255,255,255,0.55); cursor: pointer; }
+.dws-char-check input { width: 11px; height: 11px; accent-color: #34d399; }
 .dws-shot-desc { width: 100%; border: 1px solid rgba(255,255,255,0.06); border-radius: 6px; background: transparent; color: rgba(255,255,255,0.7); font-size: 10px; padding: 4px 6px; resize: none; outline: none; font-family: inherit; line-height: 1.3; }
 .dws-shot-desc:focus { border-color: rgba(52,211,153,0.2); }
+.dws-shot-cam-row { display: flex; gap: 3px; margin-top: 4px; }
+.dws-shot-cam-sel { flex: 1; border: 1px solid rgba(255,255,255,0.06); border-radius: 6px; background: rgba(15,23,42,0.6); color: rgba(255,255,255,0.6); font-size: 9px; padding: 2px 4px; outline: none; }
 .dws-shot-row-2 { display: flex; gap: 4px; margin-top: 4px; }
 .dws-shot-input { flex: 1; border: 1px solid rgba(255,255,255,0.06); border-radius: 6px; background: transparent; color: rgba(255,255,255,0.6); font-size: 9px; padding: 3px 5px; outline: none; }
 .dws-shot-input:focus { border-color: rgba(52,211,153,0.2); }

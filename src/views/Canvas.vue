@@ -442,7 +442,7 @@
         <button
           v-if="!showEngineWorkspace"
           class="rounded-full border border-cyan-300/25 bg-slate-950/75 px-3 py-2 text-xs font-semibold text-cyan-100 shadow-xl backdrop-blur hover:bg-slate-900"
-          @click="showEngineWorkspace = true"
+          @click="openEngineWorkspace"
         >
           云端工作流 + 短剧
         </button>
@@ -514,7 +514,7 @@
         </div>
       </section>
 
-      <YufengEngineWorkspace v-if="showEngineWorkspace" @action="handleEngineWorkspaceAction" @close="showEngineWorkspace = false" />
+      <YufengEngineWorkspace v-if="showEngineWorkspace" :initial-tab="workspaceInitialTab" @action="handleEngineWorkspaceAction" @close="closeEngineWorkspace" />
 
       <!-- Bottom AI composer | 底部 AI 输入：默认收起，按 Ctrl/⌘+K 呼出 -->
       <div
@@ -824,6 +824,17 @@ const defaultEdgeOptions = {
 // UI state | UI状态
 const showNodeMenu = ref(false)
 const showEngineWorkspace = ref(false)
+const workspaceInitialTab = ref('comfy')
+
+const closeEngineWorkspace = () => {
+  showEngineWorkspace.value = false
+  workspaceInitialTab.value = 'comfy'
+}
+
+const openEngineWorkspace = () => {
+  workspaceInitialTab.value = currentProject.value?.type === 'drama' || currentProject.value?.drama ? 'drama' : 'comfy'
+  showEngineWorkspace.value = true
+}
 const showStudioCockpit = ref(false)
 const chatInput = ref('')
 const autoExecute = ref(false)
@@ -2345,22 +2356,24 @@ const handleDramaCreateVideo = (shotId) => {
 }
 
 const handleGenerateDramaShots = async (payload) => {
-  const { userInput, settings } = payload || {}
+  const { userInput, settings, _panelCallback } = payload || {}
   if (!userInput) {
     window.$message?.warning('请输入故事创意')
+    _panelCallback?.(false, '请输入故事创意')
     return
   }
 
   const project = currentProject.value
   if (!project) {
     const result = executeCommand('createProject', { name: '短剧项目', type: 'drama' })
-    if (!result.ok) { window.$message?.warning(result.message); return }
+    if (!result.ok) { window.$message?.warning(result.message); _panelCallback?.(false, result.message); return }
   }
 
   window.$message?.info('正在生成短剧方案，请稍候...')
   const result = await generateDramaContent(userInput, settings)
   if (!result.ok) {
     window.$message?.error(result.error)
+    _panelCallback?.(false, result.error)
     return
   }
 
@@ -2429,6 +2442,7 @@ const handleGenerateDramaShots = async (payload) => {
   updateProject(updatedProject.id, { drama: { ...updatedProject.drama, shots: [...updatedProject.drama.shots] } })
   saveProject()
   window.$message?.success(`已生成 ${newShots.length} 个镜头`)
+  _panelCallback?.(true)
   nextTick(() => fitView({ padding: 0.18, duration: 500 }))
 }
 
@@ -2463,6 +2477,7 @@ const handleInitialCanvasAction = (rawAction) => {
 
   if (action === 'dramaShots') {
     executeCommand('createDramaProject', { title: '短剧创作项目', premise: '' })
+    workspaceInitialTab.value = 'drama'
     showEngineWorkspace.value = true
     showStudioCockpit.value = false
     window.$message?.success('已创建短剧项目，请在工作区中设置参数并生成')
@@ -2471,7 +2486,7 @@ const handleInitialCanvasAction = (rawAction) => {
 
   runStudioAction(action)
   showStudioCockpit.value = false
-  showEngineWorkspace.value = false
+  closeEngineWorkspace()
   window.$message?.success('已在画布创建可执行生产线')
 }
 

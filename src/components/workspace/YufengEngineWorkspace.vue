@@ -58,9 +58,12 @@
 import { ref } from 'vue'
 import DramaWorkspacePanel from './DramaWorkspacePanel.vue'
 
+const props = defineProps({
+  initialTab: { type: String, default: 'comfy' }
+})
 defineEmits(['action', 'close'])
 
-const activeTab = ref('comfy')
+const activeTab = ref(props.initialTab)
 </script>
 
 <style scoped>
