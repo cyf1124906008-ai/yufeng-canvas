@@ -831,8 +831,21 @@ const closeEngineWorkspace = () => {
   workspaceInitialTab.value = 'comfy'
 }
 
+function hasRealDramaContent(project) {
+  const d = project?.drama
+  return Boolean(
+    project?.type === 'drama' ||
+    d?.premise?.trim?.() ||
+    d?.shots?.length ||
+    d?.characters?.length ||
+    d?.scenes?.length ||
+    d?.episodes?.length
+  )
+}
+
 const openEngineWorkspace = () => {
-  workspaceInitialTab.value = currentProject.value?.type === 'drama' || currentProject.value?.drama ? 'drama' : 'comfy'
+  const project = currentProject.value
+  workspaceInitialTab.value = hasRealDramaContent(project) ? 'drama' : 'comfy'
   showEngineWorkspace.value = true
 }
 const showStudioCockpit = ref(false)
