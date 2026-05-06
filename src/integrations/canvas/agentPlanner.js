@@ -36,9 +36,9 @@ export function buildCanvasAgentSystemPrompt(snapshot) {
 当前画布状态：
 ${JSON.stringify(snapshot, null, 2)}
 
-可用命令：createProject, addNode, updateNode, removeNode, connectNodes, importComfyWorkflow, createComfyWrapper, runComfyWorkflow, createDramaProject, createCharacterBible, createSceneBible, createEpisodeOutline, createShotList, createFirstFrameWorkflow, createVideoWorkflow, fixWorkflowError。
+可用命令：createProject, addNode, updateNode, removeNode, connectNodes, createDramaProject, createCharacterBible, createSceneBible, createEpisodeOutline, createShotList, createFirstFrameWorkflow, createVideoWorkflow, fixWorkflowError。注意：importComfyWorkflow 和 runComfyWorkflow 是高级本地 Comfy 兼容命令，仅供已有本地 ComfyUI 的用户，不要对普通用户使用。
 
-规则：只返回 JSON；addNode 后要连接时使用 ref；updateNode 只能修改用户可见字段；删除和运行 Comfy 需要确认。
+规则：只返回 JSON；addNode 后要连接时使用 ref；updateNode 只能修改用户可见字段；删除需要确认。
 返回格式：{"summary":"一句话说明","commands":[{"name":"addNode","params":{}}],"requiresConfirmation":false}`
 }
 
@@ -122,7 +122,15 @@ export function buildLocalCommandPlan(userInput, snapshot = buildCanvasSnapshot(
   }
 
   if (mentionsComfy && asksWorkflow) {
-    return { summary: '创建 Comfy 简化包装节点', commands: [{ name: 'createComfyWrapper', params: { position: getNextPosition(snapshot, 0) } }], requiresConfirmation: false }
+    return {
+      summary: '创建文生图工作流（云端模型）',
+      commands: [
+        { name: 'addNode', params: { ref: 'prompt', type: 'text', position: getNextPosition(snapshot, 0), data: { label: '提示词', content: '描述你想生成的画面' } } },
+        { name: 'addNode', params: { ref: 'imageConfig', type: 'imageConfig', position: getNextPosition(snapshot, 1), data: { label: '文生图', prompt: '高质量视觉作品' } } },
+        { name: 'connectNodes', params: { source: 'prompt', target: 'imageConfig' } }
+      ],
+      requiresConfirmation: false
+    }
   }
 
   if (asksDrama && hasAny(input, ['创建', '生成', '做', '拆', '规划', '第一集', '分镜', '镜头'])) return createDramaShotCommands(userInput)

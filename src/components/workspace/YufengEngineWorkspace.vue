@@ -41,53 +41,30 @@
             使用你配置的云端图片/视频模型执行专业参数工作流。在设置中配置 API Key 和 Base URL 即可开始。
           </p>
           <div class="mt-3 flex flex-wrap gap-2">
-            <button class="shell-action primary" @click="$emit('action', 'createComfyWrapper')">创建专业参数节点</button>
-            <button class="shell-action" @click="$emit('action', 'openWorkflowImport')">导入 / 添加工作流</button>
             <button class="shell-action" @click="$emit('action', 'openCloudModelSettings')">模型 API 设置</button>
           </div>
         </div>
 
         <div class="rounded-2xl border border-white/10 bg-white/[0.06] p-3">
           <div class="mb-2 flex items-center justify-between gap-2">
-            <strong class="text-sm">画布里的专业工作流</strong>
-            <span class="text-[10px] text-white/45">{{ comfyNodes.length }} 个</span>
+            <strong class="text-sm">画布节点</strong>
+            <span class="text-[10px] text-white/45">{{ assetNodes.length }} 个</span>
           </div>
-          <div v-if="!comfyNodes.length" class="rounded-xl bg-black/20 p-3 text-[11px] text-white/55">
-            还没有专业工作流节点。导入模板或创建包装节点后，会生成中文表单和云端模型执行链路。
+          <div v-if="!assetNodes.length" class="rounded-xl bg-black/20 p-3 text-[11px] text-white/55">
+            还没有图片或视频节点。使用 AI 控制台或拖拽创建节点后，生成结果会显示在这里。
           </div>
           <div v-else class="space-y-2">
-            <div v-for="node in comfyNodes" :key="node.id" class="rounded-xl bg-black/20 p-2">
+            <div v-for="node in assetNodes.slice(0, 10)" :key="node.id" class="rounded-xl bg-black/20 p-2">
               <div class="flex items-center justify-between gap-2">
                 <b class="truncate text-xs text-white">{{ node.data?.label || node.id }}</b>
                 <span class="rounded-full px-2 py-0.5 text-[10px]" :class="node.data?.status === 'success' ? 'bg-emerald-300/15 text-emerald-100' : node.data?.status === 'error' ? 'bg-red-300/15 text-red-100' : 'bg-white/[0.08] text-white/55'">
                   {{ node.data?.status || 'idle' }}
                 </span>
               </div>
-              <p class="mt-1 line-clamp-2 text-[11px] text-white/45">{{ node.data?.error || node.data?.prompt || '已绑定 workflow，可运行或继续修改参数。' }}</p>
               <div class="mt-2 flex flex-wrap gap-2">
                 <button class="mini-action" @click="$emit('action', 'focusNode', node.id)">定位</button>
-                <button class="mini-action primary" :disabled="!node.data?.apiWorkflow" @click="$emit('action', 'runComfyWorkflow', node.id)">运行</button>
               </div>
             </div>
-          </div>
-        </div>
-
-        <div class="rounded-2xl border border-white/10 bg-white/[0.06] p-3">
-          <strong class="text-sm">专业参数模板</strong>
-          <div class="mt-2 space-y-2">
-            <button
-              v-for="template in comfyTemplates"
-              :key="template.id"
-              class="w-full rounded-xl border border-white/10 bg-black/20 p-2 text-left hover:border-emerald-300/40"
-              @click="$emit('action', 'createComfyWrapper', template.id)"
-            >
-              <div class="flex items-center justify-between gap-2">
-                <b class="text-xs">{{ template.title }}</b>
-                <span class="rounded-full bg-white/[0.08] px-2 py-0.5 text-[10px] text-white/55">{{ template.level }}</span>
-              </div>
-              <p class="mt-1 text-[11px] text-white/48">输入：{{ template.fields.slice(0, 4).join(' / ') }}</p>
-              <p class="mt-1 text-[11px] text-emerald-100/60">输出：{{ template.outputs.join(' / ') }}</p>
-            </button>
           </div>
         </div>
       </section>
@@ -171,25 +148,16 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, ref } from 'vue'
 import { currentProject } from '@/stores/projects'
 import { nodes } from '@/stores/canvas'
-import { useComfyStore } from '@/stores/comfy'
-import { COMFY_WRAPPER_TEMPLATES } from '@/integrations/comfy/yufengComfyShell'
 import { DRAMA_STATUS_LABELS, summarizeDramaProject, DRAMA_PIPELINE_STAGES } from '@/integrations/drama/dramaWorkspace'
 
 const emit = defineEmits(['action', 'close'])
 
 const activeTab = ref('comfy')
-const comfyStore = useComfyStore()
 
-onMounted(() => {
-  comfyStore.refreshStatus?.()
-})
-
-const comfyTemplates = COMFY_WRAPPER_TEMPLATES
-const comfyNodes = computed(() => nodes.value.filter(node => node.type === 'comfyWorkflow'))
-const assetNodes = computed(() => nodes.value.filter(node => ['image', 'video'].includes(node.type) && (node.data?.url || node.data?.assetPath)))
+const assetNodes = computed(() => nodes.value.filter(node => ['image', 'video', 'imageConfig', 'videoConfig'].includes(node.type)))
 const dramaSummary = computed(() => summarizeDramaProject(currentProject.value))
 const shotList = computed(() => Array.isArray(currentProject.value?.drama?.shots) ? currentProject.value.drama.shots : [])
 const statusOptions = computed(() => Object.entries(DRAMA_STATUS_LABELS).map(([value, label]) => ({ value, label })))

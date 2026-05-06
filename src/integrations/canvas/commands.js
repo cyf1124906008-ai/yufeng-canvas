@@ -194,7 +194,7 @@ export function executeConnectNodes(params) {
 // --- Comfy ---
 export function validateImportComfyWorkflow(params) {
   const workflow = params?.apiWorkflow || params?.workflow
-  if (!isComfyApiWorkflow(workflow)) return fail('请选择有效的 Comfy API workflow JSON')
+  if (!isComfyApiWorkflow(workflow)) return fail('请选择有效的 Comfy API workflow JSON（高级本地 Comfy 兼容）')
   return null
 }
 
@@ -205,7 +205,7 @@ export function executeImportComfyWorkflow(params) {
   const data = buildComfyWorkflowNodeData(params.apiWorkflow || params.workflow, params.name || params.fileName || 'Comfy 工作流')
   const nodeId = addLinkedNode('comfyWorkflow', position, data)
   persistCurrentCanvas()
-  return ok('Comfy workflow 已导入为可编辑节点', { nodeIds: [nodeId] })
+  return ok('高级本地 Comfy 兼容：workflow 已导入为可编辑节点', { nodeIds: [nodeId] })
 }
 
 export function validateCreateComfyWrapper(params) {
@@ -234,7 +234,7 @@ export function executeCreateComfyWrapper(params = {}) {
     error: '这是旧版工作流包装节点。可导入工作流配置后在高级设置中使用，普通用户请使用云端 ImageConfig 节点。'
   })
   persistCurrentCanvas()
-  return ok('Comfy 包装节点已创建', { nodeIds: [nodeId] })
+  return ok('高级本地 Comfy 兼容：包装节点已创建', { nodeIds: [nodeId] })
 }
 
 export function validateRunComfyWorkflow(params) {
@@ -242,7 +242,7 @@ export function validateRunComfyWorkflow(params) {
   const node = getNodeById(params.nodeId)
   if (!node) return fail(`节点不存在: ${params.nodeId}`)
   if (node.type !== 'comfyWorkflow') return fail('runComfyWorkflow 只能运行 Comfy 工作流节点')
-  if (!node.data?.apiWorkflow) return fail('该 Comfy 节点还没有绑定 API workflow JSON，不能运行')
+  if (!node.data?.apiWorkflow) return fail('高级本地 Comfy 兼容：该节点还没有绑定 API workflow JSON，不能运行')
   return null
 }
 
@@ -253,7 +253,7 @@ export function executeRunComfyWorkflow(params) {
     return fail('当前环境无法触发 Comfy 工作流运行')
   }
   window.dispatchEvent(new CustomEvent('yufeng:run-comfy-workflow', { detail: { nodeId: params.nodeId } }))
-  return ok('Comfy 工作流运行请求已发送', { nodeIds: [params.nodeId] })
+  return ok('高级本地 Comfy 兼容：工作流运行请求已发送', { nodeIds: [params.nodeId] })
 }
 
 // Backward-compatible alias. It is no longer a stub.

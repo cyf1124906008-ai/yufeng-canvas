@@ -2155,9 +2155,8 @@ const updateDramaShotStatus = ({ shotId, status }) => {
 }
 
 const handleEngineWorkspaceAction = (action, payload) => {
-  if (action === 'openComfySettings') {
+  if (action === 'openCloudModelSettings' || action === 'openComfySettings') {
     showApiSettings.value = true
-    window.$message?.info('已打开模型 API 设置设置，请进入 Comfy 引擎页安装、启动或测试连接。')
     return
   }
 
@@ -2171,28 +2170,8 @@ const handleEngineWorkspaceAction = (action, payload) => {
     return
   }
 
-  if (action === 'runComfyWorkflow') {
-    const plan = makeStudioNodePlan('运行 Comfy 工作流', [
-      { name: 'runComfyWorkflow', params: { nodeId: payload } }
-    ])
-    executeCanvasCommandPlan(plan)
-    return
-  }
-
   if (action === 'updateDramaShotStatus') {
     updateDramaShotStatus(payload || {})
-    return
-  }
-
-  if (action === 'createComfyWrapper') {
-    const y = nodes.value.length
-      ? Math.max(...nodes.value.map(node => Number(node.position?.y) || 0)) + 240
-      : 180
-    const plan = makeStudioNodePlan('已创建云端专业参数节点', [
-      { name: 'createComfyWrapper', params: { templateId: payload || 'txt2img-basic', position: { x: 560, y } } }
-    ])
-    const executed = executeCanvasCommandPlan(plan)
-    if (executed) nextTick(() => fitView({ padding: 0.18, duration: 500 }))
     return
   }
 

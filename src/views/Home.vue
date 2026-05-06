@@ -200,9 +200,6 @@
               <button class="primary-action small hot" @click.stop="createIntegratedProject('dramaShots')">
                 一键短剧 8 分镜
               </button>
-              <button class="secondary-action small" @click.stop="createIntegratedProject('comfyWrapper')">
-                云端专业工作流
-              </button>
               <button class="secondary-action small" @click.stop="scrollToProjects">
                 我的项目
               </button>
@@ -231,7 +228,7 @@
 
               <div class="integrated-inline-actions">
                 <button @click.stop="createIntegratedProject('dramaShots')">内置短剧项目：生成 8 分镜</button>
-                <button @click.stop="createIntegratedProject('comfyWrapper')">云端专业工作流：创建参数节点</button>
+                <button @click.stop="createIntegratedProject('image2video')">首帧到视频链路</button>
               </div>
 
               <div class="chat-thread">
@@ -1136,13 +1133,6 @@ const onboardingStorageKey = 'yufeng-canvas-onboarding-v2'
 const homeTourStorageKey = 'yufeng-canvas-home-tour-v1'
 const chatHistoryStorageKey = 'yufeng-canvas-chat-history-v1'
 const integratedLaunchCards = [
-  {
-    id: 'comfyWrapper',
-    badge: '云端专业工作流',
-    title: '专业文生图参数',
-    desc: '直接在画布创建可编辑、可运行的云端模型专业参数节点。',
-    action: '创建参数节点'
-  },
   {
     id: 'dramaShots',
     badge: 'Huobao Drama',
@@ -2106,11 +2096,6 @@ const createNewProject = () => {
 
 const createIntegratedProject = (actionId) => {
   const specs = {
-    comfyWrapper: {
-      name: '云端专业工作流',
-      type: PROJECT_TYPES.IMAGE,
-      action: 'comfyWrapper'
-    },
     dramaShots: {
       name: '短剧 8 分镜项目',
       type: PROJECT_TYPES.DRAMA,
@@ -2127,7 +2112,11 @@ const createIntegratedProject = (actionId) => {
       action: 'image2video'
     }
   }
-  const spec = specs[actionId] || specs.comfyWrapper
+  const spec = specs[actionId]
+  if (!spec) {
+    enterBlankCanvas()
+    return
+  }
   const id = createProject(spec.name, spec.type)
   sessionStorage.setItem('yufeng-canvas-initial-action', JSON.stringify({
     action: spec.action,
