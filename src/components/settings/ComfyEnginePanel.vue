@@ -12,12 +12,12 @@
       </div>
 
       <n-alert type="info" class="mb-4">
-        YUFENG 已随应用内置 ComfyUI 源码。首次打开会自动装载到本机引擎目录；你只需要补 Python 依赖和模型权重。
+        这是高级用户可选的本地 ComfyUI 连接/运行页。普通用户不需要部署本地模型，只需在前面的模型配置页填写云端 API Key、Base URL 和模型名。
       </n-alert>
 
       <template v-if="!state?.installed">
         <n-button type="primary" :loading="loading" @click="handleInstall">
-          立即装载内置 ComfyUI
+          装载本地 ComfyUI（高级）
         </n-button>
       </template>
 
@@ -41,7 +41,7 @@
         </n-form>
 
         <div class="flex flex-wrap gap-2 mb-4">
-          <n-button type="primary" @click="handleStart" :disabled="state.running">启动内置 ComfyUI</n-button>
+          <n-button type="primary" @click="handleStart" :disabled="state.running">启动本地 ComfyUI</n-button>
           <n-button @click="handleStop" :disabled="!state.running">停止</n-button>
           <n-button @click="handleInstallDependencies">安装 Python 依赖</n-button>
           <n-button @click="handleScanModels">扫描模型</n-button>
@@ -50,7 +50,7 @@
         </div>
 
         <n-alert v-if="state.objectInfoCount > 0 && !state.error" type="success" class="mb-4">
-          已连接内置 ComfyUI，检测到 {{ state.objectInfoCount }} 个节点类型。
+          已连接本地 ComfyUI，检测到 {{ state.objectInfoCount }} 个节点类型。
         </n-alert>
         <n-alert v-if="state.error" type="error" class="mb-4">{{ state.error }}</n-alert>
 

@@ -482,7 +482,7 @@
           class="rounded-full border border-cyan-300/25 bg-slate-950/75 px-3 py-2 text-xs font-semibold text-cyan-100 shadow-xl backdrop-blur hover:bg-slate-900"
           @click="showEngineWorkspace = true"
         >
-          内置 ComfyUI + 短剧
+          云端工作流 + 短剧
           <span class="ml-1 text-[10px] text-cyan-200/65">{{ compactEngineStatus }}</span>
         </button>
       </div>
@@ -496,12 +496,12 @@
                 <span class="inline-flex h-8 w-8 items-center justify-center rounded-2xl bg-emerald-400 text-slate-950 font-bold">Y</span>
                 <div>
                   <div class="text-sm font-semibold">YUFENG AI 创作工作区</div>
-                  <div class="text-[11px] text-emerald-100/75">内置 ComfyUI · AI 操控画布 · Huobao Drama 核心</div>
+                  <div class="text-[11px] text-emerald-100/75">云端模型 · AI 操控画布 · 短剧工作区</div>
                 </div>
               </div>
             </div>
             <div class="flex shrink-0 items-center gap-2">
-              <span class="text-[10px] px-2 py-1 rounded-full bg-emerald-400/15 text-emerald-200 border border-emerald-300/30">v1.0.0</span>
+              <span class="text-[10px] px-2 py-1 rounded-full bg-emerald-400/15 text-emerald-200 border border-emerald-300/30">v1.0.1</span>
               <button class="rounded-full border border-white/10 bg-white/[0.08] px-2 py-1 text-[10px] text-white/70 hover:bg-white/[0.14]" @click="showStudioCockpit = false">收起</button>
             </div>
           </div>
@@ -520,7 +520,7 @@
             </div>
             <div class="rounded-2xl bg-white/[0.08] px-2 py-2 border border-white/10">
               <b class="block text-base text-white">{{ studioStats.comfyCount }}</b>
-              <span class="text-white/60">Comfy</span>
+              <span class="text-white/60">工作流</span>
             </div>
           </div>
         </div>
@@ -545,10 +545,10 @@
             自然语言操控 Ctrl/⌘ K
           </button>
           <button class="px-3 py-1.5 text-xs rounded-xl bg-white/[0.08] hover:bg-white/[0.12] border border-white/10 transition-colors" @click="showWorkflowPanel = true">
-            导入 Comfy / 工作流模板
+            导入 / 添加工作流模板
           </button>
           <button class="px-3 py-1.5 text-xs rounded-xl bg-white/[0.08] hover:bg-white/[0.12] border border-white/10 transition-colors" @click="showApiSettings = true">
-            模型与本地引擎
+            模型 API 设置
           </button>
         </div>
       </section>
@@ -970,9 +970,9 @@ const studioActions = [
   },
   {
     id: 'comfyWrapper',
-    title: 'Comfy 包装节点',
-    badge: 'Local',
-    desc: '把复杂 ComfyUI 工作流包装成一个可填写表单节点。'
+    title: '专业参数节点',
+    badge: 'Cloud',
+    desc: '把 ComfyUI 风格的专业参数包装成云端模型可执行表单。'
   },
   {
     id: 'dramaShots',
@@ -2208,7 +2208,7 @@ const runStudioAction = (actionId) => {
       { name: 'connectNodes', params: { source: 'prompt', target: 'image' } },
       { name: 'connectNodes', params: { source: 'image', target: 'video' } }
     ]),
-    comfyWrapper: makeStudioNodePlan('已创建 Comfy 简化包装节点', [
+    comfyWrapper: makeStudioNodePlan('已创建云端专业参数节点', [
       { name: 'createComfyWrapper', params: { templateId: 'txt2img-basic', position: { x: 560, y } } }
     ]),
     productLaunch: makeStudioNodePlan('已创建产品发布全套物料工作流', [
@@ -2274,7 +2274,7 @@ const updateDramaShotStatus = ({ shotId, status }) => {
 const handleEngineWorkspaceAction = (action, payload) => {
   if (action === 'openComfySettings') {
     showApiSettings.value = true
-    window.$message?.info('已打开模型与本地引擎设置，请进入 Comfy 引擎页安装、启动或测试连接。')
+    window.$message?.info('已打开模型 API 设置设置，请进入 Comfy 引擎页安装、启动或测试连接。')
     return
   }
 
@@ -2305,7 +2305,7 @@ const handleEngineWorkspaceAction = (action, payload) => {
     const y = nodes.value.length
       ? Math.max(...nodes.value.map(node => Number(node.position?.y) || 0)) + 240
       : 180
-    const plan = makeStudioNodePlan('已创建 Comfy 简化包装节点', [
+    const plan = makeStudioNodePlan('已创建云端专业参数节点', [
       { name: 'createComfyWrapper', params: { templateId: payload || 'txt2img-basic', position: { x: 560, y } } }
     ])
     const executed = executeCanvasCommandPlan(plan)

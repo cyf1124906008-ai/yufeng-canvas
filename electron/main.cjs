@@ -843,7 +843,7 @@ function createWindow() {
 app.whenReady().then(() => {
   migrateLegacyUserDataStorage()
   setupAutoUpdater()
-  comfyInstaller.autoInstallIfAvailable()
+  // 本地 ComfyUI 仅作为高级用户可选能力，不在应用启动时自动装载。
 
   ipcMain.handle('app:get-version', () => packageJson.version)
   ipcMain.handle('app:get-update-status', () => updateState)

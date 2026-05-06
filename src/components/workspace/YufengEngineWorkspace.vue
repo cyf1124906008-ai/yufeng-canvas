@@ -3,12 +3,12 @@
     <div class="border-b border-white/10 bg-gradient-to-r from-cyan-500/15 via-emerald-500/10 to-transparent p-3">
       <div class="flex items-start justify-between gap-3">
         <div>
-          <p class="text-[10px] uppercase tracking-[0.22em] text-emerald-100/60">YUFENG Integrated Workspace</p>
-          <h3 class="text-sm font-semibold">ComfyUI + Drama 原生工作区</h3>
-          <span class="text-[11px] text-white/55">这里的按钮会直接创建节点、项目结构、镜头表或执行工作流。</span>
+          <p class="text-[10px] uppercase tracking-[0.22em] text-emerald-100/60">YUFENG Cloud Creative Workspace</p>
+          <h3 class="text-sm font-semibold">云端模型工作流 + 短剧工作区</h3>
+          <span class="text-[11px] text-white/55">用 API 模型直接创建节点、项目结构、镜头表和可执行工作流。</span>
         </div>
         <div class="flex shrink-0 items-center gap-2">
-          <span class="rounded-full border border-emerald-300/30 bg-emerald-300/10 px-2 py-1 text-[10px] text-emerald-100">v1.0.0</span>
+          <span class="rounded-full border border-emerald-300/30 bg-emerald-300/10 px-2 py-1 text-[10px] text-emerald-100">v1.0.1</span>
           <button class="rounded-full border border-white/10 bg-white/[0.08] px-2 py-1 text-[10px] text-white/70 hover:bg-white/[0.14]" @click="$emit('close')">收起</button>
         </div>
       </div>
@@ -18,7 +18,7 @@
           :class="activeTab === 'comfy' ? 'bg-emerald-400 text-slate-950' : 'bg-white/[0.08] text-white/70 hover:bg-white/[0.12]'"
           @click="activeTab = 'comfy'"
         >
-          Comfy 本地引擎
+          云端专业工作流
         </button>
         <button
           class="rounded-2xl px-3 py-2 text-xs font-semibold transition-colors"
@@ -34,42 +34,26 @@
       <section v-if="activeTab === 'comfy'" class="space-y-3">
         <div class="rounded-2xl border border-white/10 bg-white/[0.06] p-3">
           <div class="mb-2 flex items-center justify-between gap-2">
-            <strong class="text-sm">Comfy 引擎状态</strong>
-            <span class="rounded-full px-2 py-0.5 text-[10px]" :class="comfySummary.connected ? 'bg-emerald-300/15 text-emerald-100' : 'bg-amber-300/15 text-amber-100'">
-              {{ comfySummary.statusLabel }}
-            </span>
+            <strong class="text-sm">云端工作流执行</strong>
+            <span class="rounded-full bg-emerald-300/15 px-2 py-0.5 text-[10px] text-emerald-100">API 优先</span>
           </div>
-          <dl class="grid grid-cols-2 gap-2 text-[11px] text-white/62">
-            <div><dt>API</dt><dd class="truncate text-white">{{ comfySummary.baseUrl }}</dd></div>
-            <div><dt>节点类型</dt><dd class="text-white">{{ comfySummary.objectInfoCount }}</dd></div>
-          </dl>
-          <p v-if="comfySummary.error" class="mt-2 rounded-xl bg-red-500/10 px-2 py-1 text-[11px] text-red-100">{{ comfySummary.error }}</p>
+          <p class="text-[11px] leading-relaxed text-white/62">
+            这里不是让用户部署本地 ComfyUI，而是吸收 ComfyUI 的专业参数和工作流结构，用你配置的云端图片/视频模型执行。
+          </p>
           <div class="mt-3 flex flex-wrap gap-2">
-            <button class="shell-action primary" @click="startComfy">启动内置 ComfyUI</button>
-            <button class="shell-action" @click="installDependencies">安装依赖</button>
-            <button class="shell-action" @click="scanModels">扫描模型</button>
-            <button class="shell-action" @click="$emit('action', 'openWorkflowImport')">导入 API workflow</button>
-            <button class="shell-action" @click="$emit('action', 'createComfyWrapper')">生成包装节点</button>
-            <button class="shell-action" @click="$emit('action', 'openComfySettings')">高级设置</button>
-          </div>
-          <div v-if="modelScan" class="mt-3 rounded-xl bg-black/20 p-2 text-[11px] text-white/60">
-            <div class="flex flex-wrap gap-2">
-              <span>Checkpoint {{ modelScan.counts?.checkpoints || 0 }}</span>
-              <span>LoRA {{ modelScan.counts?.loras || 0 }}</span>
-              <span>ControlNet {{ modelScan.counts?.controlnet || 0 }}</span>
-              <span>VAE {{ modelScan.counts?.vae || 0 }}</span>
-            </div>
-            <p v-if="modelScan.missing?.length" class="mt-1 text-amber-100">缺少模型权重：{{ modelScan.missing.join('、') }}</p>
+            <button class="shell-action primary" @click="$emit('action', 'createComfyWrapper')">创建专业参数节点</button>
+            <button class="shell-action" @click="$emit('action', 'openWorkflowImport')">导入 / 添加工作流</button>
+            <button class="shell-action" @click="$emit('action', 'openCloudModelSettings')">模型 API 设置</button>
           </div>
         </div>
 
         <div class="rounded-2xl border border-white/10 bg-white/[0.06] p-3">
           <div class="mb-2 flex items-center justify-between gap-2">
-            <strong class="text-sm">画布里的 Comfy 工作流</strong>
+            <strong class="text-sm">画布里的专业工作流</strong>
             <span class="text-[10px] text-white/45">{{ comfyNodes.length }} 个</span>
           </div>
           <div v-if="!comfyNodes.length" class="rounded-xl bg-black/20 p-3 text-[11px] text-white/55">
-            还没有 Comfy 节点。导入 API workflow 会生成可编辑、可运行的中文表单节点。
+            还没有专业工作流节点。导入模板或创建包装节点后，会生成中文表单和云端模型执行链路。
           </div>
           <div v-else class="space-y-2">
             <div v-for="node in comfyNodes" :key="node.id" class="rounded-xl bg-black/20 p-2">
@@ -89,7 +73,7 @@
         </div>
 
         <div class="rounded-2xl border border-white/10 bg-white/[0.06] p-3">
-          <strong class="text-sm">Comfy 包装模板</strong>
+          <strong class="text-sm">专业参数模板</strong>
           <div class="mt-2 space-y-2">
             <button
               v-for="template in comfyTemplates"
@@ -106,6 +90,20 @@
             </button>
           </div>
         </div>
+
+        <details class="rounded-2xl border border-white/10 bg-white/[0.04] p-3 text-[11px] text-white/55">
+          <summary class="cursor-pointer text-white/70">高级用户：连接已有本地 ComfyUI（可选）</summary>
+          <p class="mt-2 leading-relaxed">
+            普通用户不需要本地部署。只有已经自己运行 ComfyUI 的专业用户，才需要在这里测试 localhost 连接或导入 API workflow。
+          </p>
+          <div class="mt-3 flex flex-wrap gap-2">
+            <button class="shell-action" @click="$emit('action', 'openComfySettings')">本地连接设置</button>
+            <button class="shell-action" @click="scanModels">检查本地模型目录</button>
+          </div>
+          <p v-if="modelScan?.missing?.length" class="mt-2 rounded-xl bg-amber-300/10 px-2 py-1 text-amber-100">
+            本地模式缺少模型权重：{{ modelScan.missing.join('、') }}
+          </p>
+        </details>
       </section>
 
       <section v-else class="space-y-3">
@@ -191,7 +189,7 @@ import { computed, onMounted, ref } from 'vue'
 import { currentProject } from '@/stores/projects'
 import { nodes } from '@/stores/canvas'
 import { useComfyStore } from '@/stores/comfy'
-import { COMFY_WRAPPER_TEMPLATES, getComfyShellSummary } from '@/integrations/comfy/yufengComfyShell'
+import { COMFY_WRAPPER_TEMPLATES } from '@/integrations/comfy/yufengComfyShell'
 import { DRAMA_STATUS_LABELS, summarizeDramaProject, DRAMA_PIPELINE_STAGES } from '@/integrations/drama/dramaWorkspace'
 
 const emit = defineEmits(['action', 'close'])
@@ -201,11 +199,9 @@ const comfyStore = useComfyStore()
 
 onMounted(() => {
   comfyStore.refreshStatus?.()
-  comfyStore.scanModels?.()
 })
 
 const comfyTemplates = COMFY_WRAPPER_TEMPLATES
-const comfySummary = computed(() => getComfyShellSummary(comfyStore.state.value))
 const modelScan = computed(() => comfyStore.modelScan.value)
 const comfyNodes = computed(() => nodes.value.filter(node => node.type === 'comfyWorkflow'))
 const assetNodes = computed(() => nodes.value.filter(node => ['image', 'video'].includes(node.type) && (node.data?.url || node.data?.assetPath)))
@@ -235,7 +231,7 @@ async function installDependencies() {
     window.$message?.error(result.error || '依赖安装启动失败')
     return
   }
-  window.$message?.success('已开始安装 ComfyUI Python 依赖，进度可在日志里查看')
+  window.$message?.success('已开始安装本地 ComfyUI Python 依赖，进度可在日志里查看')
 }
 
 async function startComfy() {
@@ -247,7 +243,7 @@ async function startComfy() {
     window.$message?.error(comfyStore.state.value.error)
     return
   }
-  window.$message?.success('已启动内置 ComfyUI')
+  window.$message?.success('已启动本地 ComfyUI')
 }
 
 async function scanModels() {

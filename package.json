@@ -2,7 +2,7 @@
   "name": "yufeng-canvas",
   "productName": "YUFENG Canvas",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Visual AI canvas desktop app built with Vue, Vite and Electron",
   "repository": {
     "type": "git",
@@ -87,34 +87,7 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true
-    },
-    "extraResources": [
-      {
-        "from": ".reference-repos/ComfyUI",
-        "to": "engines/ComfyUI",
-        "filter": [
-          "**/*",
-          "!**/.git/**",
-          "!**/.github/**",
-          "!models/**",
-          "!input/**",
-          "!output/**",
-          "!tests/**",
-          "!tests-unit/**"
-        ]
-      },
-      {
-        "from": ".reference-repos/huobao-drama",
-        "to": "engines/huobao-drama",
-        "filter": [
-          "**/*",
-          "!**/.git/**",
-          "!data/**",
-          "!frontend/node_modules/**",
-          "!backend/node_modules/**"
-        ]
-      }
-    ]
+    }
   },
   "pnpm": {
     "onlyBuiltDependencies": [

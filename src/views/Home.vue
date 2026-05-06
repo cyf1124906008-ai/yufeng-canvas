@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div
     ref="homeShellRef"
     class="home-shell min-h-screen h-screen overflow-y-auto text-[var(--text-primary)]"
@@ -201,7 +201,7 @@
                 一键短剧 8 分镜
               </button>
               <button class="secondary-action small" @click.stop="createIntegratedProject('comfyWrapper')">
-                内置 Comfy 工作流
+                云端专业工作流
               </button>
               <button class="secondary-action small" @click.stop="scrollToProjects">
                 我的项目
@@ -231,7 +231,7 @@
 
               <div class="integrated-inline-actions">
                 <button @click.stop="createIntegratedProject('dramaShots')">内置短剧项目：生成 8 分镜</button>
-                <button @click.stop="createIntegratedProject('comfyWrapper')">内置 ComfyUI：创建可运行包装节点</button>
+                <button @click.stop="createIntegratedProject('comfyWrapper')">云端专业工作流：创建参数节点</button>
               </div>
 
               <div class="chat-thread">
@@ -1138,10 +1138,10 @@ const chatHistoryStorageKey = 'yufeng-canvas-chat-history-v1'
 const integratedLaunchCards = [
   {
     id: 'comfyWrapper',
-    badge: '内置 ComfyUI',
-    title: '本地文生图包装',
-    desc: '直接在画布创建可编辑、可运行的 Comfy 简化节点，不跳网页。',
-    action: '创建 Comfy 节点'
+    badge: '云端专业工作流',
+    title: '专业文生图参数',
+    desc: '直接在画布创建可编辑、可运行的云端模型专业参数节点。',
+    action: '创建参数节点'
   },
   {
     id: 'dramaShots',
@@ -2107,7 +2107,7 @@ const createNewProject = () => {
 const createIntegratedProject = (actionId) => {
   const specs = {
     comfyWrapper: {
-      name: 'Comfy 本地工作流',
+      name: '云端专业工作流',
       type: PROJECT_TYPES.IMAGE,
       action: 'comfyWrapper'
     },
@@ -6242,4 +6242,3 @@ onUnmounted(() => {
   }
 }
 </style>
-
