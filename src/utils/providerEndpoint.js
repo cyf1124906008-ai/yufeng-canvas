@@ -1,6 +1,6 @@
 /**
  * Provider endpoint normalization and identification.
- * Strips endpoint paths, identifies provider type, suggests canonical endpoints.
+ * Keeps API base versions such as /v1 and /api/v1, while stripping concrete endpoints.
  */
 
 const PROVIDER_DOMAIN_PATTERNS = [
@@ -21,21 +21,20 @@ const PROVIDER_DOMAIN_PATTERNS = [
   { pattern: /xai\.com|api\.x\.ai/i, provider: 'openai', label: 'xAI' }
 ]
 
-const KNOWN_ENDPOINT_PATHS = [
-  '/v1/images/generations',
-  '/v1/images/edits',
-  '/v1/chat/completions',
-  '/v1/videos',
-  '/v1/models',
-  '/v1/embeddings',
+// Endpoint suffixes to remove while preserving versioned API base paths.
+// Example: https://host/api/v1/images/generations -> https://host/api/v1
+const ENDPOINT_SUFFIXES = [
   '/images/generations',
   '/images/edits',
   '/chat/completions',
+  '/videos/generations',
+  '/video/generations',
+  '/video/task',
+  '/audio/speech',
+  '/embeddings',
   '/models',
   '/videos',
-  '/api/v1/models',
-  '/api/v1/chat/completions',
-  '/api/v1/images/generations'
+  '/video'
 ]
 
 const DEFAULT_ENDPOINTS = {
@@ -47,72 +46,102 @@ const DEFAULT_ENDPOINTS = {
   models: '/v1/models'
 }
 
+const emptyResult = () => ({
+  baseUrl: '',
+  detectedEndpoint: '',
+  capabilityHint: '',
+  identifiedProvider: null,
+  identifiedLabel: null,
+  warnings: [],
+  endpoints: { ...DEFAULT_ENDPOINTS },
+  normalized: false
+})
+
+function identifyProvider(url) {
+  for (const { pattern, provider, label } of PROVIDER_DOMAIN_PATTERNS) {
+    if (pattern.test(url)) return { identifiedProvider: provider, identifiedLabel: label }
+  }
+  return { identifiedProvider: null, identifiedLabel: null }
+}
+
+function inferCapabilityFromEndpoint(endpoint = '') {
+  if (/images\/(generations|edits)/i.test(endpoint)) return 'image'
+  if (/chat\/completions/i.test(endpoint)) return 'chat'
+  if (/videos|video\//i.test(endpoint)) return 'video'
+  if (/audio\/speech/i.test(endpoint)) return 'audio'
+  return ''
+}
+
 /**
- * Normalize a base URL: strip endpoint paths, add protocol, strip trailing slashes.
- * Enhanced version of request.js normalizeBaseUrl with provider identification.
+ * Normalize provider URL. It adds https://, strips concrete endpoint suffixes,
+ * and keeps API base prefixes such as /v1 and /api/v1.
  */
 export function normalizeProviderEndpoint(input) {
-  if (!input || typeof input !== 'string') {
-    return { baseUrl: '', identifiedProvider: null, identifiedLabel: null, warnings: [], normalized: false }
-  }
+  if (!input || typeof input !== 'string') return emptyResult()
 
-  let url = input.trim()
-  if (!url) {
-    return { baseUrl: '', identifiedProvider: null, identifiedLabel: null, warnings: [], normalized: false }
-  }
+  const original = input.trim()
+  if (!original) return emptyResult()
 
+  let url = original
   const warnings = []
 
-  // Add https:// if no protocol
   if (!/^https?:\/\//i.test(url)) {
-    url = 'https://' + url
+    url = `https://${url}`
     warnings.push('已自动添加 https://')
   }
 
-  // Strip known endpoint paths (longest first for correct matching)
-  const sortedPaths = [...KNOWN_ENDPOINT_PATHS].sort((a, b) => b.length - a.length)
-  for (const path of sortedPaths) {
-    if (url.toLowerCase().endsWith(path.toLowerCase())) {
-      url = url.slice(0, url.length - path.length)
-      warnings.push(`已移除端点路径 ${path}`)
+  // Drop query/hash before matching endpoint paths; API base should not store them.
+  url = url.replace(/[?#].*$/, '')
+
+  let detectedEndpoint = ''
+  const lower = url.toLowerCase().replace(/\/+$/, '')
+  const sortedSuffixes = [...ENDPOINT_SUFFIXES].sort((a, b) => b.length - a.length)
+  for (const suffix of sortedSuffixes) {
+    if (lower.endsWith(suffix.toLowerCase())) {
+      detectedEndpoint = url.slice(url.length - suffix.length)
+      url = url.slice(0, url.length - suffix.length)
+      warnings.push(`已移除完整接口路径 ${suffix}，保留 API Base URL`)
       break
     }
   }
 
-  // Strip trailing slashes
   url = url.replace(/\/+$/, '')
 
-  // Identify provider by domain
-  let identifiedProvider = null
-  let identifiedLabel = null
-  for (const { pattern, provider, label } of PROVIDER_DOMAIN_PATTERNS) {
-    if (pattern.test(url)) {
-      identifiedProvider = provider
-      identifiedLabel = label
-      break
-    }
+  const { identifiedProvider, identifiedLabel } = identifyProvider(url)
+  const capabilityHint = inferCapabilityFromEndpoint(detectedEndpoint)
+  const normalized = url !== original
+
+  return {
+    baseUrl: url,
+    detectedEndpoint,
+    capabilityHint,
+    identifiedProvider,
+    identifiedLabel,
+    label: identifiedLabel,
+    warnings,
+    endpoints: { ...DEFAULT_ENDPOINTS },
+    normalized
   }
+}
 
-  // Build canonical endpoints for the identified provider
-  const endpoints = { ...DEFAULT_ENDPOINTS }
-
-  const normalized = url !== input.trim()
-  return { baseUrl: url, identifiedProvider, identifiedLabel, warnings, endpoints, normalized }
+function getModelDiscoveryPaths(baseUrl = '') {
+  const clean = String(baseUrl || '').replace(/\/+$/, '').toLowerCase()
+  if (/\/(api\/)?v\d+$/.test(clean)) return ['/models']
+  return ['/v1/models', '/models', '/api/v1/models']
 }
 
 /**
  * Test connection to a provider endpoint.
  * Returns { ok, status, models?, error?, chineseError? }
  */
-export async function testProviderConnection({ baseUrl, apiKey, provider }) {
+export async function testProviderConnection({ baseUrl, apiKey }) {
   if (!baseUrl) {
-    return { ok: false, error: '缺少 Base URL', chineseError: '请填写 Base URL' }
+    return { ok: false, error: 'Missing Base URL', chineseError: '请填写 Base URL' }
   }
 
   const { baseUrl: normalizedUrl } = normalizeProviderEndpoint(baseUrl)
   const testUrl = normalizedUrl || baseUrl
-
-  const paths = ['/v1/models', '/models', '/api/v1/models']
+  const paths = getModelDiscoveryPaths(testUrl)
   let lastStatus = 0
   let lastError = null
   let payload = null
@@ -120,23 +149,21 @@ export async function testProviderConnection({ baseUrl, apiKey, provider }) {
   for (const path of paths) {
     try {
       const headers = {}
-      if (apiKey) {
-        headers.Authorization = `Bearer ${apiKey}`
-      }
+      if (apiKey) headers.Authorization = `Bearer ${apiKey}`
 
       const resp = await fetch(`${testUrl}${path}`, { method: 'GET', headers, signal: AbortSignal.timeout(10000) })
       lastStatus = resp.status
 
+      const text = await resp.text()
       if (resp.status === 401 || resp.status === 403) {
         return {
           ok: false,
           status: resp.status,
-          error: 'Authentication failed',
-          chineseError: 'API Key 无效或没有权限，请检查 Key 是否正确。'
+          error: text || 'Authentication failed',
+          chineseError: 'API Key 无效或没有访问权限，请检查 Key、余额和模型权限。'
         }
       }
 
-      const text = await resp.text()
       if (!resp.ok) {
         try { lastError = JSON.parse(text) } catch { lastError = { message: text.slice(0, 200) } }
         continue
@@ -158,22 +185,11 @@ export async function testProviderConnection({ baseUrl, apiKey, provider }) {
 
   if (payload) {
     const models = normalizeModelPayload(payload)
-    return {
-      ok: true,
-      status: 200,
-      models,
-      modelCount: models.length,
-      chineseError: null
-    }
+    return { ok: true, status: 200, models, modelCount: models.length, chineseError: null }
   }
 
-  const message = lastError?.error?.message || lastError?.message || `连接失败：尝试了 ${paths.length} 个路径均未成功`
-  return {
-    ok: false,
-    status: lastStatus,
-    error: message,
-    chineseError: translateConnectionError(lastStatus, message)
-  }
+  const message = lastError?.error?.message || lastError?.message || `连接失败：尝试了 ${paths.length} 个模型列表路径均未成功`
+  return { ok: false, status: lastStatus, error: message, chineseError: translateConnectionError(lastStatus, message) }
 }
 
 function normalizeModelPayload(payload) {
@@ -185,13 +201,13 @@ function normalizeModelPayload(payload) {
 }
 
 function translateConnectionError(status, message) {
-  if (status === 404) return '接口路径未找到。请确认 Base URL 正确（只需填写域名部分）。'
-  if (status === 401 || status === 403) return 'API Key 无效或没有权限。'
+  if (status === 404) return '模型列表接口未找到。请确认 Base URL 只填写到 /v1 或 /api/v1，不要包含具体生成接口。'
+  if (status === 401 || status === 403) return 'API Key 无效或没有访问权限。'
   if (status === 429) return '请求过于频繁，请稍后再试。'
-  if (status >= 500) return '服务端异常，供应商可能暂时不可用。'
+  if (status >= 500) return '供应商服务异常，可能暂时不可用。'
   if (/dns|ENOTFOUND|getaddrinfo/i.test(message)) return '域名解析失败，请检查 Base URL 拼写。'
-  if (/ECONNREFUSED|network/i.test(message)) return '网络连接被拒绝，请检查 Base URL 和网络状态。'
+  if (/ECONNREFUSED|network|failed to fetch/i.test(message)) return '网络连接失败，请检查 Base URL 和网络状态。'
   return `连接失败：${message || '未知错误'}`
 }
 
-export { DEFAULT_ENDPOINTS }
+export { DEFAULT_ENDPOINTS, getModelDiscoveryPaths }

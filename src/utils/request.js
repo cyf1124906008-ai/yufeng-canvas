@@ -5,6 +5,7 @@
 import axios from 'axios'
 import { getRuntimeApiKey, getRuntimeBaseUrl, getRuntimeProvider } from './runtimeConfig'
 import { addRuntimeLog } from '@/stores/canvas'
+import { normalizeProviderEndpoint } from './providerEndpoint'
 
 /**
  * Normalize a base URL: strip trailing slashes, add protocol, validate format.
@@ -14,18 +15,7 @@ import { addRuntimeLog } from '@/stores/canvas'
  * strip known API endpoint paths to recover the true base URL.
  */
 export function normalizeBaseUrl(url) {
-  if (!url || typeof url !== 'string') return ''
-  let normalized = url.trim()
-  if (!normalized) return ''
-  // Add https:// if no protocol
-  if (!/^https?:\/\//i.test(normalized)) {
-    normalized = 'https://' + normalized
-  }
-  // Strip known endpoint paths to recover base URL
-  normalized = normalized.replace(/\/(v1\/(images\/generations|chat\/completions|models|videos|embeddings)|api\/v1)\/?$/i, '')
-  // Strip trailing slashes
-  normalized = normalized.replace(/\/+$/, '')
-  return normalized
+  return normalizeProviderEndpoint(url).baseUrl || ''
 }
 
 /**

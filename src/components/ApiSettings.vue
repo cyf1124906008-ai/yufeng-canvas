@@ -389,7 +389,6 @@ import { getProviderConfig } from '../config/providers'
 import { useModelStore } from '../stores/pinia'
 import { backupUserDataNow, exportUserDataToFile, importUserDataFromFile } from '../utils/appDataBackup'
 import { getCapabilityLabel, getModelCapabilityConflict } from '../utils/modelCapability'
-import { normalizeBaseUrl } from '../utils/request'
 import { normalizeProviderEndpoint, testProviderConnection } from '../utils/providerEndpoint'
 import ComfyEnginePanel from './settings/ComfyEnginePanel.vue'
 
@@ -672,10 +671,16 @@ const persistFormConfig = () => {
   modelStore.setApiKeyByProvider(provider, formData.chatApiKey, 'chat')
   modelStore.setApiKeyByProvider(provider, formData.imageApiKey, 'image')
   modelStore.setApiKeyByProvider(provider, formData.videoApiKey, 'video')
-  modelStore.setBaseUrlByProvider(provider, showBaseUrlInput.value ? formData.baseUrl : resolvedBaseUrl.value)
-  modelStore.setBaseUrlByProvider(provider, formData.chatBaseUrl, 'chat')
-  modelStore.setBaseUrlByProvider(provider, formData.imageBaseUrl, 'image')
-  modelStore.setBaseUrlByProvider(provider, formData.videoBaseUrl, 'video')
+  const normalizeAndStoreBaseUrl = (value, capability = 'default') => {
+    const normalized = normalizeProviderEndpoint(value).baseUrl || ''
+    modelStore.setBaseUrlByProvider(provider, normalized, capability)
+    return normalized
+  }
+
+  formData.baseUrl = normalizeAndStoreBaseUrl(showBaseUrlInput.value ? formData.baseUrl : resolvedBaseUrl.value)
+  formData.chatBaseUrl = normalizeAndStoreBaseUrl(formData.chatBaseUrl, 'chat')
+  formData.imageBaseUrl = normalizeAndStoreBaseUrl(formData.imageBaseUrl, 'image')
+  formData.videoBaseUrl = normalizeAndStoreBaseUrl(formData.videoBaseUrl, 'video')
 
   return provider
 }

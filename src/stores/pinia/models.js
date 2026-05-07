@@ -17,7 +17,7 @@ import {
 import { PROVIDERS, getProviderList, getDefaultProvider, getProviderConfig, getDefaultBaseUrl } from '@/config/providers'
 import { DISTRIBUTION_CONFIG, getPresetApiKey, getPresetBaseUrl } from '@/config/distribution'
 import { isModelAllowedForCapability } from '@/utils/modelCapability'
-import { normalizeBaseUrl } from '@/utils/request'
+import { normalizeProviderEndpoint } from '@/utils/providerEndpoint'
 
 const STORAGE_KEYS = {
   PROVIDER: 'api-provider',
@@ -248,11 +248,11 @@ const normalizeBaseUrlEntry = (entry, presetDefault = '') => {
   }
 
   if (typeof entry === 'string') {
-    normalized.default = entry.trim()
+    normalized.default = normalizeProviderEndpoint(entry).baseUrl || ''
   } else if (entry && typeof entry === 'object') {
     API_BASE_URL_CAPABILITIES.forEach((capability) => {
       const value = entry[capability]
-      normalized[capability] = typeof value === 'string' ? value.trim() : ''
+      normalized[capability] = typeof value === 'string' ? (normalizeProviderEndpoint(value).baseUrl || '') : ''
     })
   }
 
@@ -268,6 +268,17 @@ const normalizeBaseUrlsByProvider = (baseUrlsByProvider = {}) =>
     result[provider] = normalizeBaseUrlEntry(entry)
     return result
   }, {})
+
+const joinApiEndpoint = (baseUrl = '', endpoint = '') => {
+  const base = String(baseUrl || '').replace(/\/+$/, '')
+  let path = String(endpoint || '')
+  if (!base) return path
+  if (/\/(api\/)?v\d+$/i.test(base) && /^\/v\d+\//i.test(path)) {
+    path = path.replace(/^\/v\d+/i, '')
+  }
+  if (!path.startsWith('/')) path = `/${path}`
+  return `${base}${path}`
+}
 
 const isModelSupported = (model, provider) => {
   if (!model.provider) {
@@ -441,7 +452,7 @@ export const useModelStore = defineStore('model', () => {
 
   const setBaseUrlByProvider = (provider, baseUrl, capability = 'default') => {
     const normalizedCapability = API_BASE_URL_CAPABILITIES.includes(capability) ? capability : 'default'
-    const normalizedBaseUrl = normalizeBaseUrl(baseUrl) || ''
+    const normalizedBaseUrl = normalizeProviderEndpoint(baseUrl).baseUrl || ''
     const nextBaseUrl = DISTRIBUTION_CONFIG.api.lockBaseUrl
       ? resolveBaseUrl(provider, {})
       : normalizedBaseUrl
@@ -640,27 +651,27 @@ export const useModelStore = defineStore('model', () => {
 
   const getImageEndpoint = () => {
     const endpoint = providerConfig.value.endpoints?.image || '/images/generations'
-    return `${currentImageBaseUrl.value}${endpoint}`
+    return joinApiEndpoint(currentImageBaseUrl.value, endpoint)
   }
 
   const getImageEditEndpoint = () => {
     const endpoint = providerConfig.value.endpoints?.imageEdit || '/images/edits'
-    return `${currentImageBaseUrl.value}${endpoint}`
+    return joinApiEndpoint(currentImageBaseUrl.value, endpoint)
   }
 
   const getVideoEndpoint = () => {
     const endpoint = providerConfig.value.endpoints?.video || '/videos'
-    return `${currentVideoBaseUrl.value}${endpoint}`
+    return joinApiEndpoint(currentVideoBaseUrl.value, endpoint)
   }
 
   const getVideoTaskEndpoint = () => {
     const endpoint = providerConfig.value.endpoints?.videoQuery || providerConfig.value.endpoints?.video || '/videos'
-    return `${currentVideoBaseUrl.value}${endpoint}`
+    return joinApiEndpoint(currentVideoBaseUrl.value, endpoint)
   }
 
   const getChatEndpoint = () => {
     const endpoint = providerConfig.value.endpoints?.chat || '/chat/completions'
-    return `${currentChatBaseUrl.value}${endpoint}`
+    return joinApiEndpoint(currentChatBaseUrl.value, endpoint)
   }
 
   const getModelsByProvider = (provider) => ({

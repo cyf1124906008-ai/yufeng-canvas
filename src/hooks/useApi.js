@@ -56,9 +56,30 @@ const getApiErrorText = (error) => [
 
 const getApiErrorStatus = (error) => error?.response?.status || error?.status || error?.error?.status || error?.code || ''
 
+const IMAGE_PROFESSIONAL_PARAM_KEYS = [
+  'steps',
+  'cfg_scale',
+  'sampler',
+  'scheduler',
+  'denoising_strength',
+  'seed',
+  'negative_prompt'
+]
+
+const hasImageProfessionalParams = (payload = {}) =>
+  IMAGE_PROFESSIONAL_PARAM_KEYS.some((key) => payload[key] !== undefined && payload[key] !== null && payload[key] !== '')
+
+const stripImageProfessionalParams = (payload = {}) => {
+  const next = { ...payload }
+  IMAGE_PROFESSIONAL_PARAM_KEYS.forEach((key) => {
+    delete next[key]
+  })
+  return next
+}
+
 const isRecoverableImageParamError = (error) => {
   const message = getApiErrorText(error).toLowerCase()
-  return /quality|不合法的quality|size|resolution|不合法的size|尺寸|像素|pixels|count|数量|num| n /.test(message)
+  return /quality|不合法的quality|size|resolution|不合法的size|尺寸|像素|pixels|count|数量|num| n |unsupported|not support|unknown parameter|unrecognized|invalid.*(steps|cfg|sampler|scheduler|denois|seed|negative)|steps|cfg_scale|sampler|scheduler|denoising_strength|negative_prompt/.test(message)
 }
 
 const getFriendlyImageErrorMessage = (error) => {
@@ -902,6 +923,15 @@ export const useImageGeneration = () => {
         for (let attempt = 0; attempt < 4; attempt += 1) {
           const errorText = getApiErrorText(lastError).toLowerCase()
           const minPixels = getMinimumPixelsFromError(lastError)
+
+          if (hasImageProfessionalParams(activeRequestData) && /unsupported|not support|unknown parameter|unrecognized|invalid|steps|cfg|sampler|scheduler|denois|negative_prompt/.test(errorText)) {
+            const result = await runCandidate(
+              stripImageProfessionalParams(activeRequestData),
+              '当前模型不支持部分专业参数，已自动移除 Steps / CFG / Sampler / Scheduler / Denoise 等参数后重试。'
+            )
+            if (result) return result
+            continue
+          }
 
           if (activeRequestData.quality && /quality|不合法的quality/.test(errorText)) {
             const nextRequestData = { ...activeRequestData }

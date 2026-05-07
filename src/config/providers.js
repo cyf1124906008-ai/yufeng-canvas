@@ -14,6 +14,25 @@ const toDisplayableImageUrl = (item) => {
   return ''
 }
 
+const IMAGE_PROFESSIONAL_PARAM_KEYS = [
+  'steps',
+  'cfg_scale',
+  'sampler',
+  'scheduler',
+  'denoising_strength',
+  'seed',
+  'negative_prompt'
+]
+
+const copyImageProfessionalParams = (adapted, params) => {
+  IMAGE_PROFESSIONAL_PARAM_KEYS.forEach((key) => {
+    if (params[key] !== undefined && params[key] !== null && params[key] !== '') {
+      adapted[key] = params[key]
+    }
+  })
+  return adapted
+}
+
 const createOpenAICompatibleProvider = (label, defaultBaseUrl) => ({
   label,
   defaultBaseUrl,
@@ -45,6 +64,7 @@ const createOpenAICompatibleProvider = (label, defaultBaseUrl) => ({
       if (params.quality) adapted.quality = params.quality
       if (params.style) adapted.style = params.style
       if (params.image) adapted.image = params.image
+      copyImageProfessionalParams(adapted, params)
       return adapted
     },
     video: (params) => {
@@ -114,6 +134,7 @@ export const PROVIDERS = {
         if (params.quality) adapted.quality = params.quality
         if (params.style) adapted.style = params.style
         if (params.image) adapted.image = params.image
+        copyImageProfessionalParams(adapted, params)
         return adapted
       },
       video: (params) => {
