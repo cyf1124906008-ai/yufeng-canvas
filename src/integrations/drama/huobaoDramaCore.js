@@ -310,3 +310,11 @@ export function removeEpisode(project, epId) {
   project.drama.episodes.forEach((e, i) => { e.index = i + 1 })
   return true
 }
+
+export function updateEpisode(project, epId, patch = {}) {
+  if (!project?.drama?.episodes) return false
+  const ep = project.drama.episodes.find(e => e.id === epId)
+  if (!ep) return false
+  Object.assign(ep, patch, { updatedAt: Date.now() })
+  return true
+}

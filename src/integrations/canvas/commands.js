@@ -22,7 +22,7 @@ import {
 import { PROJECT_TYPES, createEmptyProjectStructure } from '@/config/projectSchema'
 import { buildComfyWorkflowNodeData, isComfyApiWorkflow } from '@/integrations/comfy/workflowAdapter'
 import { buildDefaultComfyWrapperData } from '@/integrations/comfy/yufengComfyShell'
-import { createHuobaoDramaProjectSeed, createHuobaoStoryboards, normalizeHuobaoShotToYufengShot, addShot, removeShot, duplicateShot } from '@/integrations/drama/huobaoDramaCore'
+import { createHuobaoDramaProjectSeed, createHuobaoStoryboards, normalizeHuobaoShotToYufengShot, addShot, removeShot, duplicateShot, addCharacter, removeCharacter as removeDramaCharacter, updateCharacter as updateDramaCharacter, addScene, removeScene as removeDramaScene, updateScene as updateDramaScene, addEpisode, removeEpisode as removeDramaEpisode, updateEpisode as updateDramaEpisode } from '@/integrations/drama/huobaoDramaCore'
 
 const ALLOWED_NODE_TYPES = new Set(['text', 'imageConfig', 'image', 'videoConfig', 'video', 'llmConfig', 'comfyWorkflow', 'cloudImageWorkflow', 'dramaShot'])
 
@@ -724,6 +724,7 @@ export function validateRunCloudImageWorkflow(params = {}) {
   const node = getNodeById(params.nodeId)
   if (!node) return fail(`节点不存在: ${params.nodeId}`)
   if (node.type !== 'cloudImageWorkflow') return fail('该节点不是云端专业工作流节点')
+  if (!node.data?.model) return fail('请先在云端工作流节点中选择图片模型')
   return null
 }
 
@@ -750,6 +751,177 @@ export function validateFixWorkflowError(params = {}) {
 }
 export function executeFixWorkflowError(params = {}) {
   return ok('已生成工作流修复建议', { suggestions: ['检查 Comfy 是否连接', '确认 SaveImage / PreviewImage 输出节点存在', '确认缺失模型和自定义节点已安装'], nodeIds: params.nodeId ? [params.nodeId] : [] })
+}
+
+// --- Drama CRUD Commands (character / scene / episode / premise / cloud update) ---
+
+export function validateUpdateDramaPremise(params = {}) {
+  if (!params?.premise || typeof params.premise !== 'string') return fail('premise 必须是非空字符串')
+  return null
+}
+export function executeUpdateDramaPremise(params = {}) {
+  const err = validateUpdateDramaPremise(params)
+  if (err) return err
+  const project = getCurrentProject()
+  if (!project) return fail('没有当前项目')
+  updateProject(project.id, { drama: { ...project.drama, premise: params.premise } })
+  persistCurrentCanvas(project.id)
+  return ok('故事前提已更新')
+}
+
+export function validateCreateCharacter(params = {}) {
+  if (!params?.name || typeof params.name !== 'string') return fail('name 必须是非空字符串')
+  return null
+}
+export function executeCreateCharacter(params = {}) {
+  const err = validateCreateCharacter(params)
+  if (err) return err
+  const project = getCurrentProject()
+  if (!project) return fail('没有当前项目')
+  const char = addCharacter(project, { name: params.name, role: params.role, appearance: params.appearance, personality: params.personality, voiceStyle: params.voiceStyle })
+  if (!char) return fail('创建角色失败')
+  updateProject(project.id, { drama: { ...project.drama } })
+  persistCurrentCanvas(project.id)
+  return ok(`角色「${char.name}」已创建`, { characterId: char.id })
+}
+
+export function validateUpdateCharacter(params = {}) {
+  if (!params?.characterId || typeof params.characterId !== 'string') return fail('characterId 必须是非空字符串')
+  if (!params?.patch || typeof params.patch !== 'object') return fail('patch 必须是对象')
+  return null
+}
+export function executeUpdateCharacter(params = {}) {
+  const err = validateUpdateCharacter(params)
+  if (err) return err
+  const project = getCurrentProject()
+  if (!project) return fail('没有当前项目')
+  if (!updateDramaCharacter(project, params.characterId, params.patch)) return fail(`角色不存在: ${params.characterId}`)
+  updateProject(project.id, { drama: { ...project.drama } })
+  persistCurrentCanvas(project.id)
+  return ok('角色已更新', { characterId: params.characterId })
+}
+
+export function validateRemoveCharacter(params = {}) {
+  if (!params?.characterId || typeof params.characterId !== 'string') return fail('characterId 必须是非空字符串')
+  return null
+}
+export function executeRemoveCharacter(params = {}) {
+  const err = validateRemoveCharacter(params)
+  if (err) return err
+  const project = getCurrentProject()
+  if (!project) return fail('没有当前项目')
+  if (!removeDramaCharacter(project, params.characterId)) return fail(`角色不存在: ${params.characterId}`)
+  updateProject(project.id, { drama: { ...project.drama } })
+  persistCurrentCanvas(project.id)
+  return ok('角色已删除', { characterId: params.characterId })
+}
+
+export function validateCreateScene(params = {}) {
+  if (!params?.name || typeof params.name !== 'string') return fail('name 必须是非空字符串')
+  return null
+}
+export function executeCreateScene(params = {}) {
+  const err = validateCreateScene(params)
+  if (err) return err
+  const project = getCurrentProject()
+  if (!project) return fail('没有当前项目')
+  const scene = addScene(project, { name: params.name, location: params.location, time: params.time, prompt: params.prompt })
+  if (!scene) return fail('创建场景失败')
+  updateProject(project.id, { drama: { ...project.drama } })
+  persistCurrentCanvas(project.id)
+  return ok(`场景「${scene.name}」已创建`, { sceneId: scene.id })
+}
+
+export function validateUpdateScene(params = {}) {
+  if (!params?.sceneId || typeof params.sceneId !== 'string') return fail('sceneId 必须是非空字符串')
+  if (!params?.patch || typeof params.patch !== 'object') return fail('patch 必须是对象')
+  return null
+}
+export function executeUpdateScene(params = {}) {
+  const err = validateUpdateScene(params)
+  if (err) return err
+  const project = getCurrentProject()
+  if (!project) return fail('没有当前项目')
+  if (!updateDramaScene(project, params.sceneId, params.patch)) return fail(`场景不存在: ${params.sceneId}`)
+  updateProject(project.id, { drama: { ...project.drama } })
+  persistCurrentCanvas(project.id)
+  return ok('场景已更新', { sceneId: params.sceneId })
+}
+
+export function validateRemoveScene(params = {}) {
+  if (!params?.sceneId || typeof params.sceneId !== 'string') return fail('sceneId 必须是非空字符串')
+  return null
+}
+export function executeRemoveScene(params = {}) {
+  const err = validateRemoveScene(params)
+  if (err) return err
+  const project = getCurrentProject()
+  if (!project) return fail('没有当前项目')
+  if (!removeDramaScene(project, params.sceneId)) return fail(`场景不存在: ${params.sceneId}`)
+  updateProject(project.id, { drama: { ...project.drama } })
+  persistCurrentCanvas(project.id)
+  return ok('场景已删除', { sceneId: params.sceneId })
+}
+
+export function validateCreateEpisode(params = {}) { return null }
+export function executeCreateEpisode(params = {}) {
+  const project = getCurrentProject()
+  if (!project) return fail('没有当前项目')
+  if (!project.drama) updateProject(project.id, { type: PROJECT_TYPES.DRAMA, drama: { ...createEmptyProjectStructure(PROJECT_TYPES.DRAMA).drama } })
+  const freshProject = getCurrentProject()
+  const ep = addEpisode(freshProject, { title: params.title, summary: params.summary })
+  if (!ep) return fail('创建分集失败')
+  updateProject(freshProject.id, { drama: { ...freshProject.drama } })
+  persistCurrentCanvas(freshProject.id)
+  return ok(`分集「${ep.title}」已创建`, { episodeId: ep.id })
+}
+
+export function validateUpdateEpisode(params = {}) {
+  if (!params?.episodeId || typeof params.episodeId !== 'string') return fail('episodeId 必须是非空字符串')
+  if (!params?.patch || typeof params.patch !== 'object') return fail('patch 必须是对象')
+  return null
+}
+export function executeUpdateEpisode(params = {}) {
+  const err = validateUpdateEpisode(params)
+  if (err) return err
+  const project = getCurrentProject()
+  if (!project) return fail('没有当前项目')
+  if (!updateDramaEpisode(project, params.episodeId, params.patch)) return fail(`分集不存在: ${params.episodeId}`)
+  updateProject(project.id, { drama: { ...project.drama } })
+  persistCurrentCanvas(project.id)
+  return ok('分集已更新', { episodeId: params.episodeId })
+}
+
+export function validateRemoveEpisode(params = {}) {
+  if (!params?.episodeId || typeof params.episodeId !== 'string') return fail('episodeId 必须是非空字符串')
+  return null
+}
+export function executeRemoveEpisode(params = {}) {
+  const err = validateRemoveEpisode(params)
+  if (err) return err
+  const project = getCurrentProject()
+  if (!project) return fail('没有当前项目')
+  if (!removeDramaEpisode(project, params.episodeId)) return fail(`分集不存在: ${params.episodeId}`)
+  updateProject(project.id, { drama: { ...project.drama } })
+  persistCurrentCanvas(project.id)
+  return ok('分集已删除', { episodeId: params.episodeId })
+}
+
+export function validateUpdateCloudImageWorkflow(params = {}) {
+  if (!params?.nodeId || typeof params.nodeId !== 'string') return fail('nodeId 必须是非空字符串')
+  const node = getNodeById(params.nodeId)
+  if (!node) return fail(`节点不存在: ${params.nodeId}`)
+  if (node.type !== 'cloudImageWorkflow') return fail('该节点不是云端专业工作流节点')
+  if (params.data && typeof params.data !== 'object') return fail('data 必须是对象')
+  return null
+}
+export function executeUpdateCloudImageWorkflow(params = {}) {
+  const err = validateUpdateCloudImageWorkflow(params)
+  if (err) return err
+  const cleaned = sanitizeNodeData('cloudImageWorkflow', params.data || {})
+  updateNode(params.nodeId, { ...cleaned, updatedAt: Date.now() })
+  persistCurrentCanvas()
+  return ok('云端工作流参数已更新', { nodeIds: [params.nodeId] })
 }
 
 const COMMAND_MAP = {
@@ -780,7 +952,18 @@ const COMMAND_MAP = {
   removeDramaShot: { validate: validateRemoveDramaShot, execute: executeRemoveDramaShot },
   duplicateDramaShot: { validate: validateDuplicateDramaShot, execute: executeDuplicateDramaShot },
   fixWorkflowError: { validate: validateFixWorkflowError, execute: executeFixWorkflowError },
-  saveAsset: { validate: validateSaveAsset, execute: executeSaveAsset }
+  saveAsset: { validate: validateSaveAsset, execute: executeSaveAsset },
+  updateDramaPremise: { validate: validateUpdateDramaPremise, execute: executeUpdateDramaPremise },
+  createCharacter: { validate: validateCreateCharacter, execute: executeCreateCharacter },
+  updateCharacter: { validate: validateUpdateCharacter, execute: executeUpdateCharacter },
+  removeCharacter: { validate: validateRemoveCharacter, execute: executeRemoveCharacter },
+  createScene: { validate: validateCreateScene, execute: executeCreateScene },
+  updateScene: { validate: validateUpdateScene, execute: executeUpdateScene },
+  removeScene: { validate: validateRemoveScene, execute: executeRemoveScene },
+  createEpisode: { validate: validateCreateEpisode, execute: executeCreateEpisode },
+  updateEpisode: { validate: validateUpdateEpisode, execute: executeUpdateEpisode },
+  removeEpisode: { validate: validateRemoveEpisode, execute: executeRemoveEpisode },
+  updateCloudImageWorkflow: { validate: validateUpdateCloudImageWorkflow, execute: executeUpdateCloudImageWorkflow }
 }
 
 export function executeCommand(name, params) {
@@ -861,3 +1044,57 @@ export function executeCommandBatch(commands) {
 }
 
 export const COMMAND_NAMES = Object.keys(COMMAND_MAP)
+
+// --- Command metadata registry ---
+export const COMMAND_REGISTRY = {
+  createProject: { description: '创建新项目', risk: 'safe' },
+  addNode: { description: '在画布上添加节点', risk: 'safe' },
+  updateNode: { description: '更新节点数据', risk: 'safe' },
+  removeNode: { description: '删除画布节点', risk: 'destructive' },
+  connectNodes: { description: '连接两个节点', risk: 'safe' },
+  importComfyWorkflow: { description: '导入 Comfy 工作流（高级本地功能）', risk: 'safe' },
+  importComfyWorkflowTemplate: { description: '导入 Comfy 工作流模板', risk: 'safe' },
+  createComfyWrapper: { description: '创建 Comfy 包装节点', risk: 'safe' },
+  runComfyWorkflow: { description: '运行本地 Comfy 工作流', risk: 'execution' },
+  createDramaProject: { description: '创建或升级为短剧项目', risk: 'safe' },
+  createCharacterBible: { description: '创建角色库和一致性节点', risk: 'safe' },
+  createSceneBible: { description: '创建场景库节点', risk: 'safe' },
+  createEpisodeOutline: { description: '创建分集大纲', risk: 'safe' },
+  createShotList: { description: '创建镜头列表和 DramaShot 节点', risk: 'safe' },
+  createFirstFrameWorkflow: { description: '为首帧创建图片生成工作流', risk: 'safe' },
+  createVideoWorkflow: { description: '为镜头创建视频生成工作流', risk: 'safe' },
+  createCloudImageWorkflow: { description: '创建云端专业图片工作流节点', risk: 'safe' },
+  runCloudImageWorkflow: { description: '执行云端图片生成（消耗 API 额度）', risk: 'execution' },
+  updateCloudImageWorkflow: { description: '更新云端工作流参数', risk: 'safe' },
+  updateDramaPremise: { description: '更新短剧故事前提', risk: 'safe' },
+  updateDramaShot: { description: '更新镜头数据', risk: 'safe' },
+  locateDramaShot: { description: '定位镜头到画布中心', risk: 'safe' },
+  addDramaShot: { description: '添加新镜头', risk: 'safe' },
+  removeDramaShot: { description: '删除镜头及其关联节点', risk: 'destructive' },
+  duplicateDramaShot: { description: '复制镜头', risk: 'safe' },
+  createCharacter: { description: '创建新角色', risk: 'safe' },
+  updateCharacter: { description: '更新角色信息', risk: 'safe' },
+  removeCharacter: { description: '删除角色', risk: 'destructive' },
+  createScene: { description: '创建新场景', risk: 'safe' },
+  updateScene: { description: '更新场景信息', risk: 'safe' },
+  removeScene: { description: '删除场景', risk: 'destructive' },
+  createEpisode: { description: '创建新分集', risk: 'safe' },
+  updateEpisode: { description: '更新分集信息', risk: 'safe' },
+  removeEpisode: { description: '删除分集', risk: 'destructive' },
+  fixWorkflowError: { description: '生成工作流修复建议', risk: 'safe' },
+  saveAsset: { description: '保存资产', risk: 'safe' }
+}
+
+export function dryRunCommandBatch(commands) {
+  const descriptions = []
+  let hasDestructive = false
+  let hasExecution = false
+  for (const cmd of commands) {
+    const meta = COMMAND_REGISTRY[cmd.name]
+    const risk = meta?.risk || 'safe'
+    if (risk === 'destructive') hasDestructive = true
+    if (risk === 'execution') hasExecution = true
+    descriptions.push(meta?.description || cmd.name)
+  }
+  return { ok: true, descriptions, hasDestructive, hasExecution, commandCount: commands.length }
+}

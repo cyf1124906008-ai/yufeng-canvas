@@ -639,11 +639,23 @@
     </n-modal>
 
     <!-- AI Command Confirm Modal | AI 命令确认弹窗 -->
-    <n-modal v-model:show="showCommandConfirmModal" preset="dialog" title="AI 指令确认" type="warning">
-      <p v-if="pendingCommandPlan" class="mb-2">{{ pendingCommandPlan.summary }}</p>
-      <p class="text-xs text-[var(--text-secondary)]">
-        共 {{ pendingCommandPlan?.commands?.length || 0 }} 条操作，包含需要确认的风险操作。
+    <n-modal v-model:show="commandConfirmState.show" preset="dialog" title="AI 指令确认" type="warning">
+      <p v-if="commandConfirmState.plan" class="mb-2 text-sm font-medium">{{ commandConfirmState.plan.summary }}</p>
+      <div class="mb-3 max-h-40 overflow-y-auto space-y-1">
+        <div v-for="(desc, i) in commandConfirmState.descriptions" :key="i" class="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
+          <span class="shrink-0 text-[var(--text-tertiary)]">{{ i + 1 }}.</span>
+          <span>{{ desc }}</span>
+        </div>
+      </div>
+      <p v-if="commandConfirmState.commandCount" class="text-xs text-[var(--text-tertiary)] mb-2">
+        共 {{ commandConfirmState.commandCount }} 条操作
       </p>
+      <div v-if="commandConfirmState.hasDestructive" class="mb-2 rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">
+        此操作包含删除操作，不可撤销
+      </div>
+      <div v-if="commandConfirmState.hasExecution" class="mb-2 rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-400">
+        此操作将调用云端 API，可能产生费用
+      </div>
       <template #action>
         <n-button @click="cancelCommandPlan">取消</n-button>
         <n-button type="primary" @click="confirmCommandPlan">确认执行</n-button>
@@ -720,7 +732,7 @@ import GuidedTour from '../components/GuidedTour.vue'
 import { CANVAS_PROMPT_SUGGESTIONS } from '../config/promptLibrary'
 import { buildCanvasSnapshot, buildCanvasAgentSystemPrompt, parseAgentCommandResponse, classifyCommandRisk, buildLocalCommandPlan } from '../integrations/canvas/agentPlanner'
 
-import { executeCommandBatch, validateCommandBatch, executeCommand } from '../integrations/canvas/commands'
+import { executeCommandBatch, validateCommandBatch, executeCommand, dryRunCommandBatch, COMMAND_REGISTRY } from '../integrations/canvas/commands'
 import { generateDramaContent, convertGeneratedDataToProject } from '../integrations/drama/dramaGenerator'
 
 
@@ -884,8 +896,14 @@ const splitterSourceNodeId = ref('')
 const showWorkflowPanel = ref(false)
 const showRuntimeLogs = ref(false)
 const showCanvasTour = ref(false)
-const pendingCommandPlan = ref(null)
-const showCommandConfirmModal = ref(false)
+const commandConfirmState = ref({
+  show: false,
+  plan: null,
+  descriptions: [],
+  hasDestructive: false,
+  hasExecution: false,
+  commandCount: 0
+})
 const showInspectorPanel = ref(true)
 const inspectorCollapsed = ref(false)
 const selectedNodeId = ref(null)
@@ -2045,14 +2063,13 @@ const confirmDelete = () => {
 }
 
 const confirmCommandPlan = () => {
-  const plan = pendingCommandPlan.value
+  const plan = commandConfirmState.value.plan
   if (!plan) return
   const batchErr = validateCommandBatch(plan.commands)
   if (batchErr) {
     window.$message?.error(batchErr.message)
     addRuntimeLog('error', `AI 指令确认前校验失败: ${batchErr.message}`, { commands: plan.commands })
-    showCommandConfirmModal.value = false
-    pendingCommandPlan.value = null
+    commandConfirmState.value = { show: false, plan: null, descriptions: [], hasDestructive: false, hasExecution: false, commandCount: 0 }
     return
   }
   const result = executeCommandBatch(plan.commands)
@@ -2063,13 +2080,11 @@ const confirmCommandPlan = () => {
     addRuntimeLog('error', `AI 执行失败: ${result.message}`)
     window.$message?.error(result.message)
   }
-  showCommandConfirmModal.value = false
-  pendingCommandPlan.value = null
+  commandConfirmState.value = { show: false, plan: null, descriptions: [], hasDestructive: false, hasExecution: false, commandCount: 0 }
 }
 
 const cancelCommandPlan = () => {
-  showCommandConfirmModal.value = false
-  pendingCommandPlan.value = null
+  commandConfirmState.value = { show: false, plan: null, descriptions: [], hasDestructive: false, hasExecution: false, commandCount: 0 }
 }
 
 const executeCanvasCommandPlan = (plan) => {
@@ -2082,8 +2097,15 @@ const executeCanvasCommandPlan = (plan) => {
 
   const { needsConfirm } = classifyCommandRisk(plan.commands)
   if (needsConfirm) {
-    pendingCommandPlan.value = plan
-    showCommandConfirmModal.value = true
+    const dryRun = dryRunCommandBatch(plan.commands)
+    commandConfirmState.value = {
+      show: true,
+      plan,
+      descriptions: dryRun.descriptions,
+      hasDestructive: dryRun.hasDestructive,
+      hasExecution: dryRun.hasExecution,
+      commandCount: dryRun.commandCount
+    }
     return true
   }
 
@@ -2289,6 +2311,32 @@ const handleEngineWorkspaceAction = (action, payload) => {
     ])
     const executed = executeCanvasCommandPlan(plan)
     if (executed) nextTick(() => fitView({ padding: 0.18, duration: 500 }))
+    return
+  }
+
+  // --- Phase 4: Drama CRUD commands ---
+  const simpleCommandActions = {
+    createCharacter: 'createCharacter',
+    updateCharacter: 'updateCharacter',
+    removeCharacter: 'removeCharacter',
+    createScene: 'createScene',
+    updateScene: 'updateScene',
+    removeScene: 'removeScene',
+    createEpisode: 'createEpisode',
+    updateEpisode: 'updateEpisode',
+    removeEpisode: 'removeEpisode'
+  }
+  if (simpleCommandActions[action]) {
+    const result = executeCommand(simpleCommandActions[action], payload)
+    if (!result.ok) window.$message?.warning(result.message)
+    else window.$message?.success(COMMAND_REGISTRY[simpleCommandActions[action]]?.description || '操作成功')
+    return
+  }
+
+  if (action === 'updateCloudImageWorkflow') {
+    const result = executeCommand('updateCloudImageWorkflow', payload)
+    if (!result.ok) window.$message?.warning(result.message)
+    else window.$message?.success('云端工作流已更新')
     return
   }
 }
