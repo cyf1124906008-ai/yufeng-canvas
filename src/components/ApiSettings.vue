@@ -344,7 +344,7 @@
         </div>
       </n-tab-pane>
 
-      <n-tab-pane name="comfy" tab="高级实验：本地 ComfyUI">
+      <n-tab-pane v-if="showLocalComfyAdvanced" name="comfy" tab="高级实验：本地 ComfyUI">
         <ComfyEnginePanel />
       </n-tab-pane>
     </n-tabs>
@@ -502,6 +502,10 @@ const showProviderSelect = computed(() =>
 
 const showBaseUrlInput = computed(() => !DISTRIBUTION_CONFIG.api.hideBaseUrlInput)
 const isProductPresetMode = computed(() => !showProviderSelect.value && !showBaseUrlInput.value)
+const showLocalComfyAdvanced = computed(() => {
+  if (typeof window === 'undefined') return false
+  return window.localStorage?.getItem('YUFENG_ENABLE_LOCAL_COMFY') === '1'
+})
 
 const resolveBaseUrl = (provider, capability = 'default') =>
   modelStore.getBaseUrlByProvider(provider, capability) || getProviderConfig(provider).defaultBaseUrl || ''
