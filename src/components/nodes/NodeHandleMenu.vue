@@ -117,7 +117,7 @@ const handleCreate = (item) => {
 <style scoped>
 .handle-menu-anchor {
   position: absolute;
-  left: 100%;
+  left: calc(100% - 6px);
   top: 50%;
   width: 156px;
   height: 88px;
@@ -128,7 +128,7 @@ const handleCreate = (item) => {
 
 .node-output-label {
   position: absolute;
-  left: 38px;
+  left: 32px;
   top: calc(50% - 30px);
   display: inline-flex;
   align-items: center;
@@ -154,7 +154,7 @@ const handleCreate = (item) => {
 
 .handle-add-button {
   position: absolute;
-  left: 58px;
+  left: 52px;
   top: 50%;
   width: 34px;
   height: 34px;
@@ -194,7 +194,7 @@ const handleCreate = (item) => {
 
 .handle-menu {
   position: absolute;
-  left: 98px;
+  left: 92px;
   top: 50%;
   display: flex;
   min-width: 148px;
