@@ -462,7 +462,7 @@
               </div>
             </div>
             <div class="flex shrink-0 items-center gap-2">
-              <span class="text-[10px] px-2 py-1 rounded-full bg-emerald-400/15 text-emerald-200 border border-emerald-300/30">v1.0.3</span>
+              <span class="text-[10px] px-2 py-1 rounded-full bg-emerald-400/15 text-emerald-200 border border-emerald-300/30">v1.0.4</span>
               <button class="rounded-full border border-white/10 bg-white/[0.08] px-2 py-1 text-[10px] text-white/70 hover:bg-white/[0.14]" @click="showStudioCockpit = false">收起</button>
             </div>
           </div>
@@ -3036,15 +3036,34 @@ onUnmounted(() => {
 }
 
 .canvas-flow .vue-flow__handle {
-  width: 16px;
-  height: 16px;
+  width: 26px;
+  height: 26px;
   border: 2px solid rgba(240, 253, 250, 0.98);
   background: linear-gradient(135deg, #5eead4, #22c55e);
   box-shadow:
-    0 0 0 4px rgba(20, 184, 166, 0.16),
-    0 0 18px rgba(45, 212, 191, 0.72);
+    0 0 0 7px rgba(20, 184, 166, 0.14),
+    0 0 22px rgba(45, 212, 191, 0.86);
   opacity: 1;
-  z-index: 8;
+  z-index: 100000 !important;
+  pointer-events: auto !important;
+  cursor: crosshair;
+  border-radius: 999px;
+}
+
+.canvas-flow .vue-flow__handle-left {
+  left: -14px !important;
+}
+
+.canvas-flow .vue-flow__handle-right {
+  right: -14px !important;
+}
+
+.canvas-flow .vue-flow__handle::before {
+  content: "";
+  position: absolute;
+  inset: -10px;
+  border-radius: 999px;
+  pointer-events: auto;
 }
 
 .node-port-label {
@@ -3081,6 +3100,11 @@ onUnmounted(() => {
   overflow: visible;
 }
 
+.canvas-flow .vue-flow__node .vue-flow__handle {
+  pointer-events: auto !important;
+  touch-action: none;
+}
+
 .canvas-flow .vue-flow__node button,
 .canvas-flow .vue-flow__node input,
 .canvas-flow .vue-flow__node textarea,
@@ -3101,7 +3125,7 @@ onUnmounted(() => {
 
 .canvas-flow .vue-flow__node.selected,
 .canvas-flow .vue-flow__node:hover {
-  z-index: 20 !important;
+  z-index: 2000 !important;
 }
 
 .canvas-flow .vue-flow__edges {

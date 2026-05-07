@@ -154,9 +154,13 @@ onBeforeUnmount(() => {
 .sa-edit:hover:not(:disabled) { border-color: rgba(52,211,153,0.4); }
 .sa-delete:hover:not(:disabled) { border-color: rgba(248,113,113,0.4); }
 .handle-left, .handle-right {
-  width: 12px;
-  height: 12px;
-  background: #34d399;
-  border: 2px solid rgba(15, 23, 42, 0.9);
+  width: 26px !important;
+  height: 26px !important;
+  background: linear-gradient(135deg, #5eead4, #22c55e) !important;
+  border: 2px solid rgba(240, 253, 250, 0.98) !important;
+  box-shadow: 0 0 0 7px rgba(20, 184, 166, 0.18), 0 0 18px rgba(45, 212, 191, 0.72) !important;
+  pointer-events: auto !important;
+  z-index: 100000 !important;
+  cursor: crosshair !important;
 }
 </style>

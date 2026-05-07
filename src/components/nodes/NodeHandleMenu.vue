@@ -119,34 +119,36 @@ const handleCreate = (item) => {
 <style scoped>
 .handle-menu-anchor {
   position: absolute;
-  left: calc(100% - 9px);
+  left: 100%;
   top: 50%;
   width: 170px;
   height: 96px;
   transform: translateY(-50%);
-  z-index: 10050;
+  z-index: 100000;
   pointer-events: none;
 }
 
 .node-source-handle {
-  left: 0 !important;
+  left: -13px !important;
   right: auto !important;
   top: 50% !important;
-  width: 18px !important;
-  height: 18px !important;
+  width: 26px !important;
+  height: 26px !important;
   border: 2px solid rgba(240, 253, 250, 0.98) !important;
   background: linear-gradient(135deg, #5eead4, #22c55e) !important;
   box-shadow:
-    0 0 0 4px rgba(20, 184, 166, 0.18),
+    0 0 0 7px rgba(20, 184, 166, 0.18),
     0 0 18px rgba(45, 212, 191, 0.72) !important;
   opacity: 1 !important;
   pointer-events: auto !important;
-  z-index: 10054 !important;
+  z-index: 100001 !important;
+  cursor: crosshair !important;
+  touch-action: none !important;
 }
 
 .node-output-label {
   position: absolute;
-  left: 26px;
+  left: 22px;
   top: calc(50% - 30px);
   display: inline-flex;
   align-items: center;
@@ -161,7 +163,7 @@ const handleCreate = (item) => {
   font-weight: 900;
   white-space: nowrap;
   pointer-events: none;
-  z-index: 10055;
+  z-index: 100000;
 }
 
 :global(.dark) .node-output-label {
@@ -172,7 +174,7 @@ const handleCreate = (item) => {
 
 .handle-add-button {
   position: absolute;
-  left: 36px;
+  left: 42px;
   top: 50%;
   width: 38px;
   height: 38px;
@@ -192,7 +194,7 @@ const handleCreate = (item) => {
   cursor: pointer;
   pointer-events: auto;
   transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
-  z-index: 10056;
+  z-index: 100000;
 }
 
 .handle-add-button:hover,
