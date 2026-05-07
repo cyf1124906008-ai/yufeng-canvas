@@ -28,7 +28,7 @@
             class="hidden-input"
             @change="handleImportFile"
           />
-          <button class="panel-action-btn" @click.stop="triggerImport">导入工作流</button>
+          <button class="panel-action-btn" @click.stop="triggerImport">导入 YUFENG 工作流</button>
           <button class="panel-action-btn" @click.stop="exportCurrentWorkflow">导出当前画布</button>
           <button class="expand-btn" @click="visible = false">
             <n-icon :size="16"><CloseOutline /></n-icon>
@@ -48,7 +48,7 @@
         <div v-if="isDraggingWorkflowFile" class="import-drop-overlay">
           <div class="drop-orb">JSON</div>
           <h3>松开即可导入工作流</h3>
-          <p>支持从 YUFENG Canvas 导出的 .json 工作流文件。</p>
+          <p>支持从 YUFENG Canvas 导出的 .json 工作流文件；Comfy API JSON 仅作为高级兼容能力。</p>
         </div>
         <!-- Public workflows | 公共工作流 -->
         <div v-if="activeTab === 'public'" class="public-workflows">
@@ -143,6 +143,10 @@ const activeTab = ref('public')
 const selectedCategory = ref('all')
 const importInputRef = ref(null)
 const isDraggingWorkflowFile = ref(false)
+const allowLocalComfyImport = computed(() => {
+  if (typeof window === 'undefined') return false
+  return window.localStorage?.getItem('YUFENG_ENABLE_LOCAL_COMFY') === '1'
+})
 
 // Visible state | 显示状态
 const visible = computed({
@@ -256,10 +260,14 @@ const importWorkflowFile = async (file) => {
     const payload = JSON.parse(text)
 
     if (isComfyApiWorkflow(payload)) {
+      if (!allowLocalComfyImport.value) {
+        window.$message?.warning('这是 Comfy API JSON。普通云端模式不会导入本地 Comfy 节点，请使用 YUFENG 导出的工作流，或在内部高级模式启用本地 Comfy 兼容。')
+        return
+      }
       const workflow = createComfyWorkflowTemplate(payload, file.name)
       emit('add-workflow', { workflow, options: {} })
       visible.value = false
-      window.$message?.success('Comfy 工作流已导入画布')
+      window.$message?.success('高级本地 Comfy 兼容工作流已导入画布')
       return
     }
 
