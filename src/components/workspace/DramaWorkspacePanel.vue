@@ -506,21 +506,18 @@ function saveSettings() {
 
 <style scoped>
 .drama-workspace {
-  position: absolute;
-  right: 1rem;
-  top: 5rem;
-  z-index: 20;
-  width: 340px;
-  max-height: calc(100vh - 7rem);
-  overflow: hidden;
+  position: relative;
+  width: 100%;
+  min-height: 0;
+  overflow: visible;
   display: flex;
   flex-direction: column;
-  border-radius: 1.5rem;
+  border-radius: 18px;
   border: 1px solid rgba(255,255,255,0.1);
-  background: rgba(15,23,42,0.92);
+  background: rgba(15,23,42,0.62);
   color: white;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
-  backdrop-filter: blur(16px);
+  box-shadow: none;
+  backdrop-filter: none;
 }
 .dws-header { padding: 12px 14px; border-bottom: 1px solid rgba(255,255,255,0.08); background: linear-gradient(to right, rgba(52,211,153,0.08), transparent); }
 .dws-tag { font-size: 9px; text-transform: uppercase; letter-spacing: 0.2em; color: rgba(255,255,255,0.4); margin-bottom: 2px; }

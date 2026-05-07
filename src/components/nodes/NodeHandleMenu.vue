@@ -1,13 +1,12 @@
-<template>
-  <div class="handle-menu-anchor nodrag nopan">
+﻿<template>
+  <div class="handle-menu-anchor">
     <Handle type="source" :position="Position.Right" id="right" class="node-source-handle" />
     <span v-if="outputLabel" class="node-output-label">{{ outputLabel }}</span>
 
-    <div
+    <button
       v-if="showHandleHoverZone"
+      type="button"
       class="handle-add-button nodrag nopan"
-      role="button"
-      tabindex="0"
       :aria-expanded="showMenu"
       title="添加下一个节点"
       @mouseenter="handleMouseEnter"
@@ -22,7 +21,7 @@
       <n-icon :size="16" class="add-icon">
         <AddOutline />
       </n-icon>
-    </div>
+    </button>
 
     <transition name="menu-fade">
       <div
@@ -39,7 +38,7 @@
           v-for="item in menuItems"
           :key="item.action || item.type"
           type="button"
-          class="menu-item group nodrag nopan"
+          class="menu-item nodrag nopan"
           @pointerdown.stop
           @mousedown.stop
           @mouseup.stop
@@ -64,7 +63,7 @@ import { AddOutline } from '@vicons/ionicons5'
 const props = defineProps({
   nodeId: { type: String, required: true },
   nodeType: { type: String, required: true },
-  visible: { type: Boolean },
+  visible: { type: Boolean, default: false },
   dotColor: { type: String, default: 'var(--accent-color)' },
   outputLabel: { type: String, default: '结果' },
   operations: { type: Array, default: null }
@@ -109,10 +108,7 @@ const toggleMenu = () => {
 }
 
 const menuItems = computed(() => props.operations || [])
-
-const showHandleHoverZone = computed(() => {
-  return props.operations && props.operations.length > 0
-})
+const showHandleHoverZone = computed(() => menuItems.value.length > 0)
 
 const handleCreate = (item) => {
   emit('select', item)
@@ -123,10 +119,10 @@ const handleCreate = (item) => {
 <style scoped>
 .handle-menu-anchor {
   position: absolute;
-  left: 100%;
+  left: calc(100% - 9px);
   top: 50%;
-  width: 150px;
-  height: 92px;
+  width: 170px;
+  height: 96px;
   transform: translateY(-50%);
   z-index: 10050;
   pointer-events: none;
@@ -150,7 +146,7 @@ const handleCreate = (item) => {
 
 .node-output-label {
   position: absolute;
-  left: 18px;
+  left: 26px;
   top: calc(50% - 30px);
   display: inline-flex;
   align-items: center;
@@ -159,7 +155,7 @@ const handleCreate = (item) => {
   border: 1px solid rgba(94, 234, 212, 0.34);
   border-radius: 999px;
   color: #047857;
-  background: rgba(240, 253, 250, 0.86);
+  background: rgba(240, 253, 250, 0.9);
   box-shadow: 0 8px 18px rgba(20, 184, 166, 0.14);
   font-size: 10px;
   font-weight: 900;
@@ -176,7 +172,7 @@ const handleCreate = (item) => {
 
 .handle-add-button {
   position: absolute;
-  left: 30px;
+  left: 36px;
   top: 50%;
   width: 38px;
   height: 38px;
@@ -195,19 +191,8 @@ const handleCreate = (item) => {
     0 0 24px rgba(45, 212, 191, 0.46);
   cursor: pointer;
   pointer-events: auto;
-  transition:
-    transform 0.18s ease,
-    border-color 0.18s ease,
-    box-shadow 0.18s ease;
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
   z-index: 10056;
-}
-
-.handle-add-button::before {
-  content: "";
-  position: absolute;
-  inset: -12px;
-  border-radius: 22px;
-  background: rgba(94, 234, 212, 0.08);
 }
 
 .handle-add-button:hover,
@@ -227,7 +212,7 @@ const handleCreate = (item) => {
 
 .handle-menu {
   position: absolute;
-  left: 76px;
+  left: 82px;
   top: 50%;
   display: flex;
   min-width: 148px;
@@ -262,10 +247,7 @@ const handleCreate = (item) => {
   cursor: pointer;
   font-size: 12px;
   text-align: left;
-  transition:
-    background 0.15s ease,
-    border-color 0.15s ease,
-    color 0.15s ease;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
   user-select: none;
 }
 

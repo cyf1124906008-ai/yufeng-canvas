@@ -638,10 +638,14 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .cloud-workflow-node {
+  position: relative;
   min-width: 240px;
   max-width: 280px;
+  padding-right: 52px;
+  padding-top: 20px;
 }
 .node-card {
+  position: relative;
   padding: 10px;
   border-radius: 12px;
   border: 1px solid var(--border-color);
