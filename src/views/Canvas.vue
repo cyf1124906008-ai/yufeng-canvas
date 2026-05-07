@@ -3130,7 +3130,7 @@ onUnmounted(() => {
 
 .canvas-flow .vue-flow__node.selected,
 .canvas-flow .vue-flow__node:hover {
-  z-index: 2000 !important;
+  z-index: 200000 !important;
 }
 
 .canvas-flow .vue-flow__edges {
