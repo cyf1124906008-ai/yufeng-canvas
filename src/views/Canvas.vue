@@ -3036,34 +3036,18 @@ onUnmounted(() => {
 }
 
 .canvas-flow .vue-flow__handle {
-  width: 26px;
-  height: 26px;
+  width: 22px;
+  height: 22px;
   border: 2px solid rgba(240, 253, 250, 0.98);
   background: linear-gradient(135deg, #5eead4, #22c55e);
   box-shadow:
-    0 0 0 7px rgba(20, 184, 166, 0.14),
-    0 0 22px rgba(45, 212, 191, 0.86);
+    0 0 0 6px rgba(20, 184, 166, 0.13),
+    0 0 18px rgba(45, 212, 191, 0.72);
   opacity: 1;
   z-index: 100000 !important;
   pointer-events: auto !important;
   cursor: crosshair;
   border-radius: 999px;
-}
-
-.canvas-flow .vue-flow__handle-left {
-  left: -34px !important;
-}
-
-.canvas-flow .vue-flow__handle-right {
-  right: -34px !important;
-}
-
-.canvas-flow .vue-flow__handle::before {
-  content: "";
-  position: absolute;
-  inset: -10px;
-  border-radius: 999px;
-  pointer-events: auto;
 }
 
 .node-port-label {
@@ -3134,10 +3118,9 @@ onUnmounted(() => {
 
 .canvas-flow .vue-flow__handle:hover,
 .canvas-flow .vue-flow__handle.connecting {
-  transform: scale(1.18);
   box-shadow:
-    0 0 0 6px rgba(20, 184, 166, 0.2),
-    0 0 28px rgba(45, 212, 191, 0.88);
+    0 0 0 7px rgba(20, 184, 166, 0.22),
+    0 0 28px rgba(45, 212, 191, 0.9);
 }
 
 .canvas-flow .vue-flow__edge-path {

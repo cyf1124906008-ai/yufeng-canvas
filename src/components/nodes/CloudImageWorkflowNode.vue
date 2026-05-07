@@ -58,59 +58,85 @@
       </div>
 
       <!-- Professional params toggle -->
-      <button class="mt-2 flex w-full items-center gap-1 text-[10px] text-emerald-300/70 hover:text-emerald-200" @click="showProParams = !showProParams">
-        <n-icon :size="10"><component :is="showProParams ? ChevronDownOutline : ChevronForwardOutline" /></n-icon>
-        专业参数（ComfyUI 风格）
+      <button class="pro-toggle" type="button" @click="showProParams = !showProParams">
+        <span class="inline-flex items-center gap-1">
+          <n-icon :size="11"><component :is="showProParams ? ChevronDownOutline : ChevronForwardOutline" /></n-icon>
+          专业参数（ComfyUI 风格）
+        </span>
+        <span class="pro-toggle-hint">小白可保持默认</span>
       </button>
 
-      <div v-if="showProParams" class="mt-1 space-y-1.5 rounded border border-white/5 bg-black/10 p-1.5">
-        <!-- Steps -->
-        <div>
-          <div class="flex items-center justify-between">
-            <span class="text-[10px] text-[var(--text-secondary)]">Steps（生成步数）</span>
-            <span class="text-[10px] text-white/40">越高越慢，细节越丰富</span>
+      <div v-if="showProParams" class="pro-panel nodrag nopan">
+        <div class="pro-param-row">
+          <div class="pro-param-copy">
+            <span class="pro-param-label">Steps（生成步数）</span>
+            <span class="pro-param-hint">越高越慢，细节越丰富</span>
           </div>
-          <input v-model.number="localSteps" type="number" min="1" max="150" class="w-full mt-0.5 p-1 text-xs bg-[var(--bg-tertiary)] text-[var(--text-primary)] border border-[var(--border-color)] rounded" />
+          <input
+            v-model="localStepsInput"
+            type="text"
+            inputmode="numeric"
+            class="pro-param-input nodrag nopan"
+            @wheel.prevent
+            @blur="commitProNumber('steps')"
+            @keydown.enter.prevent="commitProNumber('steps')"
+          />
         </div>
-        <!-- CFG -->
-        <div>
-          <div class="flex items-center justify-between">
-            <span class="text-[10px] text-[var(--text-secondary)]">CFG Scale（提示词服从度）</span>
-            <span class="text-[10px] text-white/40">越高越贴近提示词</span>
+
+        <div class="pro-param-row">
+          <div class="pro-param-copy">
+            <span class="pro-param-label">CFG Scale（提示词服从度）</span>
+            <span class="pro-param-hint">越高越贴近提示词</span>
           </div>
-          <input v-model.number="localCfg" type="number" min="1" max="30" step="0.5" class="w-full mt-0.5 p-1 text-xs bg-[var(--bg-tertiary)] text-[var(--text-primary)] border border-[var(--border-color)] rounded" />
+          <input
+            v-model="localCfgInput"
+            type="text"
+            inputmode="decimal"
+            class="pro-param-input nodrag nopan"
+            @wheel.prevent
+            @blur="commitProNumber('cfg')"
+            @keydown.enter.prevent="commitProNumber('cfg')"
+          />
         </div>
-        <!-- Sampler -->
-        <div>
-          <div class="flex items-center justify-between">
-            <span class="text-[10px] text-[var(--text-secondary)]">Sampler（采样方式）</span>
-            <span class="text-[10px] text-white/40">影响画面风格和稳定性</span>
+
+        <div class="pro-param-row">
+          <div class="pro-param-copy">
+            <span class="pro-param-label">Sampler（采样方式）</span>
+            <span class="pro-param-hint">影响画面风格和稳定性</span>
           </div>
-          <select v-model="localSampler" class="w-full mt-0.5 p-1 text-xs bg-[var(--bg-tertiary)] text-[var(--text-primary)] border border-[var(--border-color)] rounded">
+          <select v-model="localSampler" class="pro-param-input nodrag nopan">
             <option v-for="s in SAMPLER_OPTIONS" :key="s" :value="s">{{ s }}</option>
           </select>
         </div>
-        <!-- Scheduler -->
-        <div>
-          <div class="flex items-center justify-between">
-            <span class="text-[10px] text-[var(--text-secondary)]">Scheduler（采样调度）</span>
-            <span class="text-[10px] text-white/40">影响细节收敛</span>
+
+        <div class="pro-param-row">
+          <div class="pro-param-copy">
+            <span class="pro-param-label">Scheduler（采样调度）</span>
+            <span class="pro-param-hint">影响细节收敛</span>
           </div>
-          <select v-model="localScheduler" class="w-full mt-0.5 p-1 text-xs bg-[var(--bg-tertiary)] text-[var(--text-primary)] border border-[var(--border-color)] rounded">
+          <select v-model="localScheduler" class="pro-param-input nodrag nopan">
             <option v-for="s in SCHEDULER_OPTIONS" :key="s" :value="s">{{ s }}</option>
           </select>
         </div>
-        <!-- Denoising Strength -->
-        <div>
-          <div class="flex items-center justify-between">
-            <span class="text-[10px] text-[var(--text-secondary)]">Denoise（降噪强度）</span>
-            <span class="text-[10px] text-white/40">图生图时降低可保留原图细节</span>
+
+        <div class="pro-param-row">
+          <div class="pro-param-copy">
+            <span class="pro-param-label">Denoise（重绘强度）</span>
+            <span class="pro-param-hint">图生图时降低可保留原图细节</span>
           </div>
-          <input v-model.number="localDenoise" type="number" min="0" max="1" step="0.05" class="w-full mt-0.5 p-1 text-xs bg-[var(--bg-tertiary)] text-[var(--text-primary)] border border-[var(--border-color)] rounded" />
+          <input
+            v-model="localDenoiseInput"
+            type="text"
+            inputmode="decimal"
+            class="pro-param-input nodrag nopan"
+            @wheel.prevent
+            @blur="commitProNumber('denoise')"
+            @keydown.enter.prevent="commitProNumber('denoise')"
+          />
         </div>
-        <!-- Unsupported params notice -->
-        <div class="rounded border border-white/5 bg-white/[0.02] p-1.5">
-          <p class="text-[10px] text-white/35">LoRA / ControlNet / 局部重绘 / 高清放大：当前云端模型不支持，后续版本将逐步接入。</p>
+
+        <div class="pro-param-notice">
+          LoRA / ControlNet / 局部重绘 / 高清放大：当前会按云端模型能力自动适配；不支持的参数会安全忽略，不影响基础生成。
         </div>
       </div>
 
@@ -177,6 +203,9 @@ const localCfg = ref(props.data.cfg ?? 7)
 const localSampler = ref(props.data.sampler ?? 'euler')
 const localScheduler = ref(props.data.scheduler ?? 'normal')
 const localDenoise = ref(props.data.denoise ?? 1.0)
+const localStepsInput = ref(String(localSteps.value))
+const localCfgInput = ref(String(localCfg.value))
+const localDenoiseInput = ref(String(localDenoise.value))
 const createdImageNodeId = ref(null)
 
 const imageModelOptions = computed(() => modelStore.imageModelOptions)
@@ -214,6 +243,38 @@ const emitUpdate = (key, value) => {
   updateNode(props.id, { [key]: value, updatedAt: Date.now() })
 }
 
+function clampProNumber(raw, { min, max, step = 1, fallback, integer = false }) {
+  const parsed = Number(String(raw).trim())
+  if (!Number.isFinite(parsed)) return fallback
+  const clamped = Math.min(max, Math.max(min, parsed))
+  if (integer) return Math.round(clamped)
+  const stepped = Math.round(clamped / step) * step
+  return Number(stepped.toFixed(3))
+}
+
+function commitProNumber(key) {
+  if (key === 'steps') {
+    const next = clampProNumber(localStepsInput.value, { min: 1, max: 150, fallback: localSteps.value, integer: true })
+    localSteps.value = next
+    localStepsInput.value = String(next)
+    emitUpdate('steps', next)
+    return
+  }
+  if (key === 'cfg') {
+    const next = clampProNumber(localCfgInput.value, { min: 1, max: 30, step: 0.5, fallback: localCfg.value })
+    localCfg.value = next
+    localCfgInput.value = String(next)
+    emitUpdate('cfg', next)
+    return
+  }
+  if (key === 'denoise') {
+    const next = clampProNumber(localDenoiseInput.value, { min: 0, max: 1, step: 0.05, fallback: localDenoise.value })
+    localDenoise.value = next
+    localDenoiseInput.value = String(next)
+    emitUpdate('denoise', next)
+  }
+}
+
 // --- Drama shot status writeback ---
 function writebackDramaShot(patch) {
   const shotId = props.data?.dramaShotId
@@ -242,11 +303,8 @@ watch(localNegPrompt, v => emitUpdate('negativePrompt', v))
 watch(localModel, v => emitUpdate('model', v))
 watch(localSize, v => emitUpdate('size', v))
 watch(localSeed, v => emitUpdate('seed', v))
-watch(localSteps, v => emitUpdate('steps', v))
-watch(localCfg, v => emitUpdate('cfg', v))
 watch(localSampler, v => emitUpdate('sampler', v))
 watch(localScheduler, v => emitUpdate('scheduler', v))
-watch(localDenoise, v => emitUpdate('denoise', v))
 
 const operations = [
   { type: 'image', label: '输出到图片节点' },
@@ -641,8 +699,9 @@ onBeforeUnmount(() => {
   position: relative;
   min-width: 240px;
   max-width: 280px;
-  padding-right: 52px;
+  padding-right: 54px;
   padding-top: 20px;
+  overflow: visible;
 }
 .node-card {
   position: relative;
@@ -677,5 +736,98 @@ onBeforeUnmount(() => {
 }
 .node-action:hover {
   background: var(--bg-tertiary);
+}
+
+.pro-toggle {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+  border: 0;
+  border-radius: 8px;
+  padding: 4px 6px;
+  color: var(--accent-color);
+  background: rgba(20, 184, 166, 0.06);
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.pro-toggle:hover {
+  background: rgba(20, 184, 166, 0.1);
+}
+
+.pro-toggle-hint {
+  color: var(--text-tertiary, var(--text-secondary));
+  font-weight: 600;
+}
+
+.pro-panel {
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  border: 1px solid rgba(20, 184, 166, 0.16);
+  border-radius: 12px;
+  padding: 8px;
+  background:
+    linear-gradient(180deg, rgba(20, 184, 166, 0.07), rgba(20, 184, 166, 0.025)),
+    var(--bg-tertiary);
+}
+
+.pro-param-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 82px;
+  align-items: center;
+  gap: 8px;
+}
+
+.pro-param-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pro-param-label {
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.pro-param-hint {
+  color: var(--text-tertiary, var(--text-secondary));
+  font-size: 9px;
+  line-height: 1.25;
+}
+
+.pro-param-input {
+  width: 100%;
+  min-height: 28px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 4px 7px;
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+  font-size: 12px;
+  outline: none;
+}
+
+.pro-param-input:focus {
+  border-color: rgba(20, 184, 166, 0.72);
+  box-shadow: 0 0 0 2px rgba(20, 184, 166, 0.12);
+}
+
+.pro-param-notice {
+  border: 1px dashed rgba(20, 184, 166, 0.22);
+  border-radius: 10px;
+  padding: 7px;
+  color: var(--text-tertiary, var(--text-secondary));
+  background: rgba(20, 184, 166, 0.045);
+  font-size: 10px;
+  line-height: 1.45;
 }
 </style>

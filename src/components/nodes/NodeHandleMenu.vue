@@ -1,6 +1,12 @@
 ﻿<template>
   <div class="handle-menu-anchor">
-    <Handle type="source" :position="Position.Right" id="right" class="node-source-handle" />
+    <Handle
+      type="source"
+      :position="Position.Right"
+      id="right"
+      class="node-source-handle"
+      :style="{ '--node-dot-color': dotColor }"
+    />
     <span v-if="outputLabel" class="node-output-label">{{ outputLabel }}</span>
 
     <button
@@ -121,24 +127,26 @@ const handleCreate = (item) => {
   position: absolute;
   left: 100%;
   top: 50%;
-  width: 170px;
-  height: 96px;
+  width: 156px;
+  height: 88px;
   transform: translateY(-50%);
   z-index: 100000;
   pointer-events: none;
 }
 
 .node-source-handle {
-  left: 8px !important;
+  left: 6px !important;
   right: auto !important;
   top: 50% !important;
-  width: 26px !important;
-  height: 26px !important;
+  width: 22px !important;
+  height: 22px !important;
   border: 2px solid rgba(240, 253, 250, 0.98) !important;
-  background: linear-gradient(135deg, #5eead4, #22c55e) !important;
+  background:
+    radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.95) 0 16%, transparent 18%),
+    linear-gradient(135deg, var(--node-dot-color, #5eead4), #22c55e) !important;
   box-shadow:
-    0 0 0 7px rgba(20, 184, 166, 0.18),
-    0 0 18px rgba(45, 212, 191, 0.72) !important;
+    0 0 0 6px rgba(20, 184, 166, 0.16),
+    0 0 18px rgba(45, 212, 191, 0.68) !important;
   opacity: 1 !important;
   pointer-events: auto !important;
   z-index: 100001 !important;
@@ -148,7 +156,7 @@ const handleCreate = (item) => {
 
 .node-output-label {
   position: absolute;
-  left: 46px;
+  left: 38px;
   top: calc(50% - 30px);
   display: inline-flex;
   align-items: center;
@@ -174,10 +182,10 @@ const handleCreate = (item) => {
 
 .handle-add-button {
   position: absolute;
-  left: 66px;
+  left: 58px;
   top: 50%;
-  width: 38px;
-  height: 38px;
+  width: 34px;
+  height: 34px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -214,7 +222,7 @@ const handleCreate = (item) => {
 
 .handle-menu {
   position: absolute;
-  left: 108px;
+  left: 98px;
   top: 50%;
   display: flex;
   min-width: 148px;

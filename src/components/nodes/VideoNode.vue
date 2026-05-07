@@ -484,8 +484,10 @@ const handleDuplicate = () => {
 
 <style scoped>
 .video-node-wrapper {
-  padding-right: 50px;
+  padding-right: 54px;
   padding-top: 20px;
+  position: relative;
+  overflow: visible;
 }
 
 .video-node {

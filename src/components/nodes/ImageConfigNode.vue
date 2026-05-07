@@ -1135,6 +1135,8 @@ watch(
 .image-config-node-wrapper {
   position: relative;
   padding-top: 20px;
+  padding-right: 54px;
+  overflow: visible;
 }
 
 .image-config-node {

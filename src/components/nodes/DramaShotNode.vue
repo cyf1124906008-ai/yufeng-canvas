@@ -66,6 +66,7 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .drama-shot-node {
+  position: relative;
   min-width: 220px;
   max-width: 260px;
   border-radius: 16px;
@@ -76,6 +77,7 @@ onBeforeUnmount(() => {
   font-size: 11px;
   color: rgba(255,255,255,0.85);
   box-shadow: 0 4px 24px rgba(0,0,0,0.3);
+  overflow: visible;
 }
 .shot-header {
   display: flex;
@@ -154,8 +156,8 @@ onBeforeUnmount(() => {
 .sa-edit:hover:not(:disabled) { border-color: rgba(52,211,153,0.4); }
 .sa-delete:hover:not(:disabled) { border-color: rgba(248,113,113,0.4); }
 .handle-left, .handle-right {
-  width: 26px !important;
-  height: 26px !important;
+  width: 22px !important;
+  height: 22px !important;
   background: linear-gradient(135deg, #5eead4, #22c55e) !important;
   border: 2px solid rgba(240, 253, 250, 0.98) !important;
   box-shadow: 0 0 0 7px rgba(20, 184, 166, 0.18), 0 0 18px rgba(45, 212, 191, 0.72) !important;

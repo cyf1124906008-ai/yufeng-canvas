@@ -1037,8 +1037,9 @@ const handleVideoGen = () => {
 <style scoped>
 .image-node-wrapper {
   position: relative;
-  padding-right: 50px;
+  padding-right: 54px;
   padding-top: 20px;
+  overflow: visible;
 }
 
 .image-node {
