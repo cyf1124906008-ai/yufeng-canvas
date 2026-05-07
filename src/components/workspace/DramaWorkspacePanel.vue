@@ -188,13 +188,13 @@
           <div class="dws-shot-actions">
             <span class="dws-status-chip" :class="firstFrameChipClass(shot)">{{ firstFrameStatusLabel(shot) }}</span>
             <button v-if="!shot.firstFrameNodeId" class="dws-btn-xs primary" @click="emitAction('createFirstFrameWorkflow', shot.id)">创建首帧</button>
-            <button v-else-if="shot.firstFrameStatus === 'completed'" class="dws-btn-xs" @click="emitAction('locateDramaShot', shot.id)">查看首帧</button>
-            <button v-else class="dws-btn-xs" @click="emitAction('locateDramaShot', shot.id)">定位首帧</button>
+            <button v-else-if="shot.firstFrameStatus === 'completed'" class="dws-btn-xs" @click="emitAction('locateDramaShot', { shotId: shot.id, target: 'firstFrameOutput' })">查看首帧</button>
+            <button v-else class="dws-btn-xs" @click="emitAction('locateDramaShot', { shotId: shot.id, target: 'firstFrame' })">定位首帧</button>
             <span class="dws-status-chip" :class="videoChipClass(shot)">{{ videoStatusLabel(shot) }}</span>
             <button v-if="!shot.videoNodeId" class="dws-btn-xs primary" @click="emitAction('createVideoWorkflow', shot.id)">创建视频</button>
-            <button v-else-if="shot.videoStatus === 'completed'" class="dws-btn-xs" @click="emitAction('locateDramaShot', shot.id)">查看视频</button>
-            <button v-else class="dws-btn-xs" @click="emitAction('locateDramaShot', shot.id)">定位视频</button>
-            <button class="dws-btn-xs" @click="emitAction('locateDramaShot', shot.id)">定位</button>
+            <button v-else-if="shot.videoStatus === 'completed'" class="dws-btn-xs" @click="emitAction('locateDramaShot', { shotId: shot.id, target: 'videoOutput' })">查看视频</button>
+            <button v-else class="dws-btn-xs" @click="emitAction('locateDramaShot', { shotId: shot.id, target: 'video' })">定位视频</button>
+            <button class="dws-btn-xs" @click="emitAction('locateDramaShot', { shotId: shot.id, target: 'shot' })">定位</button>
             <button class="dws-btn-xs" @click="emitAction('duplicateShot', { shotId: shot.id })">复制</button>
             <button class="dws-btn-xs del" @click="emitAction('removeShot', { shotId: shot.id })">删除</button>
           </div>

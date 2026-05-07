@@ -645,11 +645,41 @@ export function executeLocateDramaShot(params = {}) {
   const project = getCurrentProject()
   const shot = project?.drama?.shots?.find(s => s.id === params.shotId)
   if (!shot) return fail(`镜头不存在: ${params.shotId}`)
-  const nodeId = shot.nodeIds?.text || shot.firstFrameNodeId || shot.videoNodeId
-  if (!nodeId) return fail('该镜头没有关联节点')
-  const node = getNodeById(nodeId)
-  if (!node) return fail(`节点不存在: ${nodeId}`)
-  return ok('已定位镜头节点', { nodeId, shotId: params.shotId })
+  const target = params.target || 'shot'
+  let nodeId = null
+  let fallbackNodeId = null
+  switch (target) {
+    case 'firstFrameOutput':
+      nodeId = shot.firstFrameOutputNodeId || shot.nodeIds?.firstFrameOutput
+      fallbackNodeId = shot.firstFrameNodeId
+      break
+    case 'firstFrame':
+      nodeId = shot.firstFrameNodeId
+      fallbackNodeId = shot.nodeIds?.text
+      break
+    case 'videoOutput':
+      nodeId = shot.videoOutputNodeId || shot.nodeIds?.videoOutput
+      fallbackNodeId = shot.videoNodeId
+      break
+    case 'video':
+      nodeId = shot.videoNodeId
+      fallbackNodeId = shot.nodeIds?.text
+      break
+    default:
+      nodeId = shot.nodeIds?.text || shot.firstFrameNodeId || shot.videoNodeId
+      break
+  }
+  // Fallback if target node doesn't exist
+  if (nodeId) {
+    const node = getNodeById(nodeId)
+    if (!node) nodeId = null
+  }
+  if (!nodeId && fallbackNodeId) {
+    const fallbackNode = getNodeById(fallbackNodeId)
+    if (fallbackNode) nodeId = fallbackNodeId
+  }
+  if (!nodeId) return fail('该镜头没有可定位的节点')
+  return ok('已定位镜头节点', { nodeId, shotId: params.shotId, target })
 }
 
 export function validateAddDramaShot(params = {}) {
@@ -820,6 +850,29 @@ export function executeRunCloudImageWorkflow(params = {}) {
   return ok('云端工作流运行请求已提交，等待节点响应', { nodeIds: [params.nodeId], submitted: true })
 }
 
+// --- runVideoWorkflow ---
+
+export function validateRunVideoWorkflow(params = {}) {
+  if (!params.nodeId || typeof params.nodeId !== 'string') return fail('nodeId 必须是非空字符串')
+  const node = getNodeById(params.nodeId)
+  if (!node) return fail(`节点不存在: ${params.nodeId}`)
+  if (node.type !== 'videoConfig') return fail('该节点不是视频配置节点')
+  if (!node.data?.model) return fail('请先在视频节点中选择视频模型')
+  return null
+}
+
+export function executeRunVideoWorkflow(params = {}) {
+  const err = validateRunVideoWorkflow(params)
+  if (err) return err
+  if (typeof window === 'undefined' || typeof window.dispatchEvent !== 'function') {
+    return fail('当前环境无法触发视频工作流运行')
+  }
+  const node = getNodeById(params.nodeId)
+  if (!node) return fail(`节点已不存在: ${params.nodeId}`)
+  window.dispatchEvent(new CustomEvent('yufeng:run-video-workflow', { detail: { nodeId: params.nodeId } }))
+  return ok('视频工作流运行请求已提交，等待节点响应', { nodeIds: [params.nodeId], submitted: true })
+}
+
 // --- Batch drama workflow commands ---
 
 export function validateRunAllFirstFrameWorkflows() { return null }
@@ -873,21 +926,24 @@ export function executeRunAllVideoWorkflows() {
   const errors = []
 
   for (const shot of shots) {
-    // Ensure video node exists
+    // Ensure videoConfig node exists
     if (!shot.videoNodeId) {
       const createResult = executeCreateVideoWorkflow({ shotId: shot.id })
       if (!createResult.ok) { errors.push(`镜头${shot.index}: ${createResult.message}`); continue }
       nodeIds.push(...(createResult.nodeIds || []))
       edgeIds.push(...(createResult.edgeIds || []))
     }
-    const vidNodeId = shot.videoNodeId || nodeIds[nodeIds.length - 1]
-    if (!vidNodeId) { errors.push(`镜头${shot.index}: 视频节点未创建`); continue }
+    const vidNodeId = shot.videoNodeId || nodeIds.find(id => { const n = getNodeById(id); return n?.type === 'videoConfig' })
+    if (!vidNodeId) { errors.push(`镜头${shot.index}: 视频配置节点未创建`); continue }
+    // Run the video workflow
+    const runResult = executeRunVideoWorkflow({ nodeId: vidNodeId })
+    if (!runResult.ok) { errors.push(`镜头${shot.index}: ${runResult.message}`); continue }
     nodeIds.push(vidNodeId)
     shotIds.push(shot.id)
   }
 
   if (shotIds.length === 0 && errors.length > 0) return fail(errors.join('；'))
-  return ok(`已创建 ${shotIds.length} 个视频工作流`, { nodeIds, edgeIds, shotIds, errors: errors.length ? errors : undefined })
+  return ok(`已提交 ${shotIds.length} 个视频生成任务`, { nodeIds, edgeIds, shotIds, errors: errors.length ? errors : undefined })
 }
 
 // --- assets/error helpers ---
@@ -1100,6 +1156,7 @@ const COMMAND_MAP = {
   runCloudImageWorkflow: { validate: validateRunCloudImageWorkflow, execute: executeRunCloudImageWorkflow },
   runAllFirstFrameWorkflows: { validate: validateRunAllFirstFrameWorkflows, execute: executeRunAllFirstFrameWorkflows },
   runAllVideoWorkflows: { validate: validateRunAllVideoWorkflows, execute: executeRunAllVideoWorkflows },
+  runVideoWorkflow: { validate: validateRunVideoWorkflow, execute: executeRunVideoWorkflow },
   updateDramaShot: { validate: validateUpdateDramaShot, execute: executeUpdateDramaShot },
   locateDramaShot: { validate: validateLocateDramaShot, execute: executeLocateDramaShot },
   addDramaShot: { validate: validateAddDramaShot, execute: executeAddDramaShot },
@@ -1220,7 +1277,8 @@ export const COMMAND_REGISTRY = {
   createCloudImageWorkflow: { description: '创建云端专业图片工作流节点', risk: 'safe' },
   runCloudImageWorkflow: { description: '执行云端图片生成（消耗 API 额度）', risk: 'execution' },
   runAllFirstFrameWorkflows: { description: '批量生成所有镜头首帧', risk: 'execution' },
-  runAllVideoWorkflows: { description: '批量创建所有镜头视频工作流', risk: 'execution' },
+  runAllVideoWorkflows: { description: '批量生成所有镜头视频', risk: 'execution' },
+  runVideoWorkflow: { description: '执行视频生成（消耗 API 额度）', risk: 'execution' },
   updateCloudImageWorkflow: { description: '更新云端工作流参数', risk: 'safe' },
   updateDramaPremise: { description: '更新短剧故事前提', risk: 'safe' },
   updateDramaShot: { description: '更新镜头数据', risk: 'safe' },

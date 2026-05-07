@@ -405,6 +405,14 @@ async function applyRecoveredResult(outputId, rawData) {
   emitUpdate('executed', true)
   emitUpdate('status', 'success')
   emitUpdate('error', '')
+  writebackDramaShot({
+    firstFrameStatus: 'completed',
+    status: 'firstFrameReady',
+    firstFrameNodeId: props.id,
+    firstFrameOutputNodeId: outputId,
+    firstFrameAssetPath: imageData.assetPath || '',
+    firstFrameUrl: imageData.url || ''
+  })
 }
 
 async function handleGenerate() {
@@ -602,6 +610,7 @@ onMounted(async () => {
           }
           emitUpdate('status', 'error')
           emitUpdate('error', '后台生成结果恢复超时')
+          writebackDramaShot({ firstFrameStatus: 'failed', firstFrameError: '后台生成结果恢复超时' })
         }
       } catch {
         clearInterval(recoveryTimer)
@@ -614,6 +623,7 @@ onMounted(async () => {
         }
         emitUpdate('status', 'error')
         emitUpdate('error', '恢复结果时 IPC 通信失败')
+        writebackDramaShot({ firstFrameStatus: 'failed', firstFrameError: '恢复结果时 IPC 通信失败' })
       }
     }, 3000)
   }

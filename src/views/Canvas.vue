@@ -2261,7 +2261,8 @@ const handleEngineWorkspaceAction = (action, payload) => {
   }
 
   if (action === 'locateDramaShot') {
-    const result = executeCommand('locateDramaShot', { shotId: payload })
+    const params = typeof payload === 'object' && payload !== null ? payload : { shotId: payload }
+    const result = executeCommand('locateDramaShot', params)
     if (result.ok && result.nodeId) focusCanvasNodeById(result.nodeId)
     else window.$message?.warning(result.message || '未找到镜头节点')
     return
@@ -2494,6 +2495,40 @@ const retryReplayCloudRun = (nodeId, attempt) => {
       retryReplayCloudRun(nodeId, attempt + 1)
     } else {
       window.$message?.warning('目标节点未成功挂载，运行请求未触发。请定位节点后重新运行。')
+    }
+  }, 150)
+}
+
+const handleGlobalVideoRun = (e) => {
+  const nodeId = e?.detail?.nodeId
+  const replayed = e?.detail?.replayed
+  if (!nodeId) return
+  const node = nodes.value.find(n => n.id === nodeId)
+  if (!node) return
+  const el = document.querySelector(`[data-id="${nodeId}"]`)
+  if (el) return
+  if (replayed) {
+    window.$message?.warning('视频节点未成功挂载，运行请求未触发。请定位节点后重新运行。')
+    return
+  }
+  focusCanvasNodeById(nodeId)
+  retryReplayVideoRun(nodeId, 0)
+}
+
+const retryReplayVideoRun = (nodeId, attempt) => {
+  const maxAttempts = 5
+  setTimeout(() => {
+    const el = document.querySelector(`[data-id="${nodeId}"]`)
+    if (el) {
+      window.dispatchEvent(new CustomEvent('yufeng:run-video-workflow', {
+        detail: { nodeId, replayed: true }
+      }))
+      return
+    }
+    if (attempt + 1 < maxAttempts) {
+      retryReplayVideoRun(nodeId, attempt + 1)
+    } else {
+      window.$message?.warning('视频节点未成功挂载，运行请求未触发。请定位节点后重新运行。')
     }
   }, 150)
 }
@@ -2766,6 +2801,7 @@ onMounted(() => {
   window.addEventListener('keydown', handleCanvasKeydown)
   window.addEventListener('yufeng:drama-action', handleDramaNodeAction)
   window.addEventListener('yufeng:run-cloud-image-workflow', handleGlobalCloudRun)
+  window.addEventListener('yufeng:run-video-workflow', handleGlobalVideoRun)
 
   // Initialize projects store | 初始化项目存储
   initProjectsStore()
@@ -2810,6 +2846,7 @@ onUnmounted(() => {
   window.removeEventListener('keydown', handleCanvasKeydown)
   window.removeEventListener('yufeng:drama-action', handleDramaNodeAction)
   window.removeEventListener('yufeng:run-cloud-image-workflow', handleGlobalCloudRun)
+  window.removeEventListener('yufeng:run-video-workflow', handleGlobalVideoRun)
   // Save project before leaving | 离开前保存项目
   saveProject()
 })

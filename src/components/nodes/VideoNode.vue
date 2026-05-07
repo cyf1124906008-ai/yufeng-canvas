@@ -340,6 +340,7 @@ const startPolling = async (taskId) => {
     writebackDramaVideo({
       videoStatus: 'completed',
       status: 'completed',
+      videoOutputNodeId: props.id,
       videoUrl: result.url || '',
       videoAssetPath: ''
     })

@@ -178,7 +178,7 @@
  * Video config node component | 视频配置节点组件
  * Configuration panel for video generation with API integration
  */
-import { ref, computed, watch, onMounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { NIcon, NDropdown, NSpin } from 'naive-ui'
 import { ChevronForwardOutline, ChevronDownOutline, TrashOutline, VideocamOutline, CopyOutline, CreateOutline } from '@vicons/ionicons5'
@@ -482,7 +482,6 @@ const createdVideoNodeId = ref(null)
 const handleGenerate = async () => {
   // 设置生成中状态
   isGenerating.value = true
-  writebackDramaShot({ videoStatus: 'generating' })
 
   if (!localModel.value) {
     window.$message?.warning('请先在 API 设置的模型配置里添加视频模型')
@@ -520,6 +519,9 @@ const handleGenerate = async () => {
     isGenerating.value = false
     return
   }
+
+  // All validations passed — mark as generating
+  writebackDramaShot({ videoStatus: 'generating' })
 
   // Get current node position | 获取当前节点位置
   const currentNode = nodes.value.find(n => n.id === props.id)
@@ -690,6 +692,11 @@ const handleDelete = () => {
   removeNode(props.id)
 }
 
+// Handle global run-video-workflow command
+function handleRunCommand(event) {
+  if (event?.detail?.nodeId === props.id) handleGenerate()
+}
+
 // Initialize on mount | 挂载时初始化
 onMounted(() => {
   // 检查当前模型是否在可用模型列表中
@@ -711,6 +718,11 @@ onMounted(() => {
     localResolution.value = props.data?.resolution || config?.defaultParams?.resolution || config?.defaultResolution
     updateNode(props.id, { resolution: localResolution.value })
   }
+  window.addEventListener('yufeng:run-video-workflow', handleRunCommand)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('yufeng:run-video-workflow', handleRunCommand)
 })
 
 // Watch for model changes from props | 监听 props 中模型变化
