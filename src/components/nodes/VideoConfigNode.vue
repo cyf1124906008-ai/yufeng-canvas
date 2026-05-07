@@ -167,6 +167,7 @@
       <!-- Handles | 连接点 -->
       <span class="node-port-label node-port-label-in">Prompt / 首尾帧</span>
       <Handle type="target" :position="Position.Left" id="left" class="!bg-[var(--accent-color)]" />
+      <Handle type="source" :position="Position.Right" id="right" class="!bg-[var(--accent-color)]" />
       <NodeHandleMenu :nodeId="id" nodeType="videoConfig" output-label="视频结果" :visible="showHandleMenu" :operations="[]" />
     </div>
 

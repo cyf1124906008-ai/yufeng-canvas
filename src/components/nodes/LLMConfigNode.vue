@@ -124,6 +124,7 @@
       <!-- Handles | 连接点 -->
       <span class="node-port-label node-port-label-in">上下文</span>
       <Handle type="target" :position="Position.Left" id="left" class="!bg-purple-500" />
+      <Handle type="source" :position="Position.Right" id="right" class="!bg-purple-500" />
       <NodeHandleMenu :nodeId="id" nodeType="llmConfig" dotColor="#a855f7" :visible="showHandleMenu"
         output-label="文本" :operations="operations" @select="handleSelect" />
     </div>

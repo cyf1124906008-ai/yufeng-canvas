@@ -1,12 +1,5 @@
 ﻿<template>
   <div class="handle-menu-anchor">
-    <Handle
-      type="source"
-      :position="Position.Right"
-      id="right"
-      class="node-source-handle"
-      :style="{ '--node-dot-color': dotColor }"
-    />
     <span v-if="outputLabel" class="node-output-label">{{ outputLabel }}</span>
 
     <button
@@ -62,7 +55,6 @@
 
 <script setup>
 import { computed, ref } from 'vue'
-import { Handle, Position } from '@vue-flow/core'
 import { NIcon } from 'naive-ui'
 import { AddOutline } from '@vicons/ionicons5'
 
@@ -132,26 +124,6 @@ const handleCreate = (item) => {
   transform: translateY(-50%);
   z-index: 100000;
   pointer-events: none;
-}
-
-.node-source-handle {
-  left: 6px !important;
-  right: auto !important;
-  top: 50% !important;
-  width: 22px !important;
-  height: 22px !important;
-  border: 2px solid rgba(240, 253, 250, 0.98) !important;
-  background:
-    radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.95) 0 16%, transparent 18%),
-    linear-gradient(135deg, var(--node-dot-color, #5eead4), #22c55e) !important;
-  box-shadow:
-    0 0 0 6px rgba(20, 184, 166, 0.16),
-    0 0 18px rgba(45, 212, 191, 0.68) !important;
-  opacity: 1 !important;
-  pointer-events: auto !important;
-  z-index: 100001 !important;
-  cursor: crosshair !important;
-  touch-action: none !important;
 }
 
 .node-output-label {

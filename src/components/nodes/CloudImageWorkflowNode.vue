@@ -4,6 +4,7 @@
       <!-- Handles -->
       <span class="node-port-label node-port-label-in">Prompt / 参考图</span>
       <Handle type="target" :position="Position.Left" id="left" class="!bg-emerald-400" />
+      <Handle type="source" :position="Position.Right" id="right" class="!bg-emerald-400" />
 
       <!-- Header -->
       <div class="flex items-center justify-between gap-2 px-1">

@@ -74,6 +74,7 @@
       <span class="node-port-label node-port-label-in">输入</span>
       <NodeHandleMenu :nodeId="id" nodeType="text" output-label="Prompt" :visible="showHandleMenu" :operations="operations" @select="handleSelect" />
       <Handle type="target" :position="Position.Left" id="left" class="!bg-[var(--accent-color)]" />
+      <Handle type="source" :position="Position.Right" id="right" class="!bg-[var(--accent-color)]" />
 
     </div>
 

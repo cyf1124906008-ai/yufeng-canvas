@@ -3050,6 +3050,14 @@ onUnmounted(() => {
   border-radius: 999px;
 }
 
+.canvas-flow .vue-flow__handle-left {
+  left: -11px !important;
+}
+
+.canvas-flow .vue-flow__handle-right {
+  right: -11px !important;
+}
+
 .node-port-label {
   position: absolute;
   display: inline-flex;

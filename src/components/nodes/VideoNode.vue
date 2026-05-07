@@ -120,6 +120,7 @@
     <span class="node-port-label node-port-label-in">视频</span>
     <NodeHandleMenu :nodeId="id" nodeType="video" output-label="视频" :visible="showHandleMenu" :operations="operations" @select="handleSelect" />
     <Handle type="target" :position="Position.Left" id="left" class="!bg-[var(--accent-color)]" />
+    <Handle type="source" :position="Position.Right" id="right" class="!bg-[var(--accent-color)]" />
     </div>
 
     <!-- Right side - Action buttons | 右侧 - 操作按钮 -->

@@ -180,6 +180,7 @@
       <!-- Handles | 连接点 -->
       <span class="node-port-label node-port-label-in">Prompt / 参考图</span>
       <Handle type="target" :position="Position.Left" id="left" class="!bg-[var(--accent-color)]" />
+      <Handle type="source" :position="Position.Right" id="right" class="!bg-[var(--accent-color)]" />
       <NodeHandleMenu :nodeId="id" nodeType="imageConfig" output-label="图片结果" :visible="showHandleMenu" :operations="operations" @select="handleSelect" />
     </div>
 
