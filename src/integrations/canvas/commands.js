@@ -506,7 +506,7 @@ export function executeCreateFirstFrameWorkflow(params = {}) {
     denoise: 1.0,
     seed: -1
   })
-  addEdge({ source: dramaShotNodeId, target: cloudNodeId, sourceHandle: 'right', targetHandle: 'left' })
+  const edgeId = addEdge({ source: dramaShotNodeId, target: cloudNodeId, sourceHandle: 'right', targetHandle: 'left' })
 
   shot.firstFrameNodeId = cloudNodeId
   shot.nodeIds = shot.nodeIds || {}
@@ -514,7 +514,7 @@ export function executeCreateFirstFrameWorkflow(params = {}) {
   updateProject(project.id, { drama: { ...project.drama } })
   persistCurrentCanvas()
 
-  return ok(`镜头「${shot.title}」首帧工作流已创建`, { nodeIds: [cloudNodeId], edgeIds: [], shotId: params.shotId })
+  return ok(`镜头「${shot.title}」首帧工作流已创建`, { nodeIds: [cloudNodeId], edgeIds: edgeId ? [edgeId] : [], shotId: params.shotId })
 }
 
 export function validateCreateVideoWorkflow(params = {}) {
@@ -537,8 +537,11 @@ export function executeCreateVideoWorkflow(params = {}) {
 
   const prompt = shot.videoPrompt || shot.description || '自然镜头运动，画面稳定'
   const firstFrameNodeId = shot.firstFrameNodeId || shot.nodeIds?.firstFrame
-  const sourceX = firstFrameNodeId
-    ? (getNodeById(firstFrameNodeId)?.position?.x || dramaShotNode.position?.x || 300)
+  // Verify firstFrame node actually exists; otherwise fallback to DramaShotNode
+  const firstFrameNode = firstFrameNodeId ? getNodeById(firstFrameNodeId) : null
+  const effectiveSourceId = firstFrameNode ? firstFrameNodeId : dramaShotNodeId
+  const sourceX = firstFrameNode
+    ? (firstFrameNode.position?.x || dramaShotNode.position?.x || 300)
     : (dramaShotNode.position?.x || 300)
   const x = sourceX + 380
   const y = dramaShotNode.position?.y || 180
@@ -550,8 +553,7 @@ export function executeCreateVideoWorkflow(params = {}) {
     duration: shot.duration || 5
   })
 
-  const sourceId = firstFrameNodeId || dramaShotNodeId
-  addEdge({ source: sourceId, target: videoNodeId, sourceHandle: 'right', targetHandle: 'left' })
+  const edgeId = addEdge({ source: effectiveSourceId, target: videoNodeId, sourceHandle: 'right', targetHandle: 'left' })
 
   shot.videoNodeId = videoNodeId
   shot.nodeIds = shot.nodeIds || {}
@@ -559,7 +561,7 @@ export function executeCreateVideoWorkflow(params = {}) {
   updateProject(project.id, { drama: { ...project.drama } })
   persistCurrentCanvas()
 
-  return ok(`镜头「${shot.title}」视频工作流已创建`, { nodeIds: [videoNodeId], edgeIds: [], shotId: params.shotId })
+  return ok(`镜头「${shot.title}」视频工作流已创建`, { nodeIds: [videoNodeId], edgeIds: edgeId ? [edgeId] : [], shotId: params.shotId })
 }
 
 // --- Drama Shot Commands ---

@@ -2460,16 +2460,42 @@ const handleDramaNodeAction = (e) => {
 
 const handleGlobalCloudRun = (e) => {
   const nodeId = e?.detail?.nodeId
+  const replayed = e?.detail?.replayed
   if (!nodeId) return
-  // Ensure the target node is visible so its component mounts and handles the event
   const node = nodes.value.find(n => n.id === nodeId)
   if (!node) return
-  // If the node component is offscreen, scroll it into view so it mounts
+
+  // Node component already mounted — let CloudImageWorkflowNode handle it directly
   const el = document.querySelector(`[data-id="${nodeId}"]`)
-  if (!el) {
-    // Component not mounted — bring it into viewport
-    focusCanvasNodeById(nodeId)
+  if (el) return
+
+  // Already replayed but still not mounted — cannot proceed
+  if (replayed) {
+    window.$message?.warning('目标节点未成功挂载，运行请求未触发。请定位节点后重新运行。')
+    return
   }
+
+  // Offscreen: scroll into viewport, then replay event after component mounts
+  focusCanvasNodeById(nodeId)
+  retryReplayCloudRun(nodeId, 0)
+}
+
+const retryReplayCloudRun = (nodeId, attempt) => {
+  const maxAttempts = 5
+  setTimeout(() => {
+    const el = document.querySelector(`[data-id="${nodeId}"]`)
+    if (el) {
+      window.dispatchEvent(new CustomEvent('yufeng:run-cloud-image-workflow', {
+        detail: { nodeId, replayed: true }
+      }))
+      return
+    }
+    if (attempt + 1 < maxAttempts) {
+      retryReplayCloudRun(nodeId, attempt + 1)
+    } else {
+      window.$message?.warning('目标节点未成功挂载，运行请求未触发。请定位节点后重新运行。')
+    }
+  }, 150)
 }
 
 const runCanvasQuickAction = (prompt) => {
