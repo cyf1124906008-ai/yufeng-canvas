@@ -115,30 +115,53 @@ const inferDiscoveredCapability = (model = {}) => {
   const key = String(model.id || model.key || '').toLowerCase()
   const endpointTypes = normalizeEndpointTypes(model)
 
+  // Video: endpoint type signals or model name patterns
   if (
     endpointTypes.some((type) => ['video', 'videos', 'openai-videos', 'doubao'].includes(type)) ||
-    /seedance|sora|veo|kling|wan|hailuo/.test(key)
+    /seedance|sora|veo|kling|wan2?\.?|hailuo|minimax-video|runway|luma|cogvideo|animate|video/i.test(key)
   ) {
     return 'video'
   }
 
+  // Image: endpoint type signals or model name patterns
   if (
     endpointTypes.includes('image-generation') ||
-    /gpt-image|chatgpt-image|seedream|imagen|flux|banana|grok-imagine|qwen-image/.test(key) ||
+    /gpt-image|chatgpt-image|seedream|imagen|flux|banana|grok-imagine|qwen-image|stable.?diffusion|dall.?e|midjourney|sd3|sdxl/i.test(key) ||
     (key.includes('gemini') && key.includes('image'))
   ) {
     return 'image'
   }
 
-  if (endpointTypes.includes('embeddings') || endpointTypes.includes('rerank')) {
+  // Skip: embeddings, rerank, TTS, ASR, moderation
+  if (endpointTypes.some((type) => ['embeddings', 'rerank', 'tts', 'asr', 'audio', 'moderation'].includes(type))) {
+    return ''
+  }
+  if (/embed|rerank|tts|asr|whisper|moderation|clip/i.test(key) && !/clip-interrogat/i.test(key)) {
     return ''
   }
 
-  if (endpointTypes.some((type) => ['openai', 'openai-response', 'anthropic', 'gemini'].includes(type))) {
+  // Chat: explicit endpoint types or remaining models (default fallback)
+  if (endpointTypes.some((type) => ['openai', 'openai-response', 'anthropic', 'gemini', 'chat'].includes(type))) {
+    return 'chat'
+  }
+
+  // Heuristic: if no endpoint type matched but looks like a chat model by name
+  if (/gpt-|claude|qwen|deepseek|llama|mistral|gemini|doubao|kimi|minimax|yi-|chatglm|phi-|command|granite/i.test(key)) {
     return 'chat'
   }
 
   return ''
+}
+
+/**
+ * Deduplicate model keys by stripping common version suffixes.
+ * Returns the canonical key for dedup comparison.
+ */
+const canonicalModelKey = (key = '') => {
+  let canonical = String(key).trim().toLowerCase()
+  // Strip trailing version tags like -v2, -v3, -v1.5, but keep meaningful suffixes
+  canonical = canonical.replace(/-v\d+(\.\d+)?$/, '')
+  return canonical
 }
 
 const getStored = (key, defaultValue = '') => {
@@ -737,8 +760,11 @@ export const useModelStore = defineStore('model', () => {
   }
 
   const syncModelsFromProvider = (provider, discoveredModels = []) => {
-    const stats = { chat: 0, image: 0, video: 0, skipped: 0 }
+    const stats = { chat: 0, image: 0, video: 0, skipped: 0, deduplicated: 0 }
     const models = Array.isArray(discoveredModels) ? discoveredModels : []
+
+    // Dedup by canonical key to avoid version-variant duplicates
+    const seenCanonicalKeys = new Set()
 
     models.forEach((rawModel) => {
       const key = rawModel?.id || rawModel?.key
@@ -746,6 +772,14 @@ export const useModelStore = defineStore('model', () => {
         stats.skipped += 1
         return
       }
+
+      // Dedup by canonical key
+      const canonical = canonicalModelKey(key)
+      if (seenCanonicalKeys.has(canonical)) {
+        stats.deduplicated += 1
+        return
+      }
+      seenCanonicalKeys.add(canonical)
 
       const endpointTypes = normalizeEndpointTypes(rawModel)
       const baseModel = {

@@ -22,10 +22,18 @@
           </n-form-item>
 
           <n-form-item v-if="showBaseUrlInput" label="Base URL" path="baseUrl">
-            <n-input
-              v-model:value="formData.baseUrl"
-              placeholder="https://cloud.dataeyes.ai"
-            />
+            <div class="flex flex-col w-full gap-1">
+              <n-input
+                v-model:value="formData.baseUrl"
+                placeholder="https://cloud.dataeyes.ai"
+              />
+              <div v-if="formData.baseUrl && baseUrlPreview.normalized" class="flex items-center gap-2 text-xs">
+                <span class="text-[var(--text-secondary)]">
+                  识别为：{{ baseUrlPreview.label || '自定义' }}
+                </span>
+                <span v-if="baseUrlPreview.normalized" class="text-amber-500">已自动规范化</span>
+              </div>
+            </div>
           </n-form-item>
 
           <n-form-item v-else label="服务地址">
@@ -126,6 +134,23 @@
               <span class="endpoint-label">视频查询</span>
               <n-tag size="small" type="warning" class="endpoint-tag">{{ currentEndpoints.videoQuery }}</n-tag>
             </div>
+            <div class="endpoint-item endpoint-test-row">
+              <span class="endpoint-label">连接测试</span>
+              <n-button
+                size="small"
+                :loading="connectionTesting"
+                :type="connectionTestResult?.ok ? 'success' : connectionTestResult && !connectionTestResult.ok ? 'error' : 'default'"
+                @click="handleTestConnection"
+              >
+                {{ connectionTestResult?.ok ? '连接成功' : connectionTestResult && !connectionTestResult.ok ? '连接失败' : '测试连接' }}
+              </n-button>
+            </div>
+            <n-alert v-if="connectionTestResult && !connectionTestResult.ok" type="error" class="mt-1">
+              {{ connectionTestResult.chineseError || connectionTestResult.error }}
+            </n-alert>
+            <n-alert v-if="connectionTestResult?.ok" type="success" class="mt-1">
+              连接成功，发现 {{ connectionTestResult.modelCount || 0 }} 个模型。
+            </n-alert>
           </div>
 
           <n-alert v-if="isProductPresetMode" type="info" class="mb-4">
@@ -365,6 +390,7 @@ import { useModelStore } from '../stores/pinia'
 import { backupUserDataNow, exportUserDataToFile, importUserDataFromFile } from '../utils/appDataBackup'
 import { getCapabilityLabel, getModelCapabilityConflict } from '../utils/modelCapability'
 import { normalizeBaseUrl } from '../utils/request'
+import { normalizeProviderEndpoint, testProviderConnection } from '../utils/providerEndpoint'
 import ComfyEnginePanel from './settings/ComfyEnginePanel.vue'
 
 const props = defineProps({
@@ -400,6 +426,8 @@ const modelSyncSummary = ref('')
 const dataEyesImportLoading = ref(false)
 const dataExporting = ref(false)
 const dataImporting = ref(false)
+const connectionTesting = ref(false)
+const connectionTestResult = ref(null)
 
 const DATAEYES_VERIFIED_MODELS = {
   chat: [
@@ -499,6 +527,37 @@ const currentEndpoints = computed(() => {
 const allChatModels = computed(() => modelStore.allChatModels)
 const allImageModels = computed(() => modelStore.allImageModels)
 const allVideoModels = computed(() => modelStore.allVideoModels)
+
+const baseUrlPreview = computed(() => {
+  if (!formData.baseUrl) return { normalized: false, label: '', warnings: [] }
+  return normalizeProviderEndpoint(formData.baseUrl)
+})
+
+const handleTestConnection = async () => {
+  const apiKey = formData.apiKey || formData.chatApiKey || formData.imageApiKey || formData.videoApiKey
+  const rawUrl = formData.baseUrl || resolvedBaseUrl.value
+  const { baseUrl } = normalizeProviderEndpoint(rawUrl)
+
+  if (!baseUrl) {
+    connectionTestResult.value = { ok: false, chineseError: '请先填写 Base URL' }
+    return
+  }
+  if (!apiKey) {
+    connectionTestResult.value = { ok: false, chineseError: '请先填写 API Key' }
+    return
+  }
+
+  connectionTesting.value = true
+  connectionTestResult.value = null
+  try {
+    const result = await testProviderConnection({ baseUrl, apiKey, provider: formData.provider })
+    connectionTestResult.value = result
+  } catch (e) {
+    connectionTestResult.value = { ok: false, chineseError: e?.message || '连接测试失败' }
+  } finally {
+    connectionTesting.value = false
+  }
+}
 
 const imageProtocolOptions = [
   { label: '自动识别', value: 'auto' },
@@ -635,7 +694,10 @@ const handleSyncModels = async () => {
   const provider = persistFormConfig()
   const apiKey = formData.apiKey || formData.chatApiKey || formData.imageApiKey || formData.videoApiKey
   const rawUrl = formData.baseUrl || resolvedBaseUrl.value
-  const baseUrl = normalizeBaseUrl(rawUrl) || modelStore.getBaseUrlByProvider?.(provider) || ''
+
+  // Normalize the URL first
+  const { baseUrl: normalizedUrl, warnings } = normalizeProviderEndpoint(rawUrl)
+  const baseUrl = normalizedUrl || modelStore.getBaseUrlByProvider?.(provider) || ''
 
   if (!baseUrl) {
     window.$message?.warning('请先填写 Base URL')
@@ -650,42 +712,22 @@ const handleSyncModels = async () => {
   modelSyncLoading.value = true
   modelSyncSummary.value = ''
 
-  const modelPaths = ['/v1/models', '/models', '/api/v1/models']
+  // Show normalization warnings
+  if (warnings.length > 0) {
+    window.$message?.info(warnings.join('；'))
+  }
 
   try {
-    let payload = null
-    let lastError = null
+    const result = await testProviderConnection({ baseUrl, apiKey, provider })
 
-    for (const path of modelPaths) {
-      try {
-        const response = await fetch(`${baseUrl}${path}`, {
-          method: 'GET',
-          headers: {
-            Authorization: `Bearer ${apiKey}`
-          }
-        })
-        const text = await response.text()
-
-        if (!response.ok) {
-          lastError = text ? JSON.parse(text) : {}
-          continue
-        }
-
-        payload = text ? JSON.parse(text) : {}
-        break
-      } catch {
-        continue
-      }
+    if (!result.ok) {
+      throw new Error(result.chineseError || result.error || '获取模型失败')
     }
 
-    if (!payload) {
-      const message = lastError?.error?.message || lastError?.message || `获取模型失败：尝试了 ${modelPaths.length} 个路径均未成功`
-      throw new Error(message)
-    }
-
-    const models = normalizeModelPayload(payload)
+    const models = result.models || []
     const stats = modelStore.syncModelsFromProvider(provider, models)
-    modelSyncSummary.value = `已获取 ${models.length} 个模型，新增/更新：对话 ${stats.chat} 个，图片 ${stats.image} 个，视频 ${stats.video} 个，跳过 ${stats.skipped} 个。`
+    const dedupNote = stats.deduplicated > 0 ? `（去重 ${stats.deduplicated} 个）` : ''
+    modelSyncSummary.value = `已获取 ${models.length} 个模型${dedupNote}，新增/更新：对话 ${stats.chat} 个，图片 ${stats.image} 个，视频 ${stats.video} 个，跳过 ${stats.skipped} 个。`
     window.$message?.success('模型已自动配置')
   } catch (error) {
     const message = error?.message || '获取模型失败'
@@ -862,6 +904,12 @@ const openAssetsFolder = async () => {
 .endpoint-tag {
   font-family: monospace;
   font-size: 12px;
+}
+
+.endpoint-test-row {
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px dashed rgba(148, 163, 184, 0.2);
 }
 
 .data-backup-card {

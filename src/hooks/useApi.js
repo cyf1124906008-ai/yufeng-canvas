@@ -19,6 +19,7 @@ import { useModelStore } from '@/stores/pinia'
 import { getCapabilityLabel, getModelCapabilityConflict } from '@/utils/modelCapability'
 import { addRuntimeLog } from '@/stores/canvas'
 import { showBubble } from '@/utils/bubble'
+import { getChineseApiError } from '@/utils/chineseApiError'
 
 const nowMs = () => (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now())
 const elapsedMs = (startedAt) => Math.max(0, Math.round(nowMs() - startedAt))
@@ -989,11 +990,13 @@ export const useImageGeneration = () => {
       showBubble('success', `图片生成完成 (${adaptedData.length} 张)`)
       return adaptedData
     } catch (err) {
-      const friendlyMessage = getFriendlyImageErrorMessage(err)
+      const structured = getChineseApiError(err, { capability: 'image' })
+      const friendlyMessage = structured.description || getFriendlyImageErrorMessage(err)
       const friendlyError = new Error(friendlyMessage)
       friendlyError.cause = err
       friendlyError.originalMessage = err?.message || ''
       friendlyError.status = getApiErrorStatus(err)
+      friendlyError.chineseError = structured
       if (err?._frontendTimeout) {
         friendlyError._frontendTimeout = true
       }
@@ -1340,14 +1343,17 @@ export const useVideoGeneration = () => {
 
       return result
     } catch (err) {
-      const friendlyMessage = getFriendlyVideoErrorMessage(err)
+      const structured = getChineseApiError(err, { capability: 'video' })
+      const friendlyMessage = structured.description || getFriendlyVideoErrorMessage(err)
       addRuntimeLog('error', `视频生成失败：${err.message || '未知错误'}`, {
         model: params.model,
         friendlyMessage
       })
       showBubble('error', friendlyMessage)
-      setError(new Error(friendlyMessage))
-      throw new Error(friendlyMessage)
+      const friendlyError = new Error(friendlyMessage)
+      friendlyError.chineseError = structured
+      setError(friendlyError)
+      throw friendlyError
     }
   }
 
