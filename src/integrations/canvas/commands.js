@@ -473,28 +473,93 @@ export function executeCreateShotList(params = {}) {
 }
 
 export function validateCreateFirstFrameWorkflow(params = {}) {
-  if (params.shotId != null && typeof params.shotId !== 'string') return fail('shotId 必须是字符串')
+  if (!params.shotId || typeof params.shotId !== 'string') return fail('shotId 必须是非空字符串')
   return null
 }
 
 export function executeCreateFirstFrameWorkflow(params = {}) {
-  const y = nodes.value.length ? Math.max(...nodes.value.map(n => Number(n.position?.y) || 0)) + 220 : 180
-  const prompt = params.prompt || '电影感短剧首帧，主体清晰，构图明确，角色一致，光影统一'
-  const nodeId = addLinkedNode('imageConfig', { x: 520, y }, { label: params.label || '首帧生成', prompt, size: '1920x1080', quality: 'high' })
+  const err = validateCreateFirstFrameWorkflow(params)
+  if (err) return err
+  const project = getCurrentProject()
+  if (!project?.drama?.shots) return fail('当前项目没有短剧数据')
+  const shot = project.drama.shots.find(s => s.id === params.shotId)
+  if (!shot) return fail(`镜头不存在: ${params.shotId}`)
+
+  const dramaShotNodeId = shot.nodeIds?.text
+  if (!dramaShotNodeId) return fail('镜头没有对应的画布节点')
+  const dramaShotNode = getNodeById(dramaShotNodeId)
+  if (!dramaShotNode) return fail('镜头画布节点不存在')
+
+  const prompt = shot.firstFramePrompt || shot.imagePrompt || shot.description || '电影感短剧首帧，主体清晰，构图明确，角色一致，光影统一'
+  const x = (dramaShotNode.position?.x || 300) + 320
+  const y = dramaShotNode.position?.y || 180
+
+  const cloudNodeId = addLinkedNode('cloudImageWorkflow', { x, y }, {
+    label: `${shot.title} 首帧`,
+    prompt,
+    negativePrompt: '',
+    size: '1440x2560',
+    steps: 20,
+    cfg: 7,
+    sampler: 'euler',
+    scheduler: 'normal',
+    denoise: 1.0,
+    seed: -1
+  })
+  addEdge({ source: dramaShotNodeId, target: cloudNodeId, sourceHandle: 'right', targetHandle: 'left' })
+
+  shot.firstFrameNodeId = cloudNodeId
+  shot.nodeIds = shot.nodeIds || {}
+  shot.nodeIds.firstFrame = cloudNodeId
+  updateProject(project.id, { drama: { ...project.drama } })
   persistCurrentCanvas()
-  return ok('首帧工作流已创建', { nodeIds: [nodeId] })
+
+  return ok(`镜头「${shot.title}」首帧工作流已创建`, { nodeIds: [cloudNodeId], edgeIds: [], shotId: params.shotId })
 }
 
 export function validateCreateVideoWorkflow(params = {}) {
-  if (params.duration != null && !Number.isFinite(Number(params.duration))) return fail('duration 必须是数字')
+  if (!params.shotId || typeof params.shotId !== 'string') return fail('shotId 必须是非空字符串')
   return null
 }
 
 export function executeCreateVideoWorkflow(params = {}) {
-  const y = nodes.value.length ? Math.max(...nodes.value.map(n => Number(n.position?.y) || 0)) + 220 : 180
-  const nodeId = addLinkedNode('videoConfig', { x: 900, y }, { label: params.label || '视频生成', prompt: params.prompt || '自然镜头运动，画面稳定，保持主体一致性', ratio: params.ratio || '16:9', duration: params.duration || 5 })
+  const err = validateCreateVideoWorkflow(params)
+  if (err) return err
+  const project = getCurrentProject()
+  if (!project?.drama?.shots) return fail('当前项目没有短剧数据')
+  const shot = project.drama.shots.find(s => s.id === params.shotId)
+  if (!shot) return fail(`镜头不存在: ${params.shotId}`)
+
+  const dramaShotNodeId = shot.nodeIds?.text
+  if (!dramaShotNodeId) return fail('镜头没有对应的画布节点')
+  const dramaShotNode = getNodeById(dramaShotNodeId)
+  if (!dramaShotNode) return fail('镜头画布节点不存在')
+
+  const prompt = shot.videoPrompt || shot.description || '自然镜头运动，画面稳定'
+  const firstFrameNodeId = shot.firstFrameNodeId || shot.nodeIds?.firstFrame
+  const sourceX = firstFrameNodeId
+    ? (getNodeById(firstFrameNodeId)?.position?.x || dramaShotNode.position?.x || 300)
+    : (dramaShotNode.position?.x || 300)
+  const x = sourceX + 380
+  const y = dramaShotNode.position?.y || 180
+
+  const videoNodeId = addLinkedNode('videoConfig', { x, y }, {
+    label: `${shot.title} 视频`,
+    prompt,
+    ratio: project.drama.dramaGenerationSettings?.aspectRatio || '9:16',
+    duration: shot.duration || 5
+  })
+
+  const sourceId = firstFrameNodeId || dramaShotNodeId
+  addEdge({ source: sourceId, target: videoNodeId, sourceHandle: 'right', targetHandle: 'left' })
+
+  shot.videoNodeId = videoNodeId
+  shot.nodeIds = shot.nodeIds || {}
+  shot.nodeIds.video = videoNodeId
+  updateProject(project.id, { drama: { ...project.drama } })
   persistCurrentCanvas()
-  return ok('视频工作流已创建', { nodeIds: [nodeId] })
+
+  return ok(`镜头「${shot.title}」视频工作流已创建`, { nodeIds: [videoNodeId], edgeIds: [], shotId: params.shotId })
 }
 
 // --- Drama Shot Commands ---
@@ -734,8 +799,11 @@ export function executeRunCloudImageWorkflow(params = {}) {
   if (typeof window === 'undefined' || typeof window.dispatchEvent !== 'function') {
     return fail('当前环境无法触发云端工作流运行')
   }
+  // Verify the node still exists at execution time
+  const node = getNodeById(params.nodeId)
+  if (!node) return fail(`节点已不存在: ${params.nodeId}`)
   window.dispatchEvent(new CustomEvent('yufeng:run-cloud-image-workflow', { detail: { nodeId: params.nodeId } }))
-  return ok('云端专业工作流运行请求已发送', { nodeIds: [params.nodeId] })
+  return ok('云端工作流运行请求已提交，等待节点响应', { nodeIds: [params.nodeId], submitted: true })
 }
 
 // --- assets/error helpers ---

@@ -148,14 +148,12 @@ function createFirstFrameForShot(snapshot, input) {
   if (idx == null) return null
   const shotNode = findDramaShotByIndex(snapshot, idx)
   if (!shotNode) return null
-  const prompt = shotNode.data?.description || '电影感短剧首帧，主体清晰，构图明确'
   const shotId = shotNode.data?.shotId || ''
-  const y = (shotNode.position?.y || 200)
+  if (!shotId) return null
   return {
     summary: `为镜头 ${idx} 创建首帧云端工作流`,
     commands: [
-      { name: 'addNode', params: { ref: 'firstFrame', type: 'cloudImageWorkflow', position: { x: (shotNode.position?.x || 300) + 320, y }, data: { label: `镜头${idx} 首帧`, prompt, size: '1440x2560', steps: 20, cfg: 7, sampler: 'euler', scheduler: 'normal', denoise: 1.0 } } },
-      { name: 'connectNodes', params: { source: shotNode.id, target: 'firstFrame' } }
+      { name: 'createFirstFrameWorkflow', params: { shotId } }
     ],
     requiresConfirmation: false
   }
@@ -167,19 +165,13 @@ function createVideoForAllShots(snapshot) {
   if (shotNodes.length === 0) return null
   const commands = []
   for (const shotNode of shotNodes) {
-    const idx = shotNode.data?.shotIndex || '?'
-    const prompt = shotNode.data?.description || '自然镜头运动，画面稳定'
-    const baseX = Number(shotNode.position?.x || 300) + 640
-    const baseY = Number(shotNode.position?.y || 200)
-    // If shot has a firstFrameNodeId, connect from that; otherwise from dramaShot
-    const sourceId = shotNode.data?.firstFrameNodeId || shotNode.id
-    commands.push(
-      { name: 'addNode', params: { ref: `video_${idx}`, type: 'videoConfig', position: { x: baseX, y: baseY }, data: { label: `镜头${idx} 视频`, prompt, ratio: '9:16', duration: 5 } } },
-      { name: 'connectNodes', params: { source: sourceId, target: `video_${idx}` } }
-    )
+    const shotId = shotNode.data?.shotId
+    if (!shotId) continue
+    commands.push({ name: 'createVideoWorkflow', params: { shotId } })
   }
+  if (commands.length === 0) return null
   return {
-    summary: `为 ${shotNodes.length} 个镜头批量创建视频工作流`,
+    summary: `为 ${commands.length} 个镜头批量创建视频工作流`,
     commands,
     requiresConfirmation: true
   }

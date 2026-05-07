@@ -2342,78 +2342,23 @@ const handleEngineWorkspaceAction = (action, payload) => {
 }
 
 const handleDramaCreateFirstFrame = (shotId) => {
-  const project = currentProject.value
-  if (!project?.drama?.shots) return
-  const shot = project.drama.shots.find(s => s.id === shotId)
-  if (!shot) return
-
-  const dramaShotNodeId = shot.nodeIds?.text
-  if (!dramaShotNodeId) return
-  const dramaShotNode = nodes.value.find(n => n.id === dramaShotNodeId)
-  if (!dramaShotNode) return
-
-  const prompt = shot.firstFramePrompt || shot.imagePrompt || shot.description || ''
-  const y = (dramaShotNode.position?.y || 180)
-  const x = (dramaShotNode.position?.x || 300) + 320
-
-  const cloudNodeId = addNode('cloudImageWorkflow', { x, y }, {
-    label: `${shot.title} 首帧`,
-    prompt,
-    negativePrompt: '',
-    size: '1440x2560',
-    steps: 20,
-    cfg: 7,
-    sampler: 'euler',
-    scheduler: 'normal',
-    denoise: 1.0,
-    seed: -1
-  })
-  addEdge({ source: dramaShotNodeId, target: cloudNodeId, sourceHandle: 'right', targetHandle: 'left' })
-
-  shot.firstFrameNodeId = cloudNodeId
-  shot.nodeIds.firstFrame = cloudNodeId
-  executeCommand('updateDramaShot', { shotId, patch: { firstFrameNodeId: cloudNodeId } })
+  const result = executeCommand('createFirstFrameWorkflow', { shotId })
+  if (!result.ok) {
+    window.$message?.warning(result.message)
+    return
+  }
   saveProject()
-  nextTick(() => focusCanvasNodeById(cloudNodeId))
+  if (result.nodeIds?.length) nextTick(() => focusCanvasNodeById(result.nodeIds[0]))
 }
 
 const handleDramaCreateVideo = (shotId) => {
-  const project = currentProject.value
-  if (!project?.drama?.shots) return
-  const shot = project.drama.shots.find(s => s.id === shotId)
-  if (!shot) return
-
-  const dramaShotNodeId = shot.nodeIds?.text
-  if (!dramaShotNodeId) return
-  const dramaShotNode = nodes.value.find(n => n.id === dramaShotNodeId)
-  if (!dramaShotNode) return
-
-  const prompt = shot.videoPrompt || shot.description || ''
-  const firstFrameNodeId = shot.firstFrameNodeId
-  const sourceX = firstFrameNodeId
-    ? (nodes.value.find(n => n.id === firstFrameNodeId)?.position?.x || dramaShotNode.position?.x || 300)
-    : (dramaShotNode.position?.x || 300)
-  const y = (dramaShotNode.position?.y || 180)
-  const x = sourceX + 380
-
-  const videoNodeId = addNode('videoConfig', { x, y }, {
-    label: `${shot.title} 视频`,
-    prompt,
-    ratio: project.drama.dramaGenerationSettings?.aspectRatio || '9:16',
-    duration: shot.duration || 5
-  })
-
-  if (firstFrameNodeId) {
-    addEdge({ source: firstFrameNodeId, target: videoNodeId, sourceHandle: 'right', targetHandle: 'left' })
-  } else {
-    addEdge({ source: dramaShotNodeId, target: videoNodeId, sourceHandle: 'right', targetHandle: 'left' })
+  const result = executeCommand('createVideoWorkflow', { shotId })
+  if (!result.ok) {
+    window.$message?.warning(result.message)
+    return
   }
-
-  shot.videoNodeId = videoNodeId
-  shot.nodeIds.video = videoNodeId
-  executeCommand('updateDramaShot', { shotId, patch: { videoNodeId } })
   saveProject()
-  nextTick(() => focusCanvasNodeById(videoNodeId))
+  if (result.nodeIds?.length) nextTick(() => focusCanvasNodeById(result.nodeIds[0]))
 }
 
 const handleGenerateDramaShots = async (payload) => {
@@ -2511,6 +2456,20 @@ const handleGenerateDramaShots = async (payload) => {
 const handleDramaNodeAction = (e) => {
   const { action, payload, nodeId } = e.detail || {}
   handleEngineWorkspaceAction(action, payload)
+}
+
+const handleGlobalCloudRun = (e) => {
+  const nodeId = e?.detail?.nodeId
+  if (!nodeId) return
+  // Ensure the target node is visible so its component mounts and handles the event
+  const node = nodes.value.find(n => n.id === nodeId)
+  if (!node) return
+  // If the node component is offscreen, scroll it into view so it mounts
+  const el = document.querySelector(`[data-id="${nodeId}"]`)
+  if (!el) {
+    // Component not mounted — bring it into viewport
+    focusCanvasNodeById(nodeId)
+  }
 }
 
 const runCanvasQuickAction = (prompt) => {
@@ -2780,6 +2739,7 @@ onMounted(() => {
   window.addEventListener('resize', checkMobile)
   window.addEventListener('keydown', handleCanvasKeydown)
   window.addEventListener('yufeng:drama-action', handleDramaNodeAction)
+  window.addEventListener('yufeng:run-cloud-image-workflow', handleGlobalCloudRun)
 
   // Initialize projects store | 初始化项目存储
   initProjectsStore()
@@ -2823,6 +2783,7 @@ onUnmounted(() => {
   window.removeEventListener('resize', checkMobile)
   window.removeEventListener('keydown', handleCanvasKeydown)
   window.removeEventListener('yufeng:drama-action', handleDramaNodeAction)
+  window.removeEventListener('yufeng:run-cloud-image-workflow', handleGlobalCloudRun)
   // Save project before leaving | 离开前保存项目
   saveProject()
 })
