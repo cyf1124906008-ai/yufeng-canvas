@@ -462,7 +462,7 @@
               </div>
             </div>
             <div class="flex shrink-0 items-center gap-2">
-              <span class="text-[10px] px-2 py-1 rounded-full bg-emerald-400/15 text-emerald-200 border border-emerald-300/30">v1.0.1</span>
+              <span class="text-[10px] px-2 py-1 rounded-full bg-emerald-400/15 text-emerald-200 border border-emerald-300/30">v1.0.2</span>
               <button class="rounded-full border border-white/10 bg-white/[0.08] px-2 py-1 text-[10px] text-white/70 hover:bg-white/[0.14]" @click="showStudioCockpit = false">收起</button>
             </div>
           </div>
