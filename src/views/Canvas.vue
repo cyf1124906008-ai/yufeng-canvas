@@ -3036,8 +3036,8 @@ onUnmounted(() => {
 }
 
 .canvas-flow .vue-flow__handle {
-  width: 24px;
-  height: 24px;
+  width: 28px !important;
+  height: 28px !important;
   border: 3px solid rgba(240, 253, 250, 0.98) !important;
   background:
     radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.98) 0 15%, transparent 17%),
@@ -3054,18 +3054,18 @@ onUnmounted(() => {
 }
 
 .canvas-flow .vue-flow__handle-left {
-  left: -21px !important;
+  left: -8px !important;
 }
 
 .canvas-flow .vue-flow__handle-right {
-  right: -21px !important;
+  right: -8px !important;
 }
 
 .canvas-flow .vue-flow__handle-left::after,
 .canvas-flow .vue-flow__handle-right::after {
   content: "";
   position: absolute;
-  inset: -8px;
+  inset: -6px;
   border-radius: 999px;
 }
 
@@ -3106,6 +3106,8 @@ onUnmounted(() => {
 .canvas-flow .vue-flow__node .vue-flow__handle {
   pointer-events: auto !important;
   touch-action: none;
+  visibility: visible !important;
+  display: block !important;
 }
 
 .canvas-flow .vue-flow__node button,
