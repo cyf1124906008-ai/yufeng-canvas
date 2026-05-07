@@ -183,7 +183,8 @@ import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { NIcon, NDropdown, NSpin } from 'naive-ui'
 import { ChevronForwardOutline, ChevronDownOutline, TrashOutline, VideocamOutline, CopyOutline, CreateOutline } from '@vicons/ionicons5'
 import { useVideoGeneration } from '../../hooks'
-import { updateNode, removeNode, duplicateNode, addNode, addEdge, nodes, edges } from '../../stores/canvas'
+import { updateNode, removeNode, duplicateNode, addNode, addEdge, nodes, edges, currentProjectId } from '../../stores/canvas'
+import { projects, updateProject } from '../../stores/projects'
 import NodeHandleMenu from './NodeHandleMenu.vue'
 import { useModelStore } from '../../stores/pinia'
 import { getCapabilityLabel, getModelCapabilityConflict } from '../../utils/modelCapability'
@@ -210,6 +211,28 @@ const isConfigured = computed(() => !!modelStore.currentVideoApiKey)
 
 // Video generation hook | 视频生成 hook
 const { loading, error, status, video: generatedVideo, progress, createVideoTaskOnly } = useVideoGeneration()
+
+// --- Drama shot status writeback ---
+function writebackDramaShot(patch) {
+  const shotId = props.data?.dramaShotId
+  const role = props.data?.dramaRole
+  if (!shotId || role !== 'video') return
+  const projectId = currentProjectId.value
+  if (!projectId) return
+  const project = projects.value.find(p => p.id === projectId)
+  if (!project?.drama?.shots) return
+  const shot = project.drama.shots.find(s => s.id === shotId)
+  if (!shot) return
+  Object.assign(shot, patch, { updatedAt: Date.now() })
+  if (shot.nodeIds?.text) {
+    updateNode(shot.nodeIds.text, {
+      videoStatus: patch.videoStatus || shot.videoStatus,
+      videoNodeId: shot.videoNodeId || patch.videoNodeId,
+      status: patch.status || shot.status
+    })
+  }
+  updateProject(project.id, { drama: { ...project.drama } })
+}
 
 // Local state | 本地状态
 const showHandleMenu = ref(false)
@@ -459,6 +482,7 @@ const createdVideoNodeId = ref(null)
 const handleGenerate = async () => {
   // 设置生成中状态
   isGenerating.value = true
+  writebackDramaShot({ videoStatus: 'generating' })
 
   if (!localModel.value) {
     window.$message?.warning('请先在 API 设置的模型配置里添加视频模型')
@@ -595,6 +619,14 @@ const handleGenerate = async () => {
       window.$message?.success('视频生成完成')
       // Mark this config node as executed | 标记配置节点已执行
       updateNode(props.id, { executed: true, outputNodeId: videoNodeId })
+      writebackDramaShot({
+        videoStatus: 'completed',
+        status: 'videoReady',
+        videoNodeId: props.id,
+        videoOutputNodeId: videoNodeId,
+        videoUrl: url || '',
+        videoAssetPath: ''
+      })
     } else if (newTaskId) {
       // 需要轮询，传递 taskId 给 VideoNode
       updateNode(videoNodeId, {
@@ -611,8 +643,10 @@ const handleGenerate = async () => {
       window.$message?.info('视频任务已创建，正在排队...')
       // Mark this config node as executed | 标记配置节点已执行
       updateNode(props.id, { executed: true, outputNodeId: videoNodeId })
+      writebackDramaShot({ videoOutputNodeId: videoNodeId })
     }
   } catch (err) {
+    writebackDramaShot({ videoStatus: 'failed', videoError: err.message || '视频生成失败' })
     // Update node to show error | 更新节点显示错误
     updateNode(videoNodeId, {
       loading: false,

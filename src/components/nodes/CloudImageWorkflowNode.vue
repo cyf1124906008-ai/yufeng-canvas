@@ -141,6 +141,7 @@ import { NIcon } from 'naive-ui'
 import { TrashOutline, ChevronDownOutline, ChevronForwardOutline, VideocamOutline } from '@vicons/ionicons5'
 import NodeHandleMenu from './NodeHandleMenu.vue'
 import { updateNode, addNode, addEdge, nodes, edges, removeNode, currentProjectId } from '../../stores/canvas'
+import { projects, updateProject } from '../../stores/projects'
 import { useModelStore } from '../../stores/pinia'
 import { useImageGeneration } from '../../hooks/useApi'
 import { registerTask, updateTask, getTaskByNodeId, removeTask } from '../../stores/tasks'
@@ -211,6 +212,29 @@ const connectedRefImageCount = computed(() => {
 
 const emitUpdate = (key, value) => {
   updateNode(props.id, { [key]: value, updatedAt: Date.now() })
+}
+
+// --- Drama shot status writeback ---
+function writebackDramaShot(patch) {
+  const shotId = props.data?.dramaShotId
+  const role = props.data?.dramaRole
+  if (!shotId || role !== 'firstFrame') return
+  const projectId = currentProjectId.value
+  if (!projectId) return
+  const project = projects.value.find(p => p.id === projectId)
+  if (!project?.drama?.shots) return
+  const shot = project.drama.shots.find(s => s.id === shotId)
+  if (!shot) return
+  Object.assign(shot, patch, { updatedAt: Date.now() })
+  // Sync DramaShotNode visual status
+  if (shot.nodeIds?.text) {
+    updateNode(shot.nodeIds.text, {
+      firstFrameStatus: patch.firstFrameStatus || shot.firstFrameStatus,
+      firstFrameNodeId: shot.firstFrameNodeId || patch.firstFrameNodeId,
+      status: patch.status || shot.status
+    })
+  }
+  updateProject(project.id, { drama: { ...project.drama } })
 }
 
 watch(localPrompt, v => emitUpdate('prompt', v))
@@ -413,6 +437,7 @@ async function handleGenerate() {
   emitUpdate('status', 'running')
   emitUpdate('error', '')
   startElapsed()
+  writebackDramaShot({ firstFrameStatus: 'generating' })
 
   let imageNodeId = createdImageNodeId.value
   const existingOutput = edges.value.find(e => e.source === props.id && nodes.value.find(n => n.id === e.target && n.type === 'image'))
@@ -464,6 +489,7 @@ async function handleGenerate() {
       if (genErr._frontendTimeout) {
         // Do NOT mark task as failed — keep running so refresh can recover
         updateNode(imageNodeId, { loading: false, error: '等待超时，后台仍在生成中，刷新页面可恢复结果', updatedAt: Date.now() })
+        writebackDramaShot({ firstFrameStatus: 'generating' })
         window.$message?.warning('前端等待超时，供应商请求仍在后台继续，刷新后可恢复结果')
         stopElapsed()
         emitUpdate('status', 'idle')
@@ -505,11 +531,20 @@ async function handleGenerate() {
       emitUpdate('executed', true)
       emitUpdate('status', 'success')
       if (bgTaskId) { updateTask(bgTaskId, { status: 'completed' }); removeTask(bgTaskId) }
+      writebackDramaShot({
+        firstFrameStatus: 'completed',
+        status: 'firstFrameReady',
+        firstFrameNodeId: props.id,
+        firstFrameOutputNodeId: imageNodeId,
+        firstFrameAssetPath: imageData.assetPath || '',
+        firstFrameUrl: imageData.url || ''
+      })
     }
   } catch (err) {
     updateNode(imageNodeId, { loading: false, error: err.message || '生成失败', finishedAt: Date.now(), updatedAt: Date.now() })
     emitUpdate('error', err.message || '图片生成失败')
     emitUpdate('status', 'error')
+    writebackDramaShot({ firstFrameStatus: 'failed', firstFrameError: err.message || '图片生成失败' })
     window.$message?.error(err.message || '图片生成失败')
   }
 

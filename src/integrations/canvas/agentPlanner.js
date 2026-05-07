@@ -311,5 +311,23 @@ export function buildLocalCommandPlan(userInput, snapshot = buildCanvasSnapshot(
     }
   }
 
+  // --- Batch: Run all first frame workflows ---
+  if (hasAny(input, ['全部首帧', '所有首帧', '所有分镜首帧', '把所有分镜首帧', '批量生成首帧', '首帧全部', '首帧都', '跑一遍首帧', '跑一遍所有首帧'])) {
+    return {
+      summary: '批量生成所有分镜首帧',
+      commands: [{ name: 'runAllFirstFrameWorkflows', params: {} }],
+      requiresConfirmation: true
+    }
+  }
+
+  // --- Batch: Run all video workflows ---
+  if (hasAny(input, ['所有镜头视频', '全部视频', '所有分镜视频', '批量生成视频', '视频全部', '视频都', '跑一遍视频', '继续做完整短剧', '完成短剧', '生成全部视频', '生成所有视频'])) {
+    return {
+      summary: '批量生成所有镜头视频',
+      commands: [{ name: 'runAllVideoWorkflows', params: {} }],
+      requiresConfirmation: true
+    }
+  }
+
   return null
 }

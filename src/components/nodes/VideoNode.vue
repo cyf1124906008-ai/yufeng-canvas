@@ -156,7 +156,8 @@ import { ref, computed, nextTick, watch, onMounted, onUnmounted } from 'vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { NIcon, NSpin } from 'naive-ui'
 import { TrashOutline, ExpandOutline, VideocamOutline, CopyOutline, CloseCircleOutline, DownloadOutline, EyeOutline, CreateOutline } from '@vicons/ionicons5'
-import { updateNode, removeNode, duplicateNode, addNode, addEdge, nodes } from '../../stores/canvas'
+import { updateNode, removeNode, duplicateNode, addNode, addEdge, nodes, edges, currentProjectId } from '../../stores/canvas'
+import { projects, updateProject } from '../../stores/projects'
 import { useVideoGeneration } from '../../hooks/useApi'
 import { registerTask, updateTask, getTaskByNodeId, removeTask } from '../../stores/tasks'
 import NodeHandleMenu from './NodeHandleMenu.vue'
@@ -171,6 +172,35 @@ const { updateNodeInternals } = useVueFlow()
 
 // Get pollVideoTask from useVideoGeneration | 从 useVideoGeneration 获取轮询函数
 const { pollVideoTask } = useVideoGeneration()
+
+// --- Drama shot status writeback via parent VideoConfigNode ---
+function findDramaVideoConfigShotId() {
+  // Walk upstream edges to find the VideoConfigNode that owns this video output
+  const parentEdge = edges.value.find(e => e.target === props.id)
+  if (!parentEdge) return null
+  const configNode = nodes.value.find(n => n.id === parentEdge.source)
+  if (!configNode || configNode.type !== 'videoConfig') return null
+  return { shotId: configNode.data?.dramaShotId, role: configNode.data?.dramaRole, configNodeId: configNode.id }
+}
+
+function writebackDramaVideo(patch) {
+  const info = findDramaVideoConfigShotId()
+  if (!info || info.role !== 'video') return
+  const projectId = currentProjectId.value
+  if (!projectId) return
+  const project = projects.value.find(p => p.id === projectId)
+  if (!project?.drama?.shots) return
+  const shot = project.drama.shots.find(s => s.id === info.shotId)
+  if (!shot) return
+  Object.assign(shot, patch, { updatedAt: Date.now() })
+  if (shot.nodeIds?.text) {
+    updateNode(shot.nodeIds.text, {
+      videoStatus: patch.videoStatus || shot.videoStatus,
+      status: patch.status || shot.status
+    })
+  }
+  updateProject(project.id, { drama: { ...project.drama } })
+}
 
 // Hover state | 悬浮状态
 const showActions = ref(false)
@@ -307,12 +337,19 @@ const startPolling = async (taskId) => {
       finishedAt: Date.now(),
       taskId: null
     })
+    writebackDramaVideo({
+      videoStatus: 'completed',
+      status: 'completed',
+      videoUrl: result.url || '',
+      videoAssetPath: ''
+    })
     if (backgroundTaskId.value) {
       updateTask(backgroundTaskId.value, { status: 'completed', result: { url: result.url } })
       removeTask(backgroundTaskId.value)
       backgroundTaskId.value = null
     }
   } catch (err) {
+    writebackDramaVideo({ videoStatus: 'failed', videoError: err.message || '视频生成失败' })
     updateNode(props.id, {
       loading: false,
       error: err.message || '生成失败',

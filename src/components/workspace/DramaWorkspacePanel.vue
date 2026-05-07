@@ -186,9 +186,15 @@
           </div>
 
           <div class="dws-shot-actions">
+            <span class="dws-status-chip" :class="firstFrameChipClass(shot)">{{ firstFrameStatusLabel(shot) }}</span>
+            <button v-if="!shot.firstFrameNodeId" class="dws-btn-xs primary" @click="emitAction('createFirstFrameWorkflow', shot.id)">创建首帧</button>
+            <button v-else-if="shot.firstFrameStatus === 'completed'" class="dws-btn-xs" @click="emitAction('locateDramaShot', shot.id)">查看首帧</button>
+            <button v-else class="dws-btn-xs" @click="emitAction('locateDramaShot', shot.id)">定位首帧</button>
+            <span class="dws-status-chip" :class="videoChipClass(shot)">{{ videoStatusLabel(shot) }}</span>
+            <button v-if="!shot.videoNodeId" class="dws-btn-xs primary" @click="emitAction('createVideoWorkflow', shot.id)">创建视频</button>
+            <button v-else-if="shot.videoStatus === 'completed'" class="dws-btn-xs" @click="emitAction('locateDramaShot', shot.id)">查看视频</button>
+            <button v-else class="dws-btn-xs" @click="emitAction('locateDramaShot', shot.id)">定位视频</button>
             <button class="dws-btn-xs" @click="emitAction('locateDramaShot', shot.id)">定位</button>
-            <button class="dws-btn-xs" @click="emitAction('createFirstFrameWorkflow', shot.id)">首帧</button>
-            <button class="dws-btn-xs" @click="emitAction('createVideoWorkflow', shot.id)">视频</button>
             <button class="dws-btn-xs" @click="emitAction('duplicateShot', { shotId: shot.id })">复制</button>
             <button class="dws-btn-xs del" @click="emitAction('removeShot', { shotId: shot.id })">删除</button>
           </div>
@@ -315,6 +321,42 @@ watch(drama, (d) => {
 }, { immediate: true })
 
 function emitAction(action, payload) { emit('action', action, payload) }
+
+// Status labels for first frame and video
+function firstFrameStatusLabel(shot) {
+  if (!shot.firstFrameNodeId) return '未创建'
+  const s = shot.firstFrameStatus
+  if (s === 'completed') return '首帧完成'
+  if (s === 'generating') return '首帧生成中'
+  if (s === 'failed') return '首帧失败'
+  if (s === 'pending') return '待生成'
+  return '首帧待生成'
+}
+function firstFrameChipClass(shot) {
+  if (!shot.firstFrameNodeId) return 'idle'
+  const s = shot.firstFrameStatus
+  if (s === 'completed') return 'done'
+  if (s === 'generating') return 'running'
+  if (s === 'failed') return 'failed'
+  return 'pending'
+}
+function videoStatusLabel(shot) {
+  if (!shot.videoNodeId) return '未创建'
+  const s = shot.videoStatus
+  if (s === 'completed') return '视频完成'
+  if (s === 'generating') return '视频生成中'
+  if (s === 'failed') return '视频失败'
+  if (s === 'pending') return '待生成'
+  return '视频待生成'
+}
+function videoChipClass(shot) {
+  if (!shot.videoNodeId) return 'idle'
+  const s = shot.videoStatus
+  if (s === 'completed') return 'done'
+  if (s === 'generating') return 'running'
+  if (s === 'failed') return 'failed'
+  return 'pending'
+}
 
 function emitProjectUpdate() {
   if (!currentProject.value) return
@@ -511,6 +553,13 @@ function saveSettings() {
 .dws-btn-xs { border: 1px solid rgba(255,255,255,0.08); border-radius: 999px; background: rgba(255,255,255,0.05); color: rgba(255,255,255,0.55); font-size: 9px; padding: 3px 6px; cursor: pointer; }
 .dws-btn-xs:hover { background: rgba(255,255,255,0.1); }
 .dws-btn-xs.del:hover { border-color: rgba(248,113,113,0.3); color: #f87171; }
+.dws-btn-xs.primary { border-color: rgba(52,211,153,0.3); color: #34d399; }
+.dws-status-chip { display: inline-block; font-size: 9px; padding: 2px 6px; border-radius: 999px; }
+.dws-status-chip.idle { background: rgba(255,255,255,0.05); color: rgba(255,255,255,0.3); }
+.dws-status-chip.pending { background: rgba(251,191,36,0.1); color: #fbbf24; }
+.dws-status-chip.running { background: rgba(96,165,250,0.12); color: #60a5fa; }
+.dws-status-chip.done { background: rgba(52,211,153,0.12); color: #34d399; }
+.dws-status-chip.failed { background: rgba(248,113,113,0.12); color: #f87171; }
 .dws-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .dws-card { border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; background: rgba(255,255,255,0.04); padding: 8px; }
 .dws-card.editing { grid-column: span 2; }

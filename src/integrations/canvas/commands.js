@@ -30,11 +30,11 @@ const ALLOWED_DATA_FIELDS = {
   text: ['content', 'label'],
   imageConfig: ['prompt', 'label', 'model', 'size', 'quality'],
   image: ['label', 'prompt', 'source'],
-  videoConfig: ['prompt', 'label', 'model', 'ratio', 'duration'],
+  videoConfig: ['prompt', 'label', 'model', 'ratio', 'duration', 'dramaShotId', 'dramaRole', 'dramaProjectId'],
   video: ['label', 'source', 'duration'],
   llmConfig: ['systemPrompt', 'label', 'model', 'outputFormat'],
   comfyWorkflow: ['prompt', 'negativePrompt', 'width', 'height', 'seed', 'steps', 'cfg', 'label'],
-  cloudImageWorkflow: ['prompt', 'negativePrompt', 'label', 'model', 'size', 'seed', 'steps', 'cfg', 'sampler', 'scheduler', 'denoise'],
+  cloudImageWorkflow: ['prompt', 'negativePrompt', 'label', 'model', 'size', 'seed', 'steps', 'cfg', 'sampler', 'scheduler', 'denoise', 'dramaShotId', 'dramaRole', 'dramaProjectId'],
   dramaShot: ['label', 'shotId', 'shotIndex', 'shotTitle', 'shotType', 'angle', 'movement', 'sceneName', 'characterNames', 'description', 'dialogue', 'status', 'firstFrameStatus', 'videoStatus', 'firstFrameNodeId', 'videoNodeId']
 }
 
@@ -504,13 +504,19 @@ export function executeCreateFirstFrameWorkflow(params = {}) {
     sampler: 'euler',
     scheduler: 'normal',
     denoise: 1.0,
-    seed: -1
+    seed: -1,
+    dramaShotId: shot.id,
+    dramaRole: 'firstFrame',
+    dramaProjectId: project.id
   })
   const edgeId = addEdge({ source: dramaShotNodeId, target: cloudNodeId, sourceHandle: 'right', targetHandle: 'left' })
 
   shot.firstFrameNodeId = cloudNodeId
+  shot.firstFrameStatus = 'pending'
   shot.nodeIds = shot.nodeIds || {}
   shot.nodeIds.firstFrame = cloudNodeId
+  // Sync DramaShotNode visual status
+  updateNode(dramaShotNodeId, { firstFrameStatus: 'pending', firstFrameNodeId: cloudNodeId })
   updateProject(project.id, { drama: { ...project.drama } })
   persistCurrentCanvas()
 
@@ -550,14 +556,20 @@ export function executeCreateVideoWorkflow(params = {}) {
     label: `${shot.title} 视频`,
     prompt,
     ratio: project.drama.dramaGenerationSettings?.aspectRatio || '9:16',
-    duration: shot.duration || 5
+    duration: shot.duration || 5,
+    dramaShotId: shot.id,
+    dramaRole: 'video',
+    dramaProjectId: project.id
   })
 
   const edgeId = addEdge({ source: effectiveSourceId, target: videoNodeId, sourceHandle: 'right', targetHandle: 'left' })
 
   shot.videoNodeId = videoNodeId
+  shot.videoStatus = 'pending'
   shot.nodeIds = shot.nodeIds || {}
   shot.nodeIds.video = videoNodeId
+  // Sync DramaShotNode visual status
+  updateNode(dramaShotNodeId, { videoStatus: 'pending', videoNodeId })
   updateProject(project.id, { drama: { ...project.drama } })
   persistCurrentCanvas()
 
@@ -808,6 +820,76 @@ export function executeRunCloudImageWorkflow(params = {}) {
   return ok('云端工作流运行请求已提交，等待节点响应', { nodeIds: [params.nodeId], submitted: true })
 }
 
+// --- Batch drama workflow commands ---
+
+export function validateRunAllFirstFrameWorkflows() { return null }
+
+export function executeRunAllFirstFrameWorkflows() {
+  const project = getCurrentProject()
+  if (!project?.drama?.shots) return fail('当前项目没有短剧数据')
+  const shots = project.drama.shots
+  if (shots.length === 0) return fail('没有镜头')
+
+  const nodeIds = []
+  const edgeIds = []
+  const shotIds = []
+  const errors = []
+
+  for (const shot of shots) {
+    // Ensure firstFrame node exists
+    if (!shot.firstFrameNodeId) {
+      const createResult = executeCreateFirstFrameWorkflow({ shotId: shot.id })
+      if (!createResult.ok) { errors.push(`镜头${shot.index}: ${createResult.message}`); continue }
+      nodeIds.push(...(createResult.nodeIds || []))
+      edgeIds.push(...(createResult.edgeIds || []))
+    }
+    // Run the cloud image workflow
+    const ffNodeId = shot.firstFrameNodeId || nodeIds[nodeIds.length - 1]
+    if (!ffNodeId) { errors.push(`镜头${shot.index}: 首帧节点未创建`); continue }
+    const ffNode = getNodeById(ffNodeId)
+    if (!ffNode) { errors.push(`镜头${shot.index}: 首帧节点不存在`); continue }
+    if (!ffNode.data?.model) { errors.push(`镜头${shot.index}: 未配置图片模型`); continue }
+    const runResult = executeRunCloudImageWorkflow({ nodeId: ffNodeId })
+    if (!runResult.ok) { errors.push(`镜头${shot.index}: ${runResult.message}`); continue }
+    nodeIds.push(ffNodeId)
+    shotIds.push(shot.id)
+  }
+
+  if (shotIds.length === 0 && errors.length > 0) return fail(errors.join('；'))
+  return ok(`已提交 ${shotIds.length} 个首帧生成任务`, { nodeIds, edgeIds, shotIds, errors: errors.length ? errors : undefined })
+}
+
+export function validateRunAllVideoWorkflows() { return null }
+
+export function executeRunAllVideoWorkflows() {
+  const project = getCurrentProject()
+  if (!project?.drama?.shots) return fail('当前项目没有短剧数据')
+  const shots = project.drama.shots
+  if (shots.length === 0) return fail('没有镜头')
+
+  const nodeIds = []
+  const edgeIds = []
+  const shotIds = []
+  const errors = []
+
+  for (const shot of shots) {
+    // Ensure video node exists
+    if (!shot.videoNodeId) {
+      const createResult = executeCreateVideoWorkflow({ shotId: shot.id })
+      if (!createResult.ok) { errors.push(`镜头${shot.index}: ${createResult.message}`); continue }
+      nodeIds.push(...(createResult.nodeIds || []))
+      edgeIds.push(...(createResult.edgeIds || []))
+    }
+    const vidNodeId = shot.videoNodeId || nodeIds[nodeIds.length - 1]
+    if (!vidNodeId) { errors.push(`镜头${shot.index}: 视频节点未创建`); continue }
+    nodeIds.push(vidNodeId)
+    shotIds.push(shot.id)
+  }
+
+  if (shotIds.length === 0 && errors.length > 0) return fail(errors.join('；'))
+  return ok(`已创建 ${shotIds.length} 个视频工作流`, { nodeIds, edgeIds, shotIds, errors: errors.length ? errors : undefined })
+}
+
 // --- assets/error helpers ---
 export function validateSaveAsset(params = {}) {
   if (!params.assetId && !params.nodeId) return fail('saveAsset 需要 assetId 或 nodeId')
@@ -1016,6 +1098,8 @@ const COMMAND_MAP = {
   createVideoWorkflow: { validate: validateCreateVideoWorkflow, execute: executeCreateVideoWorkflow },
   createCloudImageWorkflow: { validate: validateCreateCloudImageWorkflow, execute: executeCreateCloudImageWorkflow },
   runCloudImageWorkflow: { validate: validateRunCloudImageWorkflow, execute: executeRunCloudImageWorkflow },
+  runAllFirstFrameWorkflows: { validate: validateRunAllFirstFrameWorkflows, execute: executeRunAllFirstFrameWorkflows },
+  runAllVideoWorkflows: { validate: validateRunAllVideoWorkflows, execute: executeRunAllVideoWorkflows },
   updateDramaShot: { validate: validateUpdateDramaShot, execute: executeUpdateDramaShot },
   locateDramaShot: { validate: validateLocateDramaShot, execute: executeLocateDramaShot },
   addDramaShot: { validate: validateAddDramaShot, execute: executeAddDramaShot },
@@ -1135,6 +1219,8 @@ export const COMMAND_REGISTRY = {
   createVideoWorkflow: { description: '为镜头创建视频生成工作流', risk: 'safe' },
   createCloudImageWorkflow: { description: '创建云端专业图片工作流节点', risk: 'safe' },
   runCloudImageWorkflow: { description: '执行云端图片生成（消耗 API 额度）', risk: 'execution' },
+  runAllFirstFrameWorkflows: { description: '批量生成所有镜头首帧', risk: 'execution' },
+  runAllVideoWorkflows: { description: '批量创建所有镜头视频工作流', risk: 'execution' },
   updateCloudImageWorkflow: { description: '更新云端工作流参数', risk: 'safe' },
   updateDramaPremise: { description: '更新短剧故事前提', risk: 'safe' },
   updateDramaShot: { description: '更新镜头数据', risk: 'safe' },
