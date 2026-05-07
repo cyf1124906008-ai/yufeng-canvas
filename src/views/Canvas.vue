@@ -3036,14 +3036,17 @@ onUnmounted(() => {
 }
 
 .canvas-flow .vue-flow__handle {
-  width: 22px;
-  height: 22px;
-  border: 2px solid rgba(240, 253, 250, 0.98);
-  background: linear-gradient(135deg, #5eead4, #22c55e);
+  width: 24px;
+  height: 24px;
+  border: 3px solid rgba(240, 253, 250, 0.98) !important;
+  background:
+    radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.98) 0 15%, transparent 17%),
+    linear-gradient(135deg, #2dd4bf, #22c55e) !important;
   box-shadow:
-    0 0 0 6px rgba(20, 184, 166, 0.13),
-    0 0 18px rgba(45, 212, 191, 0.72);
-  opacity: 1;
+    0 0 0 6px rgba(20, 184, 166, 0.18),
+    0 0 22px rgba(20, 184, 166, 0.78),
+    0 10px 18px rgba(15, 23, 42, 0.18);
+  opacity: 1 !important;
   z-index: 100000 !important;
   pointer-events: auto !important;
   cursor: crosshair;
@@ -3051,11 +3054,19 @@ onUnmounted(() => {
 }
 
 .canvas-flow .vue-flow__handle-left {
-  left: -11px !important;
+  left: -21px !important;
 }
 
 .canvas-flow .vue-flow__handle-right {
-  right: -11px !important;
+  right: -21px !important;
+}
+
+.canvas-flow .vue-flow__handle-left::after,
+.canvas-flow .vue-flow__handle-right::after {
+  content: "";
+  position: absolute;
+  inset: -8px;
+  border-radius: 999px;
 }
 
 .node-port-label {
@@ -3127,8 +3138,9 @@ onUnmounted(() => {
 .canvas-flow .vue-flow__handle:hover,
 .canvas-flow .vue-flow__handle.connecting {
   box-shadow:
-    0 0 0 7px rgba(20, 184, 166, 0.22),
-    0 0 28px rgba(45, 212, 191, 0.9);
+    0 0 0 8px rgba(20, 184, 166, 0.26),
+    0 0 34px rgba(45, 212, 191, 0.96),
+    0 12px 24px rgba(15, 23, 42, 0.22);
 }
 
 .canvas-flow .vue-flow__edge-path {
