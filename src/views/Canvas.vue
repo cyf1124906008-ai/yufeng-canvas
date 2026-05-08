@@ -3054,11 +3054,13 @@ onUnmounted(() => {
 }
 
 .canvas-flow .vue-flow__handle-left {
-  left: -2px !important;
+  left: 14px !important;
+  transform: translate(-50%, -50%) !important;
 }
 
 .canvas-flow .vue-flow__handle-right {
-  right: -2px !important;
+  right: 14px !important;
+  transform: translate(50%, -50%) !important;
 }
 
 .canvas-flow .vue-flow__handle-left::after,
