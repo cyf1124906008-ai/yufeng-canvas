@@ -2,7 +2,7 @@
   "name": "yufeng-canvas",
   "productName": "YUFENG Canvas",
   "private": true,
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "Visual AI canvas desktop app built with Vue, Vite and Electron",
   "repository": {
     "type": "git",
