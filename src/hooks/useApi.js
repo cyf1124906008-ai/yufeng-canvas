@@ -63,7 +63,9 @@ const IMAGE_PROFESSIONAL_PARAM_KEYS = [
   'scheduler',
   'denoising_strength',
   'seed',
-  'negative_prompt'
+  'negative_prompt',
+  'aspect_ratio',
+  'ratio'
 ]
 
 const hasImageProfessionalParams = (payload = {}) =>
@@ -203,6 +205,22 @@ const withImageAspectPromptHint = (prompt = '', size = '') => {
   return `${prompt || ''}\n\n${hint}`.trim()
 }
 
+const getImageRequestSizeValue = ({ modelKey, resolvedSize }) => {
+  const ratioLabel = getAspectRatioLabel(resolvedSize)
+  const orientation = getImageOrientation(resolvedSize)
+
+  // Seedream-compatible cloud gateways commonly accept ratio strings in the
+  // `size` field. Pixel sizes can be ignored by some OpenAI-compatible proxies
+  // and silently fall back to 1:1, so non-square Seedream requests are sent as
+  // ratio first. If a provider rejects ratio strings, existing size fallback
+  // retries with pixel sizes.
+  if (isSeedreamFamily(modelKey) && ratioLabel && orientation !== 'square') {
+    return ratioLabel
+  }
+
+  return resolvedSize
+}
+
 const isGptImageFamily = (model = '') =>
   /(^|[-_])gpt-image|chatgpt-image/i.test(model)
 
@@ -296,7 +314,14 @@ const normalizeImageGenerationParams = (params, imageModel, modelConfig) => {
   const requestData = {
     model: modelKey,
     prompt: withImageAspectPromptHint(params.prompt, size),
-    size
+    size: getImageRequestSizeValue({ modelKey, resolvedSize: size })
+  }
+
+  const ratioLabel = getAspectRatioLabel(size)
+  const orientation = getImageOrientation(size)
+  if (isSeedreamFamily(modelKey) && ratioLabel && orientation !== 'unknown') {
+    requestData.aspect_ratio = ratioLabel
+    requestData.ratio = ratioLabel
   }
 
   if (params.n && Number(params.n) > 1) {

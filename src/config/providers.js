@@ -21,7 +21,9 @@ const IMAGE_PROFESSIONAL_PARAM_KEYS = [
   'scheduler',
   'denoising_strength',
   'seed',
-  'negative_prompt'
+  'negative_prompt',
+  'aspect_ratio',
+  'ratio'
 ]
 
 const copyImageProfessionalParams = (adapted, params) => {
