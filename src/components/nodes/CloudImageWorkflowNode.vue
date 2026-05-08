@@ -1,11 +1,12 @@
 <template>
-  <div class="cloud-workflow-node" :class="{ selected: isSelected }" @mouseenter="showToolbar = true" @mouseleave="showToolbar = false">
-    <div class="node-card">
-      <!-- Handles -->
-      <span class="node-port-label node-port-label-in">Prompt / 参考图</span>
-      <Handle type="target" :position="Position.Left" id="left" class="!bg-emerald-400" />
-      <Handle type="source" :position="Position.Right" id="right" class="!bg-emerald-400" />
+  <div class="cloud-workflow-node" :class="{ selected: isSelected }" @mouseenter="showToolbar = true; showHandleMenu = true" @mouseleave="showToolbar = false; showHandleMenu = false">
+    <!-- Handles | 外置连接点：wrapper 独立触点区，避免被卡片裁切 -->
+    <span class="node-port-label node-port-label-in">Prompt / 参考图</span>
+    <Handle type="target" :position="Position.Left" id="left" class="!bg-emerald-400" />
+    <Handle type="source" :position="Position.Right" id="right" class="!bg-emerald-400" />
+    <NodeHandleMenu :nodeId="id" nodeType="cloudImageWorkflow" output-label="图片结果" :visible="showHandleMenu" :operations="operations" @select="handleSelect" />
 
+    <div class="node-card">
       <!-- Header -->
       <div class="flex items-center justify-between gap-2 px-1">
         <div class="flex items-center gap-1.5 min-w-0">
@@ -155,8 +156,6 @@
         {{ data.status === 'running' ? `生成中 ${elapsedText}` : '云端生成' }}
       </button>
 
-      <!-- Output handle -->
-      <NodeHandleMenu :nodeId="id" nodeType="cloudImageWorkflow" output-label="图片结果" :visible="showHandleMenu" :operations="operations" @select="handleSelect" />
     </div>
   </div>
 </template>
@@ -700,7 +699,8 @@ onBeforeUnmount(() => {
   position: relative;
   min-width: 240px;
   max-width: 280px;
-  padding-right: 54px;
+  padding-left: 36px;
+  padding-right: 96px;
   padding-top: 20px;
   overflow: visible;
 }

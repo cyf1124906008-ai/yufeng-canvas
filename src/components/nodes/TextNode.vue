@@ -1,6 +1,12 @@
 <template>
   <!-- Text node wrapper | 文本节点包裹层 -->
   <div class="text-node-wrapper" @mouseenter="showHandleMenu = true" @mouseleave="showHandleMenu = false">
+    <!-- Handles | 外置连接点：wrapper 独立触点区，避免被卡片裁切 -->
+    <span class="node-port-label node-port-label-in">输入</span>
+    <NodeHandleMenu :nodeId="id" nodeType="text" output-label="Prompt" :visible="showHandleMenu" :operations="operations" @select="handleSelect" />
+    <Handle type="target" :position="Position.Left" id="left" class="!bg-[var(--accent-color)]" />
+    <Handle type="source" :position="Position.Right" id="right" class="!bg-[var(--accent-color)]" />
+
     <!-- Text node | 文本节点 -->
     <div
       class="text-node bg-[var(--bg-secondary)] rounded-xl border min-w-[280px] max-w-[350px] relative transition-all duration-200"
@@ -70,11 +76,6 @@
         </button>
       </div>
 
-      <!-- Handles | 连接点 -->
-      <span class="node-port-label node-port-label-in">输入</span>
-      <NodeHandleMenu :nodeId="id" nodeType="text" output-label="Prompt" :visible="showHandleMenu" :operations="operations" @select="handleSelect" />
-      <Handle type="target" :position="Position.Left" id="left" class="!bg-[var(--accent-color)]" />
-      <Handle type="source" :position="Position.Right" id="right" class="!bg-[var(--accent-color)]" />
 
     </div>
 
@@ -749,7 +750,8 @@ const handleVideoGen = () => {
 
 <style scoped>
 .text-node-wrapper {
-  padding-right: 54px;
+  padding-left: 36px;
+  padding-right: 96px;
   padding-top: 20px;
   position: relative;
   overflow: visible;

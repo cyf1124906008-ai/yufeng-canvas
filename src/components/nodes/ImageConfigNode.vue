@@ -1,6 +1,12 @@
 <template>
   <!-- Image config node wrapper | 文生图配置节点包裹层 -->
   <div class="image-config-node-wrapper" @mouseenter="showHandleMenu = true" @mouseleave="showHandleMenu = false">
+    <!-- Handles | 外置连接点：wrapper 独立触点区，避免被卡片裁切 -->
+    <span class="node-port-label node-port-label-in">Prompt / 参考图</span>
+    <Handle type="target" :position="Position.Left" id="left" class="!bg-[var(--accent-color)]" />
+    <Handle type="source" :position="Position.Right" id="right" class="!bg-[var(--accent-color)]" />
+    <NodeHandleMenu :nodeId="id" nodeType="imageConfig" output-label="图片结果" :visible="showHandleMenu" :operations="operations" @select="handleSelect" />
+
     <!-- Image config node | 文生图配置节点 -->
     <div
       class="image-config-node bg-[var(--bg-secondary)] rounded-xl border min-w-[300px] transition-all duration-200"
@@ -177,11 +183,6 @@
       </div> -->
       </div>
 
-      <!-- Handles | 连接点 -->
-      <span class="node-port-label node-port-label-in">Prompt / 参考图</span>
-      <Handle type="target" :position="Position.Left" id="left" class="!bg-[var(--accent-color)]" />
-      <Handle type="source" :position="Position.Right" id="right" class="!bg-[var(--accent-color)]" />
-      <NodeHandleMenu :nodeId="id" nodeType="imageConfig" output-label="图片结果" :visible="showHandleMenu" :operations="operations" @select="handleSelect" />
     </div>
 
   </div>
@@ -1136,7 +1137,8 @@ watch(
 .image-config-node-wrapper {
   position: relative;
   padding-top: 20px;
-  padding-right: 54px;
+  padding-left: 36px;
+  padding-right: 96px;
   overflow: visible;
 }
 

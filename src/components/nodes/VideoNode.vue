@@ -1,6 +1,12 @@
 <template>
   <!-- Video node wrapper | 视频节点包裹层 -->
   <div class="video-node-wrapper relative" @mouseenter="showActions = true; showHandleMenu = true" @mouseleave="showActions = false; showHandleMenu = false">
+    <!-- Handles | 外置连接点：wrapper 独立触点区，避免被卡片裁切 -->
+    <span class="node-port-label node-port-label-in">视频</span>
+    <NodeHandleMenu :nodeId="id" nodeType="video" output-label="视频" :visible="showHandleMenu" :operations="operations" @select="handleSelect" />
+    <Handle type="target" :position="Position.Left" id="left" class="!bg-[var(--accent-color)]" />
+    <Handle type="source" :position="Position.Right" id="right" class="!bg-[var(--accent-color)]" />
+
     <!-- Video node | 视频节点 -->
     <div 
       class="video-node bg-[var(--bg-secondary)] rounded-xl border w-[400px] relative transition-all duration-200"
@@ -116,11 +122,6 @@
       </div>
     </div>
 
-    <!-- Handles | 连接点 -->
-    <span class="node-port-label node-port-label-in">视频</span>
-    <NodeHandleMenu :nodeId="id" nodeType="video" output-label="视频" :visible="showHandleMenu" :operations="operations" @select="handleSelect" />
-    <Handle type="target" :position="Position.Left" id="left" class="!bg-[var(--accent-color)]" />
-    <Handle type="source" :position="Position.Right" id="right" class="!bg-[var(--accent-color)]" />
     </div>
 
     <!-- Right side - Action buttons | 右侧 - 操作按钮 -->
@@ -485,7 +486,8 @@ const handleDuplicate = () => {
 
 <style scoped>
 .video-node-wrapper {
-  padding-right: 54px;
+  padding-left: 36px;
+  padding-right: 96px;
   padding-top: 20px;
   position: relative;
   overflow: visible;

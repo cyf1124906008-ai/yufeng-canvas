@@ -1,6 +1,12 @@
 <template>
   <!-- Video config node wrapper | 视频配置节点包裹层 -->
   <div class="video-config-node-wrapper relative" @mouseenter="showHandleMenu = true" @mouseleave="showHandleMenu = false">
+    <!-- Handles | 外置连接点：wrapper 独立触点区，避免被卡片裁切 -->
+    <span class="node-port-label node-port-label-in">Prompt / 首尾帧</span>
+    <Handle type="target" :position="Position.Left" id="left" class="!bg-[var(--accent-color)]" />
+    <Handle type="source" :position="Position.Right" id="right" class="!bg-[var(--accent-color)]" />
+    <NodeHandleMenu :nodeId="id" nodeType="videoConfig" output-label="视频结果" :visible="showHandleMenu" :operations="[]" />
+
     <!-- Video config node | 视频配置节点 -->
     <div class="video-config-node bg-[var(--bg-secondary)] rounded-xl border min-w-[300px] transition-all duration-200"
       :class="data.selected ? 'border-1 border-blue-500 shadow-lg shadow-blue-500/20' : 'border border-[var(--border-color)]'">
@@ -164,11 +170,6 @@
       </div> -->
       </div>
 
-      <!-- Handles | 连接点 -->
-      <span class="node-port-label node-port-label-in">Prompt / 首尾帧</span>
-      <Handle type="target" :position="Position.Left" id="left" class="!bg-[var(--accent-color)]" />
-      <Handle type="source" :position="Position.Right" id="right" class="!bg-[var(--accent-color)]" />
-      <NodeHandleMenu :nodeId="id" nodeType="videoConfig" output-label="视频结果" :visible="showHandleMenu" :operations="[]" />
     </div>
 
   </div>
@@ -800,7 +801,8 @@ watch(
 .video-config-node-wrapper {
   position: relative;
   padding-top: 20px;
-  padding-right: 54px;
+  padding-left: 36px;
+  padding-right: 96px;
   overflow: visible;
 }
 

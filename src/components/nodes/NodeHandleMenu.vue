@@ -117,9 +117,9 @@ const handleCreate = (item) => {
 <style scoped>
 .handle-menu-anchor {
   position: absolute;
-  right: 6px;
+  right: 8px;
   top: 50%;
-  width: 126px;
+  width: 136px;
   height: 88px;
   transform: translateY(-50%);
   z-index: 100500;
@@ -128,7 +128,7 @@ const handleCreate = (item) => {
 
 .node-output-label {
   position: absolute;
-  right: 34px;
+  right: 38px;
   top: calc(50% - 30px);
   display: inline-flex;
   align-items: center;
@@ -194,7 +194,7 @@ const handleCreate = (item) => {
 
 .handle-menu {
   position: absolute;
-  left: 76px;
+  left: 140px;
   top: 50%;
   display: flex;
   min-width: 148px;

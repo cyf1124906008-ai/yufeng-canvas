@@ -1,6 +1,12 @@
 <template>
   <!-- Image node wrapper for hover area | 图片节点包裹层，扩展悬浮区域 -->
   <div class="image-node-wrapper" @mouseenter="showActions = true; showHandleMenu = true" @mouseleave="showActions = false; showHandleMenu = false">
+    <!-- Handles | 外置连接点：wrapper 独立触点区，避免被卡片裁切 -->
+    <span class="node-port-label node-port-label-in">图片</span>
+    <NodeHandleMenu :nodeId="id" nodeType="image" output-label="参考图" :visible="showHandleMenu" :operations="operations" @select="handleSelect" />
+    <Handle type="target" :position="Position.Left" id="left" class="!bg-[var(--accent-color)]" />
+    <Handle type="source" :position="Position.Right" id="right" class="!bg-[var(--accent-color)]" />
+
     <!-- Image node | 图片节点 -->
     <div
       class="image-node bg-[var(--bg-secondary)] rounded-xl border min-w-[200px] max-w-[280px] relative transition-all duration-200"
@@ -284,11 +290,6 @@
         </div>
       </div>
 
-      <!-- Handles | 连接点 -->
-      <span class="node-port-label node-port-label-in">图片</span>
-      <NodeHandleMenu :nodeId="id" nodeType="image" output-label="参考图" :visible="showHandleMenu" :operations="operations" @select="handleSelect" />
-      <Handle type="target" :position="Position.Left" id="left" class="!bg-[var(--accent-color)]" />
-      <Handle type="source" :position="Position.Right" id="right" class="!bg-[var(--accent-color)]" />
     </div>
   </div>
 
@@ -1038,7 +1039,8 @@ const handleVideoGen = () => {
 <style scoped>
 .image-node-wrapper {
   position: relative;
-  padding-right: 54px;
+  padding-left: 36px;
+  padding-right: 96px;
   padding-top: 20px;
   overflow: visible;
 }

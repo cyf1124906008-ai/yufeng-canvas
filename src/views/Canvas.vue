@@ -3054,12 +3054,12 @@ onUnmounted(() => {
 }
 
 .canvas-flow .vue-flow__handle-left {
-  left: 14px !important;
+  left: 18px !important;
   transform: translate(-50%, -50%) !important;
 }
 
 .canvas-flow .vue-flow__handle-right {
-  right: 14px !important;
+  right: 60px !important;
   transform: translate(50%, -50%) !important;
 }
 
@@ -3086,11 +3086,11 @@ onUnmounted(() => {
   font-weight: 900;
   white-space: nowrap;
   pointer-events: none;
-  z-index: 9;
+  z-index: 100090;
 }
 
 .node-port-label-in {
-  left: -10px;
+  left: 18px;
   top: 50%;
   transform: translate(-100%, -50%);
 }

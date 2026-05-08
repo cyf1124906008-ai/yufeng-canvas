@@ -1,6 +1,13 @@
 <template>
   <!-- LLM Config node wrapper | LLM配置节点包裹层 -->
   <div class="llm-node-wrapper" @mouseenter="showHandleMenu = true" @mouseleave="showHandleMenu = false">
+    <!-- Handles | 外置连接点：wrapper 独立触点区，避免被卡片裁切 -->
+    <span class="node-port-label node-port-label-in">上下文</span>
+    <Handle type="target" :position="Position.Left" id="left" class="!bg-purple-500" />
+    <Handle type="source" :position="Position.Right" id="right" class="!bg-purple-500" />
+    <NodeHandleMenu :nodeId="id" nodeType="llmConfig" dotColor="#a855f7" :visible="showHandleMenu"
+      output-label="文本" :operations="operations" @select="handleSelect" />
+
     <!-- LLM Config node | LLM配置节点 -->
     <div
       class="llm-node bg-[var(--bg-secondary)] rounded-xl border min-w-[320px] max-w-[400px] relative transition-all duration-200"
@@ -121,12 +128,6 @@
         </div>
       </div>
 
-      <!-- Handles | 连接点 -->
-      <span class="node-port-label node-port-label-in">上下文</span>
-      <Handle type="target" :position="Position.Left" id="left" class="!bg-purple-500" />
-      <Handle type="source" :position="Position.Right" id="right" class="!bg-purple-500" />
-      <NodeHandleMenu :nodeId="id" nodeType="llmConfig" dotColor="#a855f7" :visible="showHandleMenu"
-        output-label="文本" :operations="operations" @select="handleSelect" />
     </div>
   </div>
 
@@ -1133,7 +1134,8 @@ const doSplitToTextNodes = (segments) => {
 
 <style scoped>
 .llm-node-wrapper {
-  padding-right: 54px;
+  padding-left: 36px;
+  padding-right: 96px;
   padding-top: 20px;
   position: relative;
   overflow: visible;
