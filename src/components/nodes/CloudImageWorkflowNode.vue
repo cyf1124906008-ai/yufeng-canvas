@@ -50,7 +50,7 @@
         <div>
           <span class="text-[10px] text-[var(--text-secondary)]">尺寸</span>
           <select v-model="localSize" class="w-full mt-0.5 p-1 text-xs bg-[var(--bg-tertiary)] text-[var(--text-primary)] border border-[var(--border-color)] rounded">
-            <option v-for="s in imageSizeOptions" :key="s" :value="s">{{ s }}</option>
+            <option v-for="s in imageSizeOptions" :key="s" :value="s">{{ formatImageSizeLabel(s) }}</option>
           </select>
         </div>
         <div>
@@ -212,6 +212,18 @@ const imageModelOptions = computed(() => modelStore.imageModelOptions)
 const isConfigured = computed(() => !!modelStore.currentImageApiKey)
 const isSelected = computed(() => false)
 const imageSizeOptions = ['1024x1024', '1024x1792', '1792x1024', '512x512', '768x1344', '1344x768', '1920x1080', '1080x1920', '1440x2560', '2560x1440', '2048x2048']
+
+const formatImageSizeLabel = (size = '') => {
+  const match = String(size || '').match(/^(\d+)\s*x\s*(\d+)$/i)
+  if (!match) return size
+  const width = Number(match[1])
+  const height = Number(match[2])
+  const gcd = (a, b) => b ? gcd(b, a % b) : a
+  const divisor = gcd(width, height)
+  const ratio = `${width / divisor}:${height / divisor}`
+  const direction = width === height ? '方图' : width > height ? '横图' : '竖图'
+  return `${direction} ${ratio} · ${size}`
+}
 
 const modelCapabilityConflict = computed(() => {
   if (!localModel.value) return null

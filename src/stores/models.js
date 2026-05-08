@@ -28,6 +28,31 @@ import { useModelConfig } from '@/hooks/useModelConfig'
 const loading = ref(false)
 const error = ref(null)
 
+const parseImageSize = (size = '') => {
+  const match = String(size || '').match(/^(\d+)\s*x\s*(\d+)$/i)
+  if (!match) return null
+  return { width: Number(match[1]), height: Number(match[2]) }
+}
+
+const formatImageSizeLabel = (size = '') => {
+  const parsed = parseImageSize(size)
+  if (!parsed) return String(size || '')
+  const gcd = (a, b) => b ? gcd(b, a % b) : a
+  const divisor = gcd(parsed.width, parsed.height)
+  const ratio = `${parsed.width / divisor}:${parsed.height / divisor}`
+  const direction = parsed.width === parsed.height ? '方图' : parsed.width > parsed.height ? '横图' : '竖图'
+  return `${direction} ${ratio} · ${parsed.width}x${parsed.height}`
+}
+
+const withReadableImageSizeLabel = (option) => {
+  if (!option?.key) return option
+  if (String(option.label || '').includes(option.key)) return option
+  return {
+    ...option,
+    label: `${option.label} · ${option.key}`
+  }
+}
+
 // Get model config hook | 获取模型配置 hook
 const getModelConfigHook = () => {
   try {
@@ -71,7 +96,7 @@ export const getModelSizeOptions = (modelKey, quality = 'standard') => {
   
   // If model has getSizesByQuality function, use it | 如果模型有 getSizesByQuality 函数，使用它
   if (model?.getSizesByQuality) {
-    return model.getSizesByQuality(quality)
+    return model.getSizesByQuality(quality).map(withReadableImageSizeLabel)
   }
   
   if (!model?.sizes) return SEEDREAM_SIZE_OPTIONS
@@ -80,7 +105,7 @@ export const getModelSizeOptions = (modelKey, quality = 'standard') => {
   const sizeOptions = quality === '4k' ? SEEDREAM_4K_SIZE_OPTIONS : SEEDREAM_SIZE_OPTIONS
   return model.sizes.map(size => {
     const option = sizeOptions.find(o => o.key === size)
-    return option || { label: size, key: size }
+    return option ? withReadableImageSizeLabel(option) : { label: formatImageSizeLabel(size), key: size }
   })
 }
 

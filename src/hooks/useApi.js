@@ -115,10 +115,92 @@ const getMinimumPixelsFromError = (error) => {
   return match ? Number(match[1]) : 0
 }
 
-const getImageSizePixels = (size = '') => {
+const SEEDREAM_SAFE_SIZE_OPTIONS = [
+  '3024x1296',
+  '2560x1440',
+  '2496x1664',
+  '2304x1728',
+  '2048x2048',
+  '1728x2304',
+  '1664x2496',
+  '1440x2560',
+  '1296x3024'
+]
+
+const parseImageSize = (size = '') => {
   const match = String(size || '').match(/^(\d+)\s*x\s*(\d+)$/i)
-  if (!match) return 0
-  return Number(match[1]) * Number(match[2])
+  if (!match) return null
+  return {
+    width: Number(match[1]),
+    height: Number(match[2])
+  }
+}
+
+const getImageSizePixels = (size = '') => {
+  const parsed = parseImageSize(size)
+  if (!parsed) return 0
+  return parsed.width * parsed.height
+}
+
+const getImageAspect = (size = '') => {
+  const parsed = parseImageSize(size)
+  if (!parsed || !parsed.height) return null
+  return parsed.width / parsed.height
+}
+
+const getImageOrientation = (size = '') => {
+  const aspect = getImageAspect(size)
+  if (!aspect) return 'unknown'
+  if (Math.abs(aspect - 1) < 0.01) return 'square'
+  return aspect > 1 ? 'landscape' : 'portrait'
+}
+
+const getAspectRatioLabel = (size = '') => {
+  const parsed = parseImageSize(size)
+  if (!parsed) return ''
+  const gcd = (a, b) => b ? gcd(b, a % b) : a
+  const divisor = gcd(parsed.width, parsed.height)
+  return `${parsed.width / divisor}:${parsed.height / divisor}`
+}
+
+const sortImageSizesByAspect = (sizes = [], requestedSize = '') => {
+  const requestedAspect = getImageAspect(requestedSize)
+  const requestedOrientation = getImageOrientation(requestedSize)
+  const uniqueSizes = [...new Set(sizes.filter(Boolean))]
+
+  if (!requestedAspect) return uniqueSizes
+
+  return uniqueSizes.sort((a, b) => {
+    const aspectA = getImageAspect(a)
+    const aspectB = getImageAspect(b)
+    const orientationA = getImageOrientation(a)
+    const orientationB = getImageOrientation(b)
+    const sameOrientationA = orientationA === requestedOrientation ? 0 : 1
+    const sameOrientationB = orientationB === requestedOrientation ? 0 : 1
+    if (sameOrientationA !== sameOrientationB) return sameOrientationA - sameOrientationB
+
+    const aspectDeltaA = aspectA ? Math.abs(Math.log(aspectA / requestedAspect)) : Number.MAX_SAFE_INTEGER
+    const aspectDeltaB = aspectB ? Math.abs(Math.log(aspectB / requestedAspect)) : Number.MAX_SAFE_INTEGER
+    if (aspectDeltaA !== aspectDeltaB) return aspectDeltaA - aspectDeltaB
+
+    return getImageSizePixels(b) - getImageSizePixels(a)
+  })
+}
+
+const pickClosestImageSize = (sizes = [], requestedSize = '', predicate = () => true) => {
+  return sortImageSizesByAspect(sizes.filter(predicate), requestedSize)[0] || ''
+}
+
+const withImageAspectPromptHint = (prompt = '', size = '') => {
+  const orientation = getImageOrientation(size)
+  if (!size || orientation === 'square' || orientation === 'unknown') return prompt
+
+  const ratioLabel = getAspectRatioLabel(size)
+  const hint = `画幅比例要求：${ratioLabel}（${size}）。请严格按这个横竖比例构图，不要生成 1:1 方图。`
+  if (String(prompt || '').includes(size) || String(prompt || '').includes(ratioLabel)) {
+    return prompt
+  }
+  return `${prompt || ''}\n\n${hint}`.trim()
 }
 
 const isGptImageFamily = (model = '') =>
@@ -139,39 +221,55 @@ const getSafeImageSize = ({ requestedSize, modelKey, imageModel, modelConfig }) 
     const minPixels = 3686400
     const isValidSeedreamSize = (size) => getImageSizePixels(size) >= minPixels
 
+    const seedreamSizes = [
+      ...availableSizes,
+      imageModel?.defaultParams?.size,
+      modelConfig?.defaultParams?.size,
+      ...SEEDREAM_SAFE_SIZE_OPTIONS
+    ].filter(Boolean)
+
     if (requestedSize && isValidSeedreamSize(requestedSize)) {
       return requestedSize
+    }
+
+    const closestRequestedSize = pickClosestImageSize(seedreamSizes, requestedSize, isValidSeedreamSize)
+    if (closestRequestedSize) {
+      return closestRequestedSize
     }
 
     if (defaultSize && isValidSeedreamSize(defaultSize)) {
       return defaultSize
     }
 
-    return availableSizes.find(isValidSeedreamSize) || '2048x2048'
+    return seedreamSizes.find(isValidSeedreamSize) || '2048x2048'
   }
 
   if (isGptImageFamily(modelKey) && availableSizes.length > 0) {
-    return availableSizes.includes(requestedSize)
-      ? requestedSize
-      : defaultSize || availableSizes[0] || '1024x1024'
+    if (availableSizes.includes(requestedSize)) return requestedSize
+    return pickClosestImageSize(availableSizes, requestedSize)
+      || defaultSize
+      || availableSizes[0]
+      || '1024x1024'
   }
 
   return requestedSize || defaultSize || '1024x1024'
 }
 
-const getImageSizeCandidates = ({ modelKey, imageModel, modelConfig, minPixels = 0 }) => {
+const getImageSizeCandidates = ({ modelKey, imageModel, modelConfig, minPixels = 0, requestedSize = '' }) => {
   const candidates = [
     ...(Array.isArray(imageModel?.sizes) ? imageModel.sizes : []),
     ...(Array.isArray(modelConfig?.sizes) ? modelConfig.sizes : []),
     imageModel?.defaultParams?.size,
     modelConfig?.defaultParams?.size,
-    ...(isSeedreamFamily(modelKey) ? ['2048x2048', '2560x1440', '1440x2560'] : []),
+    ...(isSeedreamFamily(modelKey) ? SEEDREAM_SAFE_SIZE_OPTIONS : []),
     ...(isGptImageFamily(modelKey) ? ['1024x1024', '1536x1024', '1024x1536'] : []),
     '1024x1024'
   ].filter(Boolean)
 
-  return [...new Set(candidates)]
-    .filter((size) => !minPixels || getImageSizePixels(size) >= minPixels)
+  return sortImageSizesByAspect(
+    [...new Set(candidates)].filter((size) => !minPixels || getImageSizePixels(size) >= minPixels),
+    requestedSize
+  )
 }
 
 const shouldSendImageQuality = ({ quality, modelKey, imageModel, modelConfig }) => {
@@ -197,7 +295,7 @@ const normalizeImageGenerationParams = (params, imageModel, modelConfig) => {
 
   const requestData = {
     model: modelKey,
-    prompt: params.prompt,
+    prompt: withImageAspectPromptHint(params.prompt, size),
     size
   }
 
@@ -946,7 +1044,8 @@ export const useImageGeneration = () => {
               modelKey: params.model,
               imageModel,
               modelConfig,
-              minPixels
+              minPixels,
+              requestedSize: params.size || activeRequestData.size
             }).filter((size) => size !== activeRequestData.size)
 
             for (const size of sizeCandidates) {
