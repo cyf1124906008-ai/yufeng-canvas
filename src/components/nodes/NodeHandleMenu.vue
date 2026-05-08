@@ -117,18 +117,18 @@ const handleCreate = (item) => {
 <style scoped>
 .handle-menu-anchor {
   position: absolute;
-  left: calc(100% - 8px);
+  left: 100%;
   top: 50%;
-  width: 150px;
+  width: 120px;
   height: 88px;
   transform: translateY(-50%);
-  z-index: 100000;
+  z-index: 100500;
   pointer-events: none;
 }
 
 .node-output-label {
   position: absolute;
-  left: 26px;
+  left: 42px;
   top: calc(50% - 30px);
   display: inline-flex;
   align-items: center;
@@ -143,7 +143,7 @@ const handleCreate = (item) => {
   font-weight: 900;
   white-space: nowrap;
   pointer-events: none;
-  z-index: 100000;
+  z-index: 100510;
 }
 
 :global(.dark) .node-output-label {
@@ -154,7 +154,7 @@ const handleCreate = (item) => {
 
 .handle-add-button {
   position: absolute;
-  left: 20px;
+  left: 18px;
   top: 50%;
   width: 30px;
   height: 30px;
@@ -174,7 +174,7 @@ const handleCreate = (item) => {
   cursor: pointer;
   pointer-events: auto;
   transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
-  z-index: 100000;
+  z-index: 100520;
 }
 
 .handle-add-button:hover,
@@ -194,7 +194,7 @@ const handleCreate = (item) => {
 
 .handle-menu {
   position: absolute;
-  left: 62px;
+  left: 56px;
   top: 50%;
   display: flex;
   min-width: 148px;

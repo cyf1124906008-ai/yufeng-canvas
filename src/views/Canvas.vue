@@ -3047,7 +3047,7 @@ onUnmounted(() => {
     0 0 22px rgba(20, 184, 166, 0.78),
     0 10px 18px rgba(15, 23, 42, 0.18);
   opacity: 1 !important;
-  z-index: 100000 !important;
+  z-index: 100100 !important;
   pointer-events: auto !important;
   cursor: crosshair;
   border-radius: 999px;
@@ -3130,7 +3130,7 @@ onUnmounted(() => {
 
 .canvas-flow .vue-flow__node.selected,
 .canvas-flow .vue-flow__node:hover {
-  z-index: 200000 !important;
+  z-index: 300000 !important;
 }
 
 .canvas-flow .vue-flow__edges {
