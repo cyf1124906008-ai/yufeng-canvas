@@ -1,6 +1,5 @@
 <template>
   <!-- Workflow panel | 工作流浮动面板 -->
-  <Transition name="panel-slide">
     <div v-if="visible" class="workflow-panel" data-tour="workflow-panel-open" v-click-outside="handleClickOutside">
       <div class="panel-atmosphere" aria-hidden="true"></div>
       <!-- Header | 头部 -->
@@ -107,7 +106,6 @@
         </div>
       </div>
     </div>
-  </Transition>
 </template>
 
 <script setup>
@@ -510,7 +508,7 @@ const vClickOutside = {
     radial-gradient(circle at 12% 0%, rgba(85, 245, 182, 0.22), transparent 30%),
     radial-gradient(circle at 92% 16%, rgba(24, 183, 255, 0.2), transparent 34%),
     linear-gradient(135deg, rgba(255, 255, 255, 0.86), rgba(241, 245, 249, 0.68));
-  backdrop-filter: blur(32px) saturate(1.35);
+  backdrop-filter: none;
   border-radius: 34px;
   border: 1px solid rgba(255, 255, 255, 0.58);
   box-shadow: 0 36px 120px rgba(15, 23, 42, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.74);
@@ -697,7 +695,7 @@ const vClickOutside = {
     radial-gradient(circle at 50% 24%, rgba(85, 245, 182, 0.22), transparent 36%),
     linear-gradient(135deg, rgba(255, 255, 255, 0.84), rgba(236, 253, 245, 0.76));
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.58), 0 28px 80px rgba(4, 120, 87, 0.2);
-  backdrop-filter: blur(22px) saturate(1.35);
+  backdrop-filter: none;
   text-align: center;
 }
 
@@ -756,7 +754,7 @@ const vClickOutside = {
   font-size: 12px;
   font-weight: 800;
   box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
-  backdrop-filter: blur(16px);
+  backdrop-filter: none;
   transition: all 0.2s ease;
 }
 
@@ -799,7 +797,7 @@ const vClickOutside = {
   overflow: hidden;
   cursor: pointer;
   box-shadow: 0 20px 48px rgba(15, 23, 42, 0.1);
-  backdrop-filter: blur(18px);
+  backdrop-filter: none;
   transition: transform 0.24s ease, box-shadow 0.24s ease, border-color 0.24s ease;
 }
 
@@ -865,7 +863,7 @@ const vClickOutside = {
   background: rgba(5, 19, 27, 0.76);
   color: #EFFFF8;
   font-size: 11px;
-  backdrop-filter: blur(8px);
+  backdrop-filter: none;
 }
 
 .card-body {
@@ -951,19 +949,6 @@ const vClickOutside = {
   .workflow-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-}
-
-/* Transition | 过渡动画 */
-.panel-slide-enter-active,
-.panel-slide-leave-active {
-  transition: opacity 0.25s ease, transform 0.25s ease, filter 0.25s ease;
-}
-
-.panel-slide-enter-from,
-.panel-slide-leave-to {
-  opacity: 0;
-  filter: blur(12px);
-  transform: translate(-50%, -46%) scale(0.96);
 }
 
 /* Scrollbar | 滚动条 */

@@ -9,10 +9,6 @@
     @scroll="handleHomeScroll"
   >
     <div class="liquid-stage" aria-hidden="true">
-      <canvas ref="particleCanvas" class="particle-field"></canvas>
-      <div class="liquid-orb orb-a"></div>
-      <div class="liquid-orb orb-b"></div>
-      <div class="liquid-orb orb-c"></div>
       <div class="y-signal">
         <span></span>
         <span></span>
@@ -1119,13 +1115,6 @@ const heroTypeCycle = ref(0)
 const performanceLite = ref(false)
 const pointer = ref({ x: 0.5, y: 0.5 })
 const scrollProgress = ref(0)
-const particleCanvas = ref(null)
-const particleMouse = { x: -9999, y: -9999, active: false }
-let particles = []
-let particleFrame = null
-let particleCleanup = null
-let particleStartedAt = 0
-let lastParticleDraw = 0
 let pointerFrame = null
 let pendingPointer = null
 let scrollFrame = null
@@ -1234,8 +1223,6 @@ const stageStyle = computed(() => {
     return {
       '--mx': '50%',
       '--my': '50%',
-      '--parallax-x': '0px',
-      '--parallax-y': '0px',
       '--tilt-x': '0deg',
       '--tilt-y': '0deg',
       '--scroll-progress': '0',
@@ -1257,8 +1244,6 @@ const stageStyle = computed(() => {
   return {
     '--mx': `${(x * 100).toFixed(2)}%`,
     '--my': `${(y * 100).toFixed(2)}%`,
-    '--parallax-x': `${(dx * 26).toFixed(2)}px`,
-    '--parallax-y': `${(dy * 22).toFixed(2)}px`,
     '--tilt-x': '0deg',
     '--tilt-y': '0deg',
     '--scroll-progress': scroll.toFixed(3),
@@ -1441,9 +1426,6 @@ const handlePointerMove = (event) => {
     const y = Math.min(1, Math.max(0, (clientY - pendingRect.top) / pendingRect.height))
 
     pointer.value = { x, y }
-    particleMouse.x = x * window.innerWidth
-    particleMouse.y = y * window.innerHeight
-    particleMouse.active = true
     pendingPointer = null
   })
 }
@@ -1466,156 +1448,6 @@ const resetPointerField = () => {
   }
   pendingPointer = null
   pointer.value = { x: 0.5, y: 0.5 }
-  particleMouse.active = false
-  particleMouse.x = -9999
-  particleMouse.y = -9999
-}
-
-const initParticleField = () => {
-  if (performanceLite.value || shouldReduceHeroMotion()) return
-
-  const canvas = particleCanvas.value
-  if (!canvas) return
-
-  const ctx = canvas.getContext('2d')
-  if (!ctx) return
-
-  const createParticles = () => {
-    const ratio = Math.min(window.devicePixelRatio || 1, 1.5)
-    const width = window.innerWidth
-    const height = window.innerHeight
-    canvas.width = Math.floor(width * ratio)
-    canvas.height = Math.floor(height * ratio)
-    canvas.style.width = `${width}px`
-    canvas.style.height = `${height}px`
-    ctx.setTransform(ratio, 0, 0, ratio, 0, 0)
-
-    const density = Math.min(1600, Math.max(520, Math.floor((width * height) / 1350)))
-    particles = Array.from({ length: density }, () => {
-      const x = Math.random() * width
-      const y = Math.random() * height
-      return {
-        x,
-        y,
-        px: x,
-        py: y,
-        bx: x,
-        by: y,
-        vx: 0,
-        vy: 0,
-        size: Math.random() * 0.72 + 0.34,
-        alpha: Math.random() * 0.5 + 0.42,
-        hue: Math.random(),
-        phase: Math.random() * Math.PI * 2,
-        drift: Math.random() * 18 + 8,
-        speed: Math.random() * 0.45 + 0.28
-      }
-    })
-  }
-
-  const draw = (now = performance.now()) => {
-    particleFrame = window.requestAnimationFrame(draw)
-
-    if (document.hidden) return
-
-    const frameInterval = 1000 / 30
-    if (now - lastParticleDraw < frameInterval) return
-    lastParticleDraw = now
-
-    const width = window.innerWidth
-    const height = window.innerHeight
-    ctx.clearRect(0, 0, width, height)
-    const t = (now - particleStartedAt) / 1000
-    const isDark = document.documentElement.classList.contains('dark')
-      || document.body.classList.contains('dark')
-
-    for (const dot of particles) {
-      dot.px = dot.x
-      dot.py = dot.y
-
-      const flowX = dot.bx
-        + Math.sin(t * dot.speed + dot.phase + dot.by * 0.004) * dot.drift
-        + Math.cos(t * 0.22 + dot.phase * 0.6) * 6
-      const flowY = dot.by
-        + Math.cos(t * dot.speed * 0.8 + dot.phase + dot.bx * 0.003) * dot.drift
-        + Math.sin(t * 0.18 + dot.phase * 0.7) * 5
-
-      dot.vx += Math.sin(dot.y * 0.01 + t * 0.85 + dot.phase) * 0.018
-      dot.vy += Math.cos(dot.x * 0.01 + t * 0.72 + dot.phase) * 0.018
-
-      if (particleMouse.active) {
-        const dx = dot.x - particleMouse.x
-        const dy = dot.y - particleMouse.y
-        const distSq = dx * dx + dy * dy
-        const radius = 180
-        if (distSq < radius * radius) {
-          const dist = Math.max(Math.sqrt(distSq), 1)
-          const force = (1 - dist / radius) ** 2
-          dot.vx += (dx / dist) * force * 4.8
-          dot.vy += (dy / dist) * force * 4.8
-        }
-      }
-
-      dot.vx += (flowX - dot.x) * 0.008
-      dot.vy += (flowY - dot.y) * 0.008
-      dot.vx *= 0.91
-      dot.vy *= 0.91
-      dot.x += dot.vx
-      dot.y += dot.vy
-
-      const glow = particleMouse.active
-        ? Math.max(0, 1 - Math.hypot(dot.x - particleMouse.x, dot.y - particleMouse.y) / 230)
-        : 0
-      const alpha = Math.min(0.98, dot.alpha + glow * 0.56)
-
-      if (Math.abs(dot.x - dot.px) + Math.abs(dot.y - dot.py) > 0.12) {
-        ctx.beginPath()
-        ctx.strokeStyle = isDark
-          ? dot.hue > 0.72
-            ? `rgba(96, 255, 211, ${alpha * 0.2})`
-            : dot.hue > 0.42
-              ? `rgba(126, 205, 255, ${alpha * 0.17})`
-              : `rgba(255, 255, 255, ${alpha * 0.13})`
-          : dot.hue > 0.66
-            ? `rgba(0, 168, 153, ${alpha * 0.3})`
-            : dot.hue > 0.34
-              ? `rgba(0, 132, 255, ${alpha * 0.26})`
-              : `rgba(32, 75, 132, ${alpha * 0.18})`
-        ctx.lineWidth = 0.6 + glow * 0.45
-        ctx.moveTo(dot.px, dot.py)
-        ctx.lineTo(dot.x, dot.y)
-        ctx.stroke()
-      }
-
-      ctx.beginPath()
-      ctx.fillStyle = isDark
-        ? dot.hue > 0.72
-          ? `rgba(96, 255, 211, ${alpha})`
-          : dot.hue > 0.42
-            ? `rgba(126, 205, 255, ${alpha})`
-            : `rgba(255, 255, 255, ${alpha})`
-        : dot.hue > 0.66
-          ? `rgba(0, 168, 153, ${alpha * 0.86})`
-          : dot.hue > 0.34
-            ? `rgba(0, 132, 255, ${alpha * 0.78})`
-            : `rgba(32, 75, 132, ${alpha * 0.62})`
-      ctx.arc(dot.x, dot.y, dot.size + glow * 0.65, 0, Math.PI * 2)
-      ctx.fill()
-    }
-
-  }
-
-  createParticles()
-  particleStartedAt = performance.now()
-  draw()
-  window.addEventListener('resize', createParticles)
-  particleCleanup = () => {
-    window.removeEventListener('resize', createParticles)
-    if (particleFrame) {
-      window.cancelAnimationFrame(particleFrame)
-      particleFrame = null
-    }
-  }
 }
 
 const shouldReduceHeroMotion = () => {
@@ -2659,7 +2491,6 @@ onMounted(() => {
   initProjectsStore()
   loadChatHistory()
   refreshSuggestions()
-  initParticleField()
   if (!localStorage.getItem(onboardingStorageKey)) {
     window.setTimeout(() => {
       showOnboarding.value = true
@@ -2680,7 +2511,6 @@ onUnmounted(() => {
     scrollFrame = null
   }
   resetPointerField()
-  particleCleanup?.()
 })
 </script>
 
@@ -2716,10 +2546,6 @@ onUnmounted(() => {
     linear-gradient(135deg, #030a12 0%, #061a1b 48%, #07111f 100%);
 }
 
-.home-shell.is-perf-lite .particle-field {
-  display: none;
-}
-
 .home-shell.is-perf-lite .liquid-stage::before {
   opacity: 0.24;
   filter: blur(30px) saturate(1.12);
@@ -2728,13 +2554,6 @@ onUnmounted(() => {
 
 .home-shell.is-perf-lite .liquid-stage::after {
   opacity: 0.18;
-}
-
-.home-shell.is-perf-lite .liquid-orb {
-  opacity: 0.22;
-  filter: blur(18px);
-  animation-duration: 28s;
-  transform: none;
 }
 
 .home-shell.is-perf-lite .mesh-grid {
@@ -2789,9 +2608,6 @@ onUnmounted(() => {
     radial-gradient(circle at 20% 28%, rgba(32, 255, 184, 0.55), transparent 18%),
     radial-gradient(circle at 68% 18%, rgba(0, 170, 255, 0.48), transparent 16%),
     radial-gradient(circle at 78% 78%, rgba(252, 211, 77, 0.26), transparent 18%);
-  filter: blur(42px) saturate(1.3);
-  animation: liquid-drift 18s ease-in-out infinite alternate;
-  transform: translate3d(calc(var(--parallax-x) * -0.35), calc(var(--parallax-y) * -0.35), 0);
   transition: transform 0.35s ease-out, background-position 0.35s ease-out;
 }
 
@@ -2814,60 +2630,6 @@ onUnmounted(() => {
     linear-gradient(115deg, transparent 0 42%, rgba(34, 197, 94, 0.12) 48%, transparent 58%);
 }
 
-.particle-field {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  opacity: 1;
-  mask-image:
-    radial-gradient(ellipse at 50% 32%, #000 0 48%, transparent 84%),
-    radial-gradient(ellipse at 52% 84%, #000 0 36%, transparent 68%);
-  mix-blend-mode: multiply;
-}
-
-.dark .particle-field {
-  mix-blend-mode: screen;
-}
-
-.liquid-orb {
-  position: absolute;
-  border-radius: 999px;
-  filter: blur(22px);
-  mix-blend-mode: screen;
-  opacity: 0.5;
-}
-
-.orb-a {
-  width: 420px;
-  height: 420px;
-  left: -90px;
-  top: 120px;
-  background: rgba(38, 255, 188, 0.38);
-  animation: float-orb-a 13s ease-in-out infinite;
-  transform: translate3d(calc(var(--parallax-x) * -0.4), calc(var(--parallax-y) * -0.35), 0);
-}
-
-.orb-b {
-  width: 540px;
-  height: 540px;
-  right: -140px;
-  top: 80px;
-  background: rgba(0, 150, 255, 0.25);
-  animation: float-orb-b 16s ease-in-out infinite;
-  transform: translate3d(calc(var(--parallax-x) * 0.28), calc(var(--parallax-y) * 0.2), 0);
-}
-
-.orb-c {
-  width: 360px;
-  height: 360px;
-  right: 18%;
-  bottom: -110px;
-  background: rgba(34, 197, 94, 0.24);
-  animation: float-orb-c 18s ease-in-out infinite;
-  transform: translate3d(calc(var(--parallax-x) * -0.2), calc(var(--parallax-y) * 0.25), 0);
-}
-
 .y-signal {
   position: absolute;
   right: max(3vw, 34px);
@@ -2875,7 +2637,7 @@ onUnmounted(() => {
   width: min(42vw, 560px);
   aspect-ratio: 1;
   opacity: 0.46;
-  transform: translate3d(calc(var(--parallax-x) * 0.34), calc(var(--parallax-y) * 0.2), 0) rotate(-10deg);
+  transform: rotate(-10deg);
   transition: transform 0.3s ease-out;
 }
 
@@ -2889,7 +2651,6 @@ onUnmounted(() => {
   background: linear-gradient(90deg, transparent, rgba(91, 255, 208, 0.88), rgba(56, 189, 248, 0.65), transparent);
   box-shadow: 0 0 34px rgba(45, 212, 191, 0.65);
   transform-origin: 0 50%;
-  animation: signal-pulse 3.6s ease-in-out infinite;
 }
 
 .y-signal span:nth-child(1) {
@@ -2915,7 +2676,7 @@ onUnmounted(() => {
     linear-gradient(rgba(14, 165, 233, 0.16) 1px, transparent 1px),
     linear-gradient(90deg, rgba(20, 184, 166, 0.16) 1px, transparent 1px);
   background-size: 58px 58px;
-  transform: perspective(700px) rotateX(62deg) translate3d(calc(var(--parallax-x) * -0.22), calc(120px + var(--scroll-mesh-y)), 0);
+  transform: perspective(700px) rotateX(62deg) translate3d(0, calc(120px + var(--scroll-mesh-y)), 0);
   transform-origin: bottom;
 }
 
@@ -3455,19 +3216,6 @@ onUnmounted(() => {
   }
 }
 
-@keyframes welcomeContinuePulse {
-  0%,
-  100% {
-    opacity: 0.68;
-    transform: translateY(0);
-  }
-
-  50% {
-    opacity: 1;
-    transform: translateY(-1px);
-  }
-}
-
 .hero-line {
   min-height: clamp(228px, 26vh, 260px);
 }
@@ -3520,7 +3268,6 @@ onUnmounted(() => {
   font-size: 13px;
   font-weight: 850;
   letter-spacing: 0.08em;
-  animation: welcomeContinuePulse 1.8s ease-in-out infinite;
 }
 
 .dark .welcome-continue {
@@ -3646,7 +3393,6 @@ onUnmounted(() => {
   background: conic-gradient(from 120deg, rgba(0, 214, 255, 0.22), rgba(34, 255, 181, 0.26), rgba(2, 6, 23, 0), rgba(0, 214, 255, 0.22));
   filter: blur(28px);
   opacity: 0.8;
-  animation: rotate-glow 11s linear infinite;
 }
 
 .hero-prism {
@@ -3675,7 +3421,6 @@ onUnmounted(() => {
   letter-spacing: -0.12em;
   box-shadow: 0 28px 72px rgba(0, 0, 0, 0.22), 0 0 50px rgba(45, 212, 191, 0.22);
   transform: rotate(-12deg);
-  animation: prism-float 5.2s ease-in-out infinite;
 }
 
 .prism-chip {
@@ -3727,8 +3472,6 @@ onUnmounted(() => {
     0 34px 86px rgba(15, 23, 42, 0.16),
     inset 0 1px 0 rgba(255, 255, 255, 0.8),
     inset 0 0 0 1px rgba(255, 255, 255, 0.18);
-  backdrop-filter: blur(26px) saturate(1.35);
-  -webkit-backdrop-filter: blur(26px) saturate(1.35);
 }
 
 .dark .mode-card {
@@ -3889,7 +3632,6 @@ onUnmounted(() => {
   -webkit-mask-composite: xor;
   mask-composite: exclude;
   filter: drop-shadow(0 0 9px rgba(235, 251, 255, 0.92)) drop-shadow(0 0 20px rgba(76, 232, 255, 0.45));
-  animation: flow-border-spin 3.6s linear infinite;
 }
 
 .chat-home,
@@ -4530,19 +4272,12 @@ onUnmounted(() => {
 }
 
 .selection-flow.is-selected::after {
-  animation: flow-border-spin 3.6s linear infinite;
 }
 
 @property --flow-angle {
   syntax: "<angle>";
   inherits: false;
   initial-value: 0deg;
-}
-
-@keyframes flow-border-spin {
-  to {
-    --flow-angle: 360deg;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -5491,7 +5226,6 @@ onUnmounted(() => {
     radial-gradient(circle at 15% 0%, rgba(34, 255, 181, 0.12), transparent 34%);
   border: 1px solid rgba(255, 255, 255, 0.42);
   box-shadow: 0 22px 58px rgba(15, 23, 42, 0.12);
-  backdrop-filter: blur(18px);
   transition: transform 0.24s ease, box-shadow 0.24s ease, border-color 0.24s ease;
 }
 
@@ -5642,8 +5376,6 @@ onUnmounted(() => {
   background:
     linear-gradient(135deg, rgba(255, 255, 255, 0.46), rgba(240, 253, 250, 0.18));
   box-shadow: 0 18px 54px rgba(15, 23, 42, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.42);
-  backdrop-filter: blur(16px) saturate(1.16);
-  -webkit-backdrop-filter: blur(16px) saturate(1.16);
   opacity: 0.72;
   transform: translateY(-50%);
   transition: opacity 0.18s ease, background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
@@ -6188,59 +5920,6 @@ onUnmounted(() => {
 
   .hero-title-line {
     font-size: clamp(34px, 10vw, 48px);
-  }
-}
-
-@keyframes liquid-drift {
-  0% {
-    transform: translate3d(-2%, -1%, 0) rotate(0deg) scale(1);
-  }
-  100% {
-    transform: translate3d(2%, 3%, 0) rotate(10deg) scale(1.08);
-  }
-}
-
-@keyframes float-orb-a {
-  50% {
-    transform: translate3d(70px, -38px, 0) scale(1.08);
-  }
-}
-
-@keyframes float-orb-b {
-  50% {
-    transform: translate3d(-90px, 44px, 0) scale(0.95);
-  }
-}
-
-@keyframes float-orb-c {
-  50% {
-    transform: translate3d(-42px, -50px, 0) scale(1.12);
-  }
-}
-
-@keyframes signal-pulse {
-  0%, 100% {
-    opacity: 0.42;
-    filter: blur(0);
-  }
-  50% {
-    opacity: 1;
-    filter: blur(1px);
-  }
-}
-
-@keyframes rotate-glow {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@keyframes prism-float {
-  0%, 100% {
-    transform: rotate(-12deg) translateY(0);
-  }
-  50% {
-    transform: rotate(-7deg) translateY(-10px);
   }
 }
 </style>

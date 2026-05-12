@@ -55,9 +55,7 @@ export const showBubble = (level, message, { duration } = {}) => {
   container.appendChild(iconSpan)
   container.appendChild(msgSpan)
 
-  requestAnimationFrame(() => {
-    container.classList.add('bubble-visible')
-  })
+  container.classList.add('bubble-visible')
 
   bubbleTimeout = setTimeout(() => {
     container.classList.remove('bubble-visible')

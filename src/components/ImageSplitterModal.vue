@@ -1,7 +1,7 @@
 <template>
   <Transition name="modal-fade">
     <div v-if="visible" class="fixed inset-0 z-[9999] flex items-center justify-center" @click.self="visible = false">
-      <div class="absolute inset-0 bg-black/60 backdrop-blur-sm"></div>
+      <div class="absolute inset-0 bg-black/60"></div>
       <div class="relative bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-2xl shadow-2xl w-[560px] max-h-[80vh] overflow-hidden">
         <!-- Header -->
         <div class="flex items-center justify-between px-5 py-4 border-b border-[var(--border-color)]">

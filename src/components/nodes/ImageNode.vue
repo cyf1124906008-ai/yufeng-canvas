@@ -114,7 +114,7 @@
           class="aspect-square rounded-xl bg-gradient-to-br from-cyan-400 via-blue-300 to-amber-200 flex flex-col items-center justify-center gap-3 relative overflow-hidden">
           <!-- Animated gradient overlay | 动画渐变遮罩 -->
           <div
-            class="absolute inset-0 bg-gradient-to-br from-cyan-500/20 via-blue-400/20 to-amber-300/20 animate-pulse">
+            class="absolute inset-0 bg-gradient-to-br from-cyan-500/20 via-blue-400/20 to-amber-300/20">
           </div>
 
           <!-- Loading image | 加载图片 -->
@@ -219,7 +219,7 @@
         <!-- URL Loading state | URL 加载状态 -->
         <div v-else-if="urlLoading"
           class="aspect-square rounded-xl bg-gradient-to-br from-cyan-400 via-blue-300 to-amber-200 flex flex-col items-center justify-center gap-3 relative overflow-hidden">
-          <div class="absolute inset-0 bg-gradient-to-br from-cyan-500/20 via-blue-400/20 to-amber-300/20 animate-pulse"></div>
+          <div class="absolute inset-0 bg-gradient-to-br from-cyan-500/20 via-blue-400/20 to-amber-300/20"></div>
           <div class="relative z-10">
             <img src="../../assets/loading.webp" alt="Loading" class="w-14 h-12" />
           </div>

@@ -1,6 +1,5 @@
 <template>
   <Teleport to="body">
-    <Transition name="tour-fade">
       <div v-if="show" class="guided-tour-layer" @keydown.esc="skipTour">
         <div class="tour-dim"></div>
         <div v-if="targetRect" class="tour-spotlight" :style="spotlightStyle">
@@ -40,7 +39,6 @@
           </div>
         </section>
       </div>
-    </Transition>
   </Teleport>
 </template>
 
@@ -300,7 +298,7 @@ onBeforeUnmount(() => {
   stroke-width: 3.2;
   stroke-linecap: round;
   stroke-dasharray: 18 82;
-  animation: tour-border-flow 2.8s linear infinite;
+  stroke-dashoffset: 0;
 }
 
 .tour-card {
@@ -317,7 +315,6 @@ onBeforeUnmount(() => {
   box-shadow:
     0 24px 70px rgba(0, 0, 0, 0.42),
     inset 0 1px 0 rgba(255, 255, 255, 0.2);
-  backdrop-filter: blur(12px) saturate(1.25);
   transition: all 0.28s ease;
 }
 
@@ -459,16 +456,6 @@ onBeforeUnmount(() => {
   transform: translateY(-1px);
 }
 
-.tour-fade-enter-active,
-.tour-fade-leave-active {
-  transition: opacity 0.22s ease;
-}
-
-.tour-fade-enter-from,
-.tour-fade-leave-to {
-  opacity: 0;
-}
-
 @media (prefers-color-scheme: light) {
   .tour-dim {
     background:
@@ -500,9 +487,4 @@ onBeforeUnmount(() => {
   }
 }
 
-@keyframes tour-border-flow {
-  to {
-    stroke-dashoffset: -100;
-  }
-}
 </style>

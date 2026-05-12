@@ -202,7 +202,6 @@ onMounted(() => {
   box-shadow:
     0 44px 140px rgba(0, 0, 0, 0.5),
     inset 0 1px 0 rgba(255, 255, 255, 0.14);
-  backdrop-filter: blur(30px) saturate(1.25);
 }
 
 .invite-gate-modal .n-card__content {
@@ -291,7 +290,6 @@ onMounted(() => {
   box-shadow:
     0 40px 130px rgba(0, 0, 0, 0.46),
     inset 0 1px 0 rgba(255, 255, 255, 0.12);
-  backdrop-filter: blur(28px) saturate(1.25);
 }
 
 .support-hint-modal .n-card__content {

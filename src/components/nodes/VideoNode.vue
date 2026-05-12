@@ -58,7 +58,7 @@
         class="aspect-video rounded-lg bg-gradient-to-br from-cyan-400 via-blue-300 to-amber-200 flex flex-col items-center justify-center gap-3 relative overflow-hidden"
       >
         <!-- Animated gradient overlay | 动画渐变遮罩 -->
-        <div class="absolute inset-0 bg-gradient-to-br from-cyan-500/20 via-blue-400/20 to-amber-300/20 animate-pulse"></div>
+        <div class="absolute inset-0 bg-gradient-to-br from-cyan-500/20 via-blue-400/20 to-amber-300/20"></div>
 
         <!-- Loading image | 加载图片 -->
         <div class="relative z-10">

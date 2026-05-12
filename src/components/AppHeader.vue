@@ -20,7 +20,6 @@
           <span v-if="hasPendingUpdate" class="update-dot"></span>
         </button>
 
-        <Transition name="update-panel">
           <div v-if="showUpdateProgress" class="update-progress-card">
             <div class="update-progress-head">
               <span>{{ updateProgressTitle }}</span>
@@ -34,7 +33,6 @@
               <span>{{ updateStatus.updateSource || '更新源' }}</span>
             </div>
           </div>
-        </Transition>
       </div>
 
       <a
@@ -401,7 +399,7 @@ onUnmounted(() => {
   border-radius: inherit;
   pointer-events: none;
   background: linear-gradient(110deg, transparent 0 34%, rgba(255, 255, 255, 0.36) 45%, transparent 58%);
-  animation: updateShine 4.6s ease-in-out infinite;
+  opacity: 0.5;
 }
 
 .update-progress-head,
@@ -458,31 +456,4 @@ onUnmounted(() => {
   font-weight: 700;
 }
 
-.update-panel-enter-active,
-.update-panel-leave-active {
-  transition: opacity 0.22s ease, transform 0.22s ease;
-}
-
-.update-panel-enter-from,
-.update-panel-leave-to {
-  opacity: 0;
-  transform: translateY(-6px) scale(0.98);
-}
-
-@keyframes updateShine {
-  0% {
-    opacity: 0;
-    transform: translateX(-55%);
-  }
-  42% {
-    opacity: 0;
-  }
-  62% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0;
-    transform: translateX(70%);
-  }
-}
 </style>

@@ -122,7 +122,6 @@ button:not(:disabled) {
   box-shadow:
     0 22px 58px rgba(15, 23, 42, 0.14),
     inset 0 1px 0 rgba(255, 255, 255, 0.66) !important;
-  backdrop-filter: blur(22px) saturate(1.28);
 }
 
 .dark .text-node,
@@ -171,7 +170,6 @@ button:not(:disabled) {
 .video-config-node > div:first-child,
 .llm-config-node > div:first-child {
   background: rgba(255, 255, 255, 0.18);
-  backdrop-filter: blur(12px);
 }
 
 .dark .text-node > div:first-child,
@@ -246,8 +244,6 @@ body :is(
   border: 1px solid var(--glass-control-border) !important;
   background: var(--glass-control-bg) !important;
   box-shadow: var(--glass-control-shadow) !important;
-  backdrop-filter: blur(22px) saturate(1.55) brightness(1.05);
-  -webkit-backdrop-filter: blur(22px) saturate(1.55) brightness(1.05);
   color: rgba(15, 23, 42, 0.9) !important;
   text-shadow: 0 1px 0 rgba(255, 255, 255, 0.16);
   transition:
@@ -358,7 +354,6 @@ body :is(
   width: 38%;
   z-index: -1;
   background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.58), transparent);
-  filter: blur(1px);
   transform: skewX(-20deg);
   opacity: 0;
   transition: left 1.25s cubic-bezier(.18, .86, .22, 1), opacity 0.36s ease;
@@ -451,8 +446,6 @@ body :is(.primary-action, .send-button, .canvas-toolbar button:first-child, .n-b
     0 8px 24px rgba(34, 255, 181, 0.18),
     inset 0 1px 0 rgba(255, 255, 255, 0.72),
     inset 0 -18px 34px rgba(5, 150, 105, 0.22) !important;
-  backdrop-filter: blur(24px) saturate(1.7) brightness(1.08);
-  -webkit-backdrop-filter: blur(24px) saturate(1.7) brightness(1.08);
 }
 
 .dark :is(.primary-action, .send-button, .canvas-toolbar button:first-child, .n-button--primary-type) {
@@ -482,8 +475,6 @@ body :is(.suggestion-cloud button, .canvas-suggestions button) {
     radial-gradient(circle at 22% 8%, rgba(255, 255, 255, 0.8), transparent 26%) !important;
   color: rgba(30, 41, 59, 0.86) !important;
   text-shadow: none;
-  backdrop-filter: blur(10px) saturate(1.18);
-  -webkit-backdrop-filter: blur(10px) saturate(1.18);
   box-shadow:
     0 8px 22px rgba(15, 23, 42, 0.08),
     inset 0 1px 0 rgba(255, 255, 255, 0.68),
@@ -540,8 +531,6 @@ body :is(.suggestion-cloud button, .canvas-suggestions button):hover {
   transition: transform 0.38s cubic-bezier(0.22, 1, 0.36, 1),
               opacity 0.38s cubic-bezier(0.22, 1, 0.36, 1);
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.22), 0 0 0 1px rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(16px) saturate(1.3);
-  -webkit-backdrop-filter: blur(16px) saturate(1.3);
 }
 
 .bubble-notification-container.bubble-visible {
@@ -584,8 +573,3 @@ body :is(.suggestion-cloud button, .canvas-suggestions button):hover {
   line-height: 1.4;
 }
 
-/* Node success flash animation */
-@keyframes node-success-flash {
-  0% { border-color: #10b981 !important; box-shadow: 0 0 16px rgba(16, 185, 129, 0.5) !important; }
-  100% { border-color: rgba(255, 255, 255, 0.38) !important; box-shadow: none !important; }
-}

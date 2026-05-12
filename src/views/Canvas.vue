@@ -3659,7 +3659,6 @@ onUnmounted(() => {
   border-radius: 999px;
   background: #22c55e;
   box-shadow: 0 0 0 5px rgba(34, 197, 94, 0.14), 0 0 18px rgba(34, 197, 94, 0.8);
-  animation: live-run-pulse 1.35s ease-in-out infinite;
 }
 
 .canvas-shell.is-perf-lite .live-run-chip,
@@ -4162,17 +4161,6 @@ onUnmounted(() => {
   color: var(--text-secondary);
   line-height: 1.6;
   font-size: 13px;
-}
-
-@keyframes live-run-pulse {
-  0%, 100% {
-    transform: scale(0.9);
-    opacity: 0.78;
-  }
-  50% {
-    transform: scale(1.15);
-    opacity: 1;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
