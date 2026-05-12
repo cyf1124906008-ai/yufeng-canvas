@@ -169,11 +169,9 @@ const handleCreate = (item) => {
     radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.88), transparent 36%),
     linear-gradient(135deg, rgba(20, 184, 166, 0.96), rgba(14, 165, 233, 0.86));
   box-shadow:
-    0 12px 28px rgba(15, 23, 42, 0.24),
-    0 0 24px rgba(45, 212, 191, 0.46);
+    0 12px 28px rgba(15, 23, 42, 0.24);
   cursor: pointer;
   pointer-events: auto;
-  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
   z-index: 100520;
 }
 
@@ -182,8 +180,7 @@ const handleCreate = (item) => {
   border-color: rgba(255, 255, 255, 0.96);
   transform: translateY(-50%) scale(1.08);
   box-shadow:
-    0 14px 32px rgba(15, 23, 42, 0.28),
-    0 0 30px rgba(94, 234, 212, 0.62);
+    0 14px 32px rgba(15, 23, 42, 0.28);
   outline: none;
 }
 
@@ -207,8 +204,7 @@ const handleCreate = (item) => {
     linear-gradient(135deg, rgba(15, 23, 42, 0.92), rgba(8, 47, 73, 0.86)),
     rgba(15, 23, 42, 0.9);
   box-shadow:
-    0 18px 46px rgba(0, 0, 0, 0.36),
-    0 0 28px rgba(45, 212, 191, 0.16);
+    0 18px 46px rgba(0, 0, 0, 0.36);
   white-space: nowrap;
   z-index: 10060;
   pointer-events: auto;
@@ -227,7 +223,6 @@ const handleCreate = (item) => {
   cursor: pointer;
   font-size: 12px;
   text-align: left;
-  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
   user-select: none;
 }
 
@@ -243,11 +238,6 @@ const handleCreate = (item) => {
 
 .menu-label {
   font-weight: 700;
-}
-
-.menu-fade-enter-active,
-.menu-fade-leave-active {
-  transition: opacity 0.15s ease, transform 0.15s ease;
 }
 
 .menu-fade-enter-from,

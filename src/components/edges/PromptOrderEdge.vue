@@ -116,15 +116,14 @@ const handleOrderSelect = (newOrder) => {
   background:
     radial-gradient(circle at 30% 18%, rgba(255, 255, 255, 0.5), transparent 38%),
     linear-gradient(135deg, #5eead4, #10b981);
-  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.32), 0 0 20px rgba(52, 211, 153, 0.38);
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.32);
   font-size: 11px;
   font-weight: 900;
   letter-spacing: 0.02em;
-  transition: transform 0.16s ease, box-shadow 0.16s ease;
 }
 
 .edge-order-badge:hover {
   transform: scale(1.04);
-  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.34), 0 0 26px rgba(52, 211, 153, 0.48);
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.34);
 }
 </style>

@@ -363,7 +363,7 @@ onUnmounted(() => {
   height: 8px;
   border-radius: 999px;
   background: #55f5b6;
-  box-shadow: 0 0 0 3px rgba(85, 245, 182, 0.18);
+  box-shadow: none;
 }
 
 .update-progress-card {
@@ -444,8 +444,7 @@ onUnmounted(() => {
   background:
     linear-gradient(90deg, #55f5b6, #11d8c5 45%, #38bdf8),
     repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.22) 0 8px, transparent 8px 16px);
-  box-shadow: 0 0 22px rgba(85, 245, 182, 0.48);
-  transition: width 0.28s ease;
+  box-shadow: none;
 }
 
 .update-progress-foot {

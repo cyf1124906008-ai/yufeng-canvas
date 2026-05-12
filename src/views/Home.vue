@@ -3,19 +3,7 @@
     ref="homeShellRef"
     class="home-shell min-h-screen h-screen overflow-y-auto text-[var(--text-primary)]"
     :class="{ 'is-perf-lite': performanceLite }"
-    :style="stageStyle"
-    @pointerleave="resetPointerField"
-    @scroll="handleHomeScroll"
   >
-    <div class="liquid-stage" aria-hidden="true">
-      <div class="y-signal">
-        <span></span>
-        <span></span>
-        <span></span>
-      </div>
-      <div class="mesh-grid"></div>
-    </div>
-
     <AppHeader class="home-header">
       <template #left>
         <button class="brand-lockup" title="回到首页顶部" @click="scrollToTop">
@@ -303,7 +291,7 @@
               </div>
 
               <div
-                class="chat-composer selection-flow"
+                class="chat-composer"
                 :class="{ 'is-selected': focusedEntry === 'chat' }"
                 data-tour="chat-composer"
                 @focusin="focusedEntry = 'chat'"
@@ -409,7 +397,7 @@
               </div>
 
               <div
-                class="create-composer selection-flow"
+                class="create-composer"
                 :class="{ 'is-selected': focusedEntry === 'create' }"
                 @focusin="focusedEntry = 'create'"
                 @focusout="handleComposerFocusOut('create', $event)"
@@ -1112,9 +1100,6 @@ const heroTypeIndex = ref(0)
 const heroTypePhase = ref('idle')
 const heroTypeCycle = ref(0)
 const performanceLite = ref(false)
-const pointer = ref({ x: 0.5, y: 0.5 })
-const scrollProgress = ref(0)
-let pendingPointer = null
 let heroTypeTimer = null
 const onboardingStorageKey = 'yufeng-canvas-onboarding-v2'
 const homeTourStorageKey = 'yufeng-canvas-home-tour-v1'
@@ -1213,44 +1198,6 @@ const heroTypeChars = computed(() => Array.from(heroTypeText.value))
 const heroTypewriterAriaLabel = computed(() => {
   const fallback = heroTypeLines[heroTypeIndex.value] || heroTypeLines[0]
   return `和 AI 一起，${heroTypeText.value || fallback}`
-})
-
-const stageStyle = computed(() => {
-  if (performanceLite.value) {
-    return {
-      '--mx': '50%',
-      '--my': '50%',
-      '--tilt-x': '0deg',
-      '--tilt-y': '0deg',
-      '--scroll-progress': '0',
-      '--scroll-bg-y': '0px',
-      '--scroll-hero-y': '0px',
-      '--scroll-panel-y': '0px',
-      '--scroll-mesh-y': '0px',
-      '--scroll-stage-scale': '1',
-      '--scroll-hero-opacity': '1'
-    }
-  }
-
-  const x = pointer.value.x
-  const y = pointer.value.y
-  const dx = (x - 0.5) * 2
-  const dy = (y - 0.5) * 2
-  const scroll = scrollProgress.value
-
-  return {
-    '--mx': `${(x * 100).toFixed(2)}%`,
-    '--my': `${(y * 100).toFixed(2)}%`,
-    '--tilt-x': '0deg',
-    '--tilt-y': '0deg',
-    '--scroll-progress': scroll.toFixed(3),
-    '--scroll-bg-y': `${(-scroll * 72).toFixed(2)}px`,
-    '--scroll-hero-y': `${(-scroll * 52).toFixed(2)}px`,
-    '--scroll-panel-y': `${(-scroll * 24).toFixed(2)}px`,
-    '--scroll-mesh-y': `${(scroll * 92).toFixed(2)}px`,
-    '--scroll-stage-scale': (1 + scroll * 0.035).toFixed(4),
-    '--scroll-hero-opacity': (1 - scroll * 0.36).toFixed(3)
-  }
 })
 
 const enterWorkspace = () => {
@@ -1394,17 +1341,6 @@ const detectPerformanceLite = () => {
   const overloadedViewport = largeScreen && constrainedCpuAndMemory
 
   return Boolean(constrainedCpuAndMemory || constrainedGraphics || overloadedViewport)
-}
-
-const handleHomeScroll = (event) => {
-  const target = event.currentTarget
-  const top = target?.scrollTop || 0
-  scrollProgress.value = Math.min(1, Math.max(0, top / 620))
-}
-
-const resetPointerField = () => {
-  pendingPointer = null
-  pointer.value = { x: 0.5, y: 0.5 }
 }
 
 const shouldReduceHeroMotion = () => {
@@ -2463,7 +2399,6 @@ onUnmounted(() => {
   stopHeroTypewriter()
   document.removeEventListener('visibilitychange', handleHeroTypewriterVisibility)
   window.removeEventListener('keydown', handleWelcomeKeydown)
-  resetPointerField()
 })
 </script>
 
@@ -2472,45 +2407,24 @@ onUnmounted(() => {
   position: relative;
   isolation: isolate;
   overflow-x: hidden;
-  background:
-    radial-gradient(circle at 14% 6%, rgba(36, 240, 181, 0.22), transparent 30%),
-    radial-gradient(circle at 88% 16%, rgba(0, 161, 255, 0.2), transparent 28%),
-    linear-gradient(135deg, #eef8f3 0%, #f9fbff 42%, #eef6ff 100%);
+  background: linear-gradient(135deg, #eef8f3 0%, #f9fbff 42%, #eef6ff 100%);
 }
 
 .dark .home-shell {
-  background:
-    radial-gradient(circle at 14% 8%, rgba(43, 255, 195, 0.18), transparent 30%),
-    radial-gradient(circle at 86% 14%, rgba(0, 163, 255, 0.18), transparent 28%),
-    linear-gradient(135deg, #030a12 0%, #041e1f 42%, #06101d 100%);
+  background: linear-gradient(135deg, #030a12 0%, #041e1f 42%, #06101d 100%);
 }
 
 .home-shell.is-perf-lite {
-  background:
-    radial-gradient(circle at 18% 10%, rgba(36, 240, 181, 0.14), transparent 28%),
-    radial-gradient(circle at 82% 18%, rgba(0, 161, 255, 0.12), transparent 26%),
-    linear-gradient(135deg, #f4fbf8 0%, #f8fbff 48%, #eef6ff 100%);
+  background: linear-gradient(135deg, #f4fbf8 0%, #f8fbff 48%, #eef6ff 100%);
 }
 
 .dark .home-shell.is-perf-lite {
-  background:
-    radial-gradient(circle at 18% 10%, rgba(43, 255, 195, 0.1), transparent 28%),
-    radial-gradient(circle at 82% 18%, rgba(0, 163, 255, 0.1), transparent 26%),
-    linear-gradient(135deg, #030a12 0%, #061a1b 48%, #07111f 100%);
-}
-
-.home-shell.is-perf-lite .liquid-stage::before {
-  opacity: 0.24;
-  animation-duration: 34s;
-}
-
-.home-shell.is-perf-lite .liquid-stage::after {
-  opacity: 0.18;
+  background: linear-gradient(135deg, #030a12 0%, #061a1b 48%, #07111f 100%);
 }
 
 .home-shell.is-perf-lite .mesh-grid {
   opacity: 0.16;
-  transform: perspective(700px) rotateX(62deg) translate3d(0, 120px, 0);
+  transform: perspective(700px) rotateX(62deg) translateY(120px);
 }
 
 .home-shell.is-perf-lite .prompt-panel-glow {
@@ -2522,63 +2436,6 @@ onUnmounted(() => {
   opacity: 0.26;
 }
 
-.home-shell.is-perf-lite .home-header,
-.home-shell.is-perf-lite .mode-card,
-.home-shell.is-perf-lite .canvas-toolbar,
-.home-shell.is-perf-lite .side-rail,
-.home-shell.is-perf-lite .composer-card,
-.home-shell.is-perf-lite .showcase-card,
-.home-shell.is-perf-lite .project-card {
-}
-
-.home-shell.is-perf-lite .mode-tabs button.active::after,
-.home-shell.is-perf-lite .selection-flow.is-selected::after {
-  animation-duration: 5.6s;
-}
-
-.liquid-stage {
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  overflow: hidden;
-  transform: translate3d(0, var(--scroll-bg-y), 0) scale(var(--scroll-stage-scale));
-  transform-origin: center top;
-  will-change: transform;
-}
-
-.liquid-stage::before {
-  content: "";
-  position: absolute;
-  inset: -18%;
-  opacity: 0.34;
-  background:
-    radial-gradient(circle at var(--mx) var(--my), rgba(255, 255, 255, 0.78), transparent 0 8%, transparent 20%),
-    radial-gradient(circle at 20% 28%, rgba(32, 255, 184, 0.55), transparent 18%),
-    radial-gradient(circle at 68% 18%, rgba(0, 170, 255, 0.48), transparent 16%),
-    radial-gradient(circle at 78% 78%, rgba(252, 211, 77, 0.26), transparent 18%);
-  transition: transform 0.35s ease-out, background-position 0.35s ease-out;
-}
-
-.liquid-stage::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  opacity: 0.26;
-  background-image:
-    radial-gradient(circle, rgba(15, 23, 42, 0.26) 0 1px, transparent 1px),
-    linear-gradient(115deg, transparent 0 44%, rgba(34, 197, 94, 0.12) 45%, transparent 56%);
-  background-size: 22px 22px, 100% 100%;
-  mask-image: linear-gradient(to bottom, #000 0%, transparent 88%);
-}
-
-.dark .liquid-stage::after {
-  opacity: 0.38;
-  background-image:
-    radial-gradient(circle, rgba(196, 255, 235, 0.22) 0 1px, transparent 1px),
-    linear-gradient(115deg, transparent 0 42%, rgba(34, 197, 94, 0.12) 48%, transparent 58%);
-}
-
 .y-signal {
   position: absolute;
   right: max(3vw, 34px);
@@ -2587,7 +2444,6 @@ onUnmounted(() => {
   aspect-ratio: 1;
   opacity: 0.46;
   transform: rotate(-10deg);
-  transition: transform 0.3s ease-out;
 }
 
 .y-signal span {
@@ -2598,7 +2454,6 @@ onUnmounted(() => {
   height: 12px;
   border-radius: 999px;
   background: linear-gradient(90deg, transparent, rgba(91, 255, 208, 0.88), rgba(56, 189, 248, 0.65), transparent);
-  box-shadow: 0 0 34px rgba(45, 212, 191, 0.65);
   transform-origin: 0 50%;
 }
 
@@ -2625,7 +2480,7 @@ onUnmounted(() => {
     linear-gradient(rgba(14, 165, 233, 0.16) 1px, transparent 1px),
     linear-gradient(90deg, rgba(20, 184, 166, 0.16) 1px, transparent 1px);
   background-size: 58px 58px;
-  transform: perspective(700px) rotateX(62deg) translate3d(0, calc(120px + var(--scroll-mesh-y)), 0);
+  transform: perspective(700px) rotateX(62deg) translateY(120px);
   transform-origin: bottom;
 }
 
@@ -2654,7 +2509,6 @@ onUnmounted(() => {
   border-radius: 18px;
   padding: 4px 8px 4px 4px;
   text-align: left;
-  transition: background 0.2s ease, transform 0.2s ease;
 }
 
 .brand-lockup:hover {
@@ -2691,7 +2545,6 @@ onUnmounted(() => {
   background: rgba(255, 255, 255, 0.68);
   border-radius: 999px;
   padding: 9px 14px;
-  transition: all 0.2s ease;
 }
 
 .dark .header-pill,
@@ -2877,7 +2730,6 @@ onUnmounted(() => {
   text-align: left;
   color: var(--text-primary);
   background: rgba(255, 255, 255, 0.38);
-  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
 }
 
 .history-item:hover,
@@ -2934,7 +2786,6 @@ onUnmounted(() => {
   font-weight: 800;
   letter-spacing: 0.3em;
   color: #0fb981;
-  text-shadow: 0 0 28px rgba(34, 197, 94, 0.26);
 }
 
 .hero-eyebrow {
@@ -2948,9 +2799,6 @@ onUnmounted(() => {
   color: #68ffe2;
   font-size: 11px;
   line-height: 1;
-  text-shadow:
-    0 0 12px rgba(104, 255, 226, 0.82),
-    0 0 30px rgba(34, 211, 238, 0.34);
 }
 
 .hero-copy h1 {
@@ -2981,9 +2829,7 @@ onUnmounted(() => {
   max-width: 780px;
   margin: clamp(-62px, -5vh, -34px) auto 0;
   justify-self: center;
-  opacity: var(--scroll-hero-opacity);
-  transform: translate3d(0, var(--scroll-hero-y), 0);
-  will-change: transform, opacity;
+  opacity: 1;
 }
 
 .hero-title-typewriter {
@@ -3032,16 +2878,10 @@ onUnmounted(() => {
 
 .hero-title-line-static {
   color: #0a2430;
-  text-shadow:
-    0 0 10px rgba(221, 251, 255, 0.14),
-    0 0 26px rgba(111, 247, 232, 0.08);
 }
 
 .dark .hero-title-line-static {
   color: #f4fbff;
-  text-shadow:
-    0 0 10px rgba(221, 251, 255, 0.14),
-    0 0 26px rgba(111, 247, 232, 0.06);
 }
 
 .hero-title-line-typewriter {
@@ -3077,9 +2917,6 @@ onUnmounted(() => {
   background-position: 0% 50%;
   -webkit-background-clip: text;
   background-clip: text;
-  text-shadow:
-    0 0 12px rgba(111, 247, 232, 0.18),
-    0 0 26px rgba(32, 215, 199, 0.08);
   animation:
     heroTypeCharIn 220ms cubic-bezier(0.22, 1, 0.36, 1) both,
     heroTypeGradientDrift 8s ease-in-out infinite;
@@ -3101,9 +2938,6 @@ onUnmounted(() => {
 }
 
 .hero-typewriter-text.is-erasing .hero-typewriter-char {
-  text-shadow:
-    0 0 10px rgba(221, 251, 255, 0.16),
-    0 0 24px rgba(32, 215, 199, 0.08);
 }
 
 .hero-typewriter-cursor {
@@ -3115,9 +2949,6 @@ onUnmounted(() => {
   align-self: center;
   transform: translateY(0.01em);
   background: rgba(8, 47, 73, 0.86);
-  box-shadow:
-    0 0 4px rgba(221, 251, 255, 0.34),
-    0 0 8px rgba(111, 247, 232, 0.14);
   opacity: 0.92;
 }
 
@@ -3164,10 +2995,6 @@ onUnmounted(() => {
 }
 
 .hero-copy-enter-active,
-.hero-copy-leave-active {
-  transition: opacity 0.42s ease, transform 0.42s ease, filter 0.42s ease;
-}
-
 .hero-copy-enter-from {
   opacity: 0;
   transform: translateY(18px);
@@ -3230,7 +3057,6 @@ onUnmounted(() => {
   font-weight: 800;
   text-shadow: 0 1px 0 rgba(255, 255, 255, 0.34);
   box-shadow: 0 18px 40px rgba(0, 183, 255, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.42);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 .dark .primary-action,
@@ -3249,7 +3075,6 @@ onUnmounted(() => {
   transform: skewX(-18deg);
   opacity: 0;
   pointer-events: none;
-  transition: left 1.25s cubic-bezier(.18, .86, .22, 1);
 }
 
 .primary-action:hover::after,
@@ -3303,7 +3128,6 @@ onUnmounted(() => {
   font-size: 13px;
   cursor: pointer;
   box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
-  transition: transform 0.2s ease, border-color 0.2s ease, color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
 }
 
 .feature-mini:hover {
@@ -3320,16 +3144,13 @@ onUnmounted(() => {
 
 .prompt-panel {
   position: relative;
-  transform-style: preserve-3d;
-  transform: translate3d(0, var(--scroll-panel-y), 0);
   min-width: 0;
-  will-change: transform;
 }
 
 .prompt-panel-glow {
   position: absolute;
   inset: -50px;
-  background: conic-gradient(from 120deg, rgba(0, 214, 255, 0.22), rgba(34, 255, 181, 0.26), rgba(2, 6, 23, 0), rgba(0, 214, 255, 0.22));
+  background: rgba(0, 214, 255, 0.08);
   opacity: 0.8;
 }
 
@@ -3357,7 +3178,7 @@ onUnmounted(() => {
   font-size: 58px;
   font-weight: 950;
   letter-spacing: -0.12em;
-  box-shadow: 0 28px 72px rgba(0, 0, 0, 0.22), 0 0 50px rgba(45, 212, 191, 0.22);
+  box-shadow: 0 28px 72px rgba(0, 0, 0, 0.22);
   transform: rotate(-12deg);
 }
 
@@ -3400,10 +3221,7 @@ onUnmounted(() => {
   z-index: 2;
   overflow: hidden;
   border-radius: 34px;
-  background:
-    radial-gradient(circle at 78% 10%, rgba(84, 235, 255, 0.2), transparent 34%),
-    radial-gradient(circle at 14% 88%, rgba(28, 242, 183, 0.2), transparent 34%),
-    linear-gradient(135deg, rgba(255, 255, 255, 0.78), rgba(226, 249, 255, 0.48));
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.78), rgba(226, 249, 255, 0.48));
   border: 1px solid rgba(255, 255, 255, 0.62);
   box-shadow:
     0 34px 86px rgba(15, 23, 42, 0.16),
@@ -3412,10 +3230,7 @@ onUnmounted(() => {
 }
 
 .dark .mode-card {
-  background:
-    radial-gradient(circle at 82% 8%, rgba(81, 232, 255, 0.2), transparent 30%),
-    radial-gradient(circle at 20% 72%, rgba(20, 230, 176, 0.18), transparent 36%),
-    linear-gradient(135deg, rgba(5, 16, 28, 0.92), rgba(4, 36, 38, 0.72));
+  background: linear-gradient(135deg, rgba(5, 16, 28, 0.92), rgba(4, 36, 38, 0.72));
   border-color: rgba(202, 255, 244, 0.24);
   box-shadow:
     0 40px 112px rgba(0, 0, 0, 0.42),
@@ -3495,7 +3310,6 @@ onUnmounted(() => {
   font-weight: 800;
   text-align: left;
   background: rgba(255, 255, 255, 0.22);
-  transition: transform 0.2s ease, color 0.2s ease, background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .mode-tabs button > span,
@@ -3551,17 +3365,7 @@ onUnmounted(() => {
   padding: 1.2px;
   border-radius: inherit;
   pointer-events: none;
-  background:
-    conic-gradient(
-      from var(--flow-angle, 0deg),
-      transparent 0deg,
-      transparent 34deg,
-      rgba(255, 255, 255, 0.96) 54deg,
-      rgba(197, 243, 255, 0.98) 73deg,
-      rgba(62, 245, 232, 0.88) 94deg,
-      transparent 126deg,
-      transparent 360deg
-    );
+  background: rgba(62, 245, 232, 0.35);
   -webkit-mask:
     linear-gradient(#000 0 0) content-box,
     linear-gradient(#000 0 0);
@@ -3594,7 +3398,6 @@ onUnmounted(() => {
     radial-gradient(circle at 92% 12%, rgba(45, 212, 191, 0.20), transparent 34%),
     rgba(255, 255, 255, 0.48);
   box-shadow: 0 16px 40px rgba(15, 23, 42, 0.10);
-  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
 .dark .integrated-launch-card {
@@ -3828,7 +3631,6 @@ onUnmounted(() => {
   background: rgba(255, 255, 255, 0.62);
   font-size: 12px;
   font-weight: 700;
-  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
 }
 
 .chat-image-grid figcaption button:hover {
@@ -3855,7 +3657,6 @@ onUnmounted(() => {
   color: var(--text-primary);
   background: rgba(255, 255, 255, 0.44);
   font-size: 12px;
-  transition: border-color 0.18s ease, transform 0.18s ease;
 }
 
 .dark .chat-action-row button {
@@ -4100,7 +3901,6 @@ onUnmounted(() => {
 
 .chat-image-controls button {
   padding: 0 12px;
-  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
 }
 
 .chat-image-controls button:hover:not(:disabled) {
@@ -4135,87 +3935,11 @@ onUnmounted(() => {
     0 20px 54px rgba(15, 23, 42, 0.12);
 }
 
-.selection-flow {
-  position: relative;
-  isolation: isolate;
-  overflow: hidden;
-}
-
-.selection-flow > * {
-  position: relative;
-  z-index: 4;
-}
-
-.selection-flow::before {
-  content: "";
-  position: absolute;
-  inset: -22px;
-  z-index: 1;
-  pointer-events: none;
-  opacity: 0;
-  background:
-    radial-gradient(circle at 18% 18%, rgba(255, 255, 255, 0.55), transparent 15%),
-    radial-gradient(circle at 84% 82%, rgba(80, 255, 224, 0.28), transparent 30%);
-  transition: opacity 0.2s ease;
-}
-
-.selection-flow::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: 3;
-  padding: 1.8px;
-  border-radius: inherit;
-  pointer-events: none;
-  opacity: 0;
-  background:
-    conic-gradient(
-      from var(--flow-angle, 0deg),
-      rgba(255, 255, 255, 0) 0deg,
-      rgba(255, 255, 255, 0) 38deg,
-      rgba(255, 255, 255, 1) 58deg,
-      rgba(226, 246, 255, 0.98) 78deg,
-      rgba(105, 246, 237, 0.92) 102deg,
-      rgba(255, 255, 255, 0) 136deg,
-      rgba(255, 255, 255, 0) 360deg
-    );
-  -webkit-mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  transition: opacity 0.18s ease;
-}
-
-.selection-flow.is-selected {
-  border-color: rgba(235, 250, 255, 0.82);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.18),
-    0 0 0 1px rgba(201, 247, 255, 0.18),
-    0 0 34px rgba(130, 233, 255, 0.24),
-    0 24px 58px rgba(0, 0, 0, 0.12);
-}
-
-.selection-flow.is-selected::before,
-.selection-flow.is-selected::after {
-  opacity: 1;
-}
-
-.selection-flow.is-selected::after {
-}
-
-@property --flow-angle {
-  syntax: "<angle>";
-  inherits: false;
-  initial-value: 0deg;
-}
-
 @media (prefers-reduced-motion: reduce) {
   .hero-typewriter-char {
     animation: none;
   }
 
-  .selection-flow.is-selected::after,
   .mode-tabs button.active::after {
     animation: none;
   }
@@ -4292,7 +4016,6 @@ onUnmounted(() => {
   color: var(--text-secondary);
   background: rgba(255, 255, 255, 0.54);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.66);
-  transition: transform 0.18s ease, color 0.18s ease, border-color 0.18s ease, background 0.18s ease;
 }
 
 .attach-button:hover:not(:disabled) {
@@ -4435,7 +4158,6 @@ onUnmounted(() => {
   background: rgba(255, 255, 255, 0.68);
   font-size: 13px;
   font-weight: 650;
-  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
 }
 
 .suggestion-cloud button:hover {
@@ -4473,7 +4195,6 @@ onUnmounted(() => {
 .panel-section-head button {
   color: var(--text-secondary);
   font-size: 13px;
-  transition: color 0.18s ease;
 }
 
 .panel-section-head button:hover {
@@ -4497,7 +4218,6 @@ onUnmounted(() => {
   background:
     radial-gradient(circle at 18% 0%, rgba(77, 255, 216, 0.12), transparent 35%),
     rgba(255, 255, 255, 0.36);
-  transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
 }
 
 .panel-project-card:hover {
@@ -4584,9 +4304,7 @@ onUnmounted(() => {
   width: min(84vw, 980px);
   height: 170px;
   border-radius: 999px;
-  background:
-    radial-gradient(ellipse at 30% 50%, rgba(34, 255, 181, 0.18), transparent 58%),
-    radial-gradient(ellipse at 68% 50%, rgba(14, 165, 233, 0.16), transparent 60%);
+  background: rgba(34, 255, 181, 0.06);
   transform: translate(-50%, -50%);
 }
 
@@ -4657,7 +4375,6 @@ onUnmounted(() => {
   color: var(--text-primary);
   font-size: 13px;
   font-weight: 800;
-  transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
 }
 
 .source-link:hover {
@@ -4685,7 +4402,6 @@ onUnmounted(() => {
   border: 1px solid rgba(255, 255, 255, 0.4);
   box-shadow: 0 30px 80px rgba(15, 23, 42, 0.16);
   transform: translateZ(0);
-  transition: transform 0.28s ease, box-shadow 0.28s ease, border-color 0.28s ease;
 }
 
 .showcase-card-1 {
@@ -4716,7 +4432,6 @@ onUnmounted(() => {
   opacity: 0;
   background: linear-gradient(115deg, transparent 0 34%, rgba(255, 255, 255, 0.28) 45%, transparent 56%);
   transform: translateX(-50%);
-  transition: opacity 0.25s ease, transform 0.55s ease;
 }
 
 .showcase-card:hover::after {
@@ -4730,10 +4445,6 @@ onUnmounted(() => {
   width: 100%;
   height: 100%;
   object-fit: cover;
-}
-
-.showcase-card img {
-  transition: transform 0.45s ease;
 }
 
 .showcase-card:hover img {
@@ -4784,7 +4495,6 @@ onUnmounted(() => {
   font-weight: 850;
   transform: translateY(8px);
   opacity: 0;
-  transition: transform 0.24s ease, opacity 0.24s ease;
 }
 
 .showcase-card:hover .showcase-overlay b {
@@ -4866,7 +4576,6 @@ onUnmounted(() => {
   color: var(--text-primary);
   font-size: 12px;
   font-weight: 800;
-  transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
 }
 
 .dark .inspiration-category-row button {
@@ -4952,7 +4661,6 @@ onUnmounted(() => {
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.42));
   text-align: left;
   box-shadow: 0 22px 52px rgba(15, 23, 42, 0.1);
-  transition: transform 0.24s ease, border-color 0.24s ease, box-shadow 0.24s ease;
 }
 
 .inspiration-card::before {
@@ -4960,8 +4668,7 @@ onUnmounted(() => {
   position: absolute;
   inset: 0;
   opacity: 0;
-  background: radial-gradient(circle at var(--mx) var(--my), rgba(34, 255, 181, 0.16), transparent 34%);
-  transition: opacity 0.24s ease;
+  background: rgba(255, 255, 255, 0.06);
   pointer-events: none;
 }
 
@@ -4990,7 +4697,6 @@ onUnmounted(() => {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  transition: transform 0.45s ease;
 }
 
 .inspiration-card:hover .inspiration-image img {
@@ -5150,7 +4856,6 @@ onUnmounted(() => {
     radial-gradient(circle at 15% 0%, rgba(34, 255, 181, 0.12), transparent 34%);
   border: 1px solid rgba(255, 255, 255, 0.42);
   box-shadow: 0 22px 58px rgba(15, 23, 42, 0.12);
-  transition: transform 0.24s ease, box-shadow 0.24s ease, border-color 0.24s ease;
 }
 
 .project-card[draggable="true"] {
@@ -5169,7 +4874,6 @@ onUnmounted(() => {
   opacity: 0;
   background: linear-gradient(120deg, transparent 0 34%, rgba(255, 255, 255, 0.28) 45%, transparent 56%);
   transform: translateX(-45%);
-  transition: opacity 0.22s ease, transform 0.55s ease;
   pointer-events: none;
 }
 
@@ -5256,7 +4960,6 @@ onUnmounted(() => {
   justify-content: center;
   border-radius: 14px;
   color: var(--text-secondary);
-  transition: all 0.2s ease;
 }
 
 .project-delete,
@@ -5302,7 +5005,6 @@ onUnmounted(() => {
   box-shadow: 0 18px 54px rgba(15, 23, 42, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.42);
   opacity: 0.72;
   transform: translateY(-50%);
-  transition: opacity 0.18s ease, background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
 .side-rail:hover {
@@ -5536,18 +5238,12 @@ onUnmounted(() => {
   width: min(920px, calc(100vw - 32px));
   overflow: hidden;
   border-radius: 36px;
-  background:
-    radial-gradient(circle at 18% 0%, rgba(85, 245, 182, 0.24), transparent 34%),
-    radial-gradient(circle at 84% 12%, rgba(56, 189, 248, 0.2), transparent 36%),
-    linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(236, 253, 245, 0.7));
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(236, 253, 245, 0.7));
   box-shadow: 0 38px 120px rgba(15, 23, 42, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.75);
 }
 
 :global(.dark .onboarding-modal.n-card) {
-  background:
-    radial-gradient(circle at 18% 0%, rgba(85, 245, 182, 0.15), transparent 34%),
-    radial-gradient(circle at 84% 12%, rgba(56, 189, 248, 0.12), transparent 36%),
-    linear-gradient(135deg, rgba(12, 22, 36, 0.94), rgba(7, 34, 36, 0.82));
+  background: linear-gradient(135deg, rgba(12, 22, 36, 0.94), rgba(7, 34, 36, 0.82));
 }
 
 :global(.onboarding-modal .n-card__content) {
@@ -5658,8 +5354,6 @@ onUnmounted(() => {
   height: 100%;
   border-radius: inherit;
   background: linear-gradient(90deg, #55f5b6, #11d8c5 52%, #38bdf8);
-  box-shadow: 0 0 22px rgba(85, 245, 182, 0.42);
-  transition: width 0.28s ease;
 }
 
 .onboarding-console {

@@ -165,7 +165,6 @@ watch(
   font-weight: 800;
   line-height: 1;
   padding: 10px 12px;
-  transition: background 0.16s ease, color 0.16s ease;
 }
 
 .workspace-tab:hover {
@@ -243,7 +242,6 @@ watch(
   font-weight: 800;
   line-height: 1;
   padding: 9px 12px;
-  transition: border-color 0.16s ease, background 0.16s ease, color 0.16s ease;
 }
 
 .shell-action:hover {

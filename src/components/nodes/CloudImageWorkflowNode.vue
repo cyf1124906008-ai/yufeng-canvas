@@ -745,7 +745,7 @@ onBeforeUnmount(() => {
   background: transparent;
   border: none;
   cursor: pointer;
-  transition: background 0.15s;
+  /* transition removed for static rendering */
 }
 .node-action:hover {
   background: var(--bg-tertiary);

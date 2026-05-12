@@ -260,13 +260,10 @@ onBeforeUnmount(() => {
   border-radius: 24px;
   border: 1px solid rgba(111, 255, 221, 0.72);
   box-shadow:
-    0 0 0 9999px rgba(2, 8, 16, 0.22),
-    0 0 34px rgba(45, 255, 211, 0.46),
-    inset 0 0 22px rgba(255, 255, 255, 0.12);
+    0 0 0 9999px rgba(2, 8, 16, 0.22);
   background: rgba(98, 255, 219, 0.025);
   pointer-events: none;
   transform: translateZ(0);
-  transition: transform 0.24s ease, opacity 0.24s ease;
   overflow: visible;
 }
 
@@ -312,7 +309,6 @@ onBeforeUnmount(() => {
   box-shadow:
     0 24px 70px rgba(0, 0, 0, 0.42),
     inset 0 1px 0 rgba(255, 255, 255, 0.2);
-  transition: all 0.28s ease;
 }
 
 .tour-card::before {
@@ -407,13 +403,12 @@ onBeforeUnmount(() => {
   height: 4px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.18);
-  transition: all 0.2s ease;
 }
 
 .tour-progress i.active {
   width: 42px;
   background: linear-gradient(90deg, #61ffd5, #2aa8ff);
-  box-shadow: 0 0 18px rgba(64, 255, 212, 0.42);
+  box-shadow: none;
 }
 
 .tour-actions {
@@ -429,7 +424,6 @@ onBeforeUnmount(() => {
   border-radius: 999px;
   padding: 11px 16px;
   font-weight: 800;
-  transition: transform 0.18s ease, opacity 0.18s ease;
 }
 
 .tour-secondary {

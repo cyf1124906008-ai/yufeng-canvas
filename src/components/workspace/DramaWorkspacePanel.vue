@@ -526,7 +526,7 @@ function saveSettings() {
 .dws-close { border: 1px solid rgba(255,255,255,0.1); border-radius: 999px; background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.6); font-size: 10px; padding: 4px 10px; cursor: pointer; }
 .dws-close:hover { background: rgba(255,255,255,0.1); color: white; }
 .dws-tabs { display: flex; gap: 2px; padding: 8px 10px 0; flex-wrap: wrap; }
-.dws-tab { border: none; background: rgba(255,255,255,0.05); color: rgba(255,255,255,0.5); font-size: 11px; padding: 5px 10px; border-radius: 999px; cursor: pointer; transition: all 0.15s; }
+.dws-tab { border: none; background: rgba(255,255,255,0.05); color: rgba(255,255,255,0.5); font-size: 11px; padding: 5px 10px; border-radius: 999px; cursor: pointer; }
 .dws-tab:hover { background: rgba(255,255,255,0.08); }
 .dws-tab.active { background: #34d399; color: #020617; font-weight: 700; }
 .dws-body { flex: 1; overflow-y: auto; padding: 10px 12px; }
@@ -542,7 +542,7 @@ function saveSettings() {
 .dws-field { display: flex; flex-direction: column; }
 .dws-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .dws-toolbar-actions { display: flex; gap: 4px; }
-.dws-btn-sm { border: 1px solid rgba(255,255,255,0.1); border-radius: 999px; background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.6); font-size: 10px; padding: 5px 10px; cursor: pointer; transition: all 0.15s; }
+.dws-btn-sm { border: 1px solid rgba(255,255,255,0.1); border-radius: 999px; background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.6); font-size: 10px; padding: 5px 10px; cursor: pointer; }
 .dws-btn-sm:hover { background: rgba(255,255,255,0.1); color: white; }
 .dws-btn-sm.primary { border-color: transparent; background: #34d399; color: #020617; font-weight: 700; }
 .dws-btn-sm:disabled { opacity: 0.4; cursor: not-allowed; }

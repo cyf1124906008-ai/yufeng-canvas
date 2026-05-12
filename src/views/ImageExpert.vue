@@ -824,7 +824,7 @@ button {
   border-radius: 999px;
   color: var(--text-primary);
   background: rgba(255, 255, 255, 0.58);
-  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+  /* transition removed for static rendering */
 }
 
 .icon-button {

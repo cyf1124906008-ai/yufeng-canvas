@@ -589,7 +589,6 @@ const vClickOutside = {
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
-  transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
 }
 
 .panel-action-btn:hover {
@@ -614,7 +613,6 @@ const vClickOutside = {
   font-size: 16px;
   color: var(--text-secondary);
   cursor: pointer;
-  transition: color 0.2s, transform 0.2s;
   padding-bottom: 6px;
   position: relative;
 }
@@ -637,7 +635,7 @@ const vClickOutside = {
   height: 3px;
   border-radius: 999px;
   background: linear-gradient(90deg, #55f5b6, #22d3ee);
-  box-shadow: 0 0 18px rgba(34, 211, 238, 0.34);
+  box-shadow: none;
 }
 
 .panel-subtitle {
@@ -657,7 +655,6 @@ const vClickOutside = {
   border-radius: 14px;
   color: var(--text-secondary);
   cursor: pointer;
-  transition: all 0.2s;
 }
 
 .expand-btn:hover {
@@ -751,7 +748,6 @@ const vClickOutside = {
   font-size: 12px;
   font-weight: 800;
   box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
-  transition: all 0.2s ease;
 }
 
 :global(.dark) .category-chip {
@@ -793,7 +789,6 @@ const vClickOutside = {
   overflow: hidden;
   cursor: pointer;
   box-shadow: 0 20px 48px rgba(15, 23, 42, 0.1);
-  transition: transform 0.24s ease, box-shadow 0.24s ease, border-color 0.24s ease;
 }
 
 .workflow-card:hover {
@@ -809,7 +804,6 @@ const vClickOutside = {
   opacity: 0;
   background: linear-gradient(120deg, transparent 0 38%, rgba(255, 255, 255, 0.36) 48%, transparent 58%);
   transform: translateX(-55%);
-  transition: opacity 0.2s ease, transform 0.55s ease;
 }
 
 .workflow-card:hover::after {
@@ -837,7 +831,6 @@ const vClickOutside = {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  transition: transform 0.45s ease, filter 0.45s ease;
 }
 
 .workflow-card:hover .cover-img {

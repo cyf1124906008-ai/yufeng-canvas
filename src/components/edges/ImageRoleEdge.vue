@@ -112,14 +112,13 @@ const handleRoleSelect = (role) => {
   background:
     radial-gradient(circle at 20% 0%, rgba(255, 255, 255, 0.32), transparent 42%),
     linear-gradient(135deg, rgba(30, 64, 175, 0.92), rgba(14, 116, 144, 0.86));
-  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.28), 0 0 18px rgba(96, 165, 250, 0.28);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.28);
   font-size: 11px;
   font-weight: 900;
-  transition: transform 0.16s ease, box-shadow 0.16s ease;
 }
 
 .edge-label-pill:hover {
   transform: scale(1.04);
-  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.32), 0 0 24px rgba(96, 165, 250, 0.4);
+  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.32);
 }
 </style>

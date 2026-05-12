@@ -1085,7 +1085,7 @@ const handleVideoGen = () => {
   font-weight: 800;
   cursor: pointer;
   box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
-  transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease;
+  /* transition removed for static rendering */
   user-select: none;
 }
 

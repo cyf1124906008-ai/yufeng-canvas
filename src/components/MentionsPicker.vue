@@ -274,7 +274,7 @@ function handleKeydown(event) {
   align-items: center;
   padding: 8px 12px;
   cursor: pointer;
-  transition: background-color 0.2s;
+  /* transition removed for static rendering */
 }
 
 .mentions-item:hover,

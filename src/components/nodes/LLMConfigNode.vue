@@ -1177,7 +1177,7 @@ const doSplitToTextNodes = (segments) => {
   word-break: break-word;
   white-space: pre-wrap;
   border: 1px solid var(--border-color);
-  transition: border-color 0.2s;
+  /* transition removed for static rendering */
 }
 
 .editor-content:focus {

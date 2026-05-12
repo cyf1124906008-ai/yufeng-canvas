@@ -3042,8 +3042,6 @@ onUnmounted(() => {
     radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.98) 0 15%, transparent 17%),
     linear-gradient(135deg, #2dd4bf, #22c55e) !important;
   box-shadow:
-    0 0 0 6px rgba(20, 184, 166, 0.18),
-    0 0 22px rgba(20, 184, 166, 0.78),
     0 10px 18px rgba(15, 23, 42, 0.18);
   opacity: 1 !important;
   z-index: 100100 !important;
@@ -3141,8 +3139,6 @@ onUnmounted(() => {
 .canvas-flow .vue-flow__handle:hover,
 .canvas-flow .vue-flow__handle.connecting {
   box-shadow:
-    0 0 0 8px rgba(20, 184, 166, 0.26),
-    0 0 34px rgba(45, 212, 191, 0.96),
     0 12px 24px rgba(15, 23, 42, 0.22);
 }
 
@@ -3232,7 +3228,6 @@ onUnmounted(() => {
 .canvas-toolbar button,
 .zoom-dock button,
 .node-menu-pop button {
-  transition: transform 0.18s ease, background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
 }
 
 .canvas-toolbar button:hover,
@@ -3289,7 +3284,7 @@ onUnmounted(() => {
 
 .node-menu-search:focus {
   border-color: rgba(94, 234, 212, 0.7);
-  box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.13);
+  box-shadow: none;
 }
 
 .node-menu-tabs {
@@ -3502,7 +3497,6 @@ onUnmounted(() => {
   box-shadow: 0 18px 48px rgba(15, 23, 42, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.72);
   font-size: 13px;
   font-weight: 900;
-  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
 .composer-trigger:hover {
@@ -3576,12 +3570,6 @@ onUnmounted(() => {
   display: none;
 }
 
-.canvas-shell.is-perf-lite .canvas-toolbar button,
-.canvas-shell.is-perf-lite .zoom-dock button,
-.canvas-shell.is-perf-lite .node-menu-pop button {
-  transition: background 0.12s ease, color 0.12s ease;
-}
-
 .canvas-shell.is-perf-lite .canvas-toolbar button:hover,
 .canvas-shell.is-perf-lite .zoom-dock button:hover,
 .canvas-shell.is-perf-lite .node-menu-pop button:hover {
@@ -3643,7 +3631,7 @@ onUnmounted(() => {
   height: 8px;
   border-radius: 999px;
   background: #22c55e;
-  box-shadow: 0 0 0 5px rgba(34, 197, 94, 0.14), 0 0 18px rgba(34, 197, 94, 0.8);
+  box-shadow: none;
 }
 
 .canvas-shell.is-perf-lite .live-run-chip i {
@@ -3843,7 +3831,6 @@ onUnmounted(() => {
   right: 24px;
   bottom: 24px;
   max-height: min(620px, calc(100vh - 150px));
-  transition: right 0.22s ease, width 0.22s ease, transform 0.22s ease, opacity 0.22s ease;
 }
 
 .node-inspector-panel.is-log-open {
@@ -3905,7 +3892,6 @@ onUnmounted(() => {
   color: var(--text-secondary);
   font-size: 20px;
   line-height: 1;
-  transition: color 0.16s ease, background 0.16s ease, transform 0.16s ease;
 }
 
 .inspector-close:hover {
@@ -3986,10 +3972,6 @@ onUnmounted(() => {
   background: rgba(255, 255, 255, 0.66);
   font-size: 12px;
   font-weight: 800;
-  transition:
-    transform 0.18s ease,
-    border-color 0.18s ease,
-    box-shadow 0.18s ease;
 }
 
 .inspector-output-actions button:first-child,
@@ -4104,7 +4086,7 @@ onUnmounted(() => {
 .inspector-body textarea:focus,
 .inspector-body select:focus {
   border-color: rgba(94, 234, 212, 0.72);
-  box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.12);
+  box-shadow: none;
 }
 
 .dark .inspector-body input,
@@ -4137,21 +4119,5 @@ onUnmounted(() => {
   color: var(--text-secondary);
   line-height: 1.6;
   font-size: 13px;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .canvas-toolbar button,
-  .zoom-dock button,
-  .node-menu-pop button,
-  .live-run-chip i {
-    transition: none;
-  }
-
-  .canvas-toolbar button:hover,
-  .zoom-dock button:hover,
-  .node-menu-pop button:hover {
-    transform: none;
-    box-shadow: none;
-  }
 }
 </style>

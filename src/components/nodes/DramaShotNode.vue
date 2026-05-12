@@ -146,7 +146,6 @@ onBeforeUnmount(() => {
   font-size: 10px;
   padding: 4px 8px;
   cursor: pointer;
-  transition: all 0.15s;
 }
 .sa-btn:hover:not(:disabled) { background: rgba(255,255,255,0.12); color: white; }
 .sa-btn:disabled { opacity: 0.4; cursor: not-allowed; }
@@ -159,7 +158,7 @@ onBeforeUnmount(() => {
   height: 22px !important;
   background: linear-gradient(135deg, #5eead4, #22c55e) !important;
   border: 2px solid rgba(240, 253, 250, 0.98) !important;
-  box-shadow: 0 0 0 7px rgba(20, 184, 166, 0.18), 0 0 18px rgba(45, 212, 191, 0.72) !important;
+  box-shadow: none !important;
   pointer-events: auto !important;
   z-index: 100000 !important;
   cursor: crosshair !important;
