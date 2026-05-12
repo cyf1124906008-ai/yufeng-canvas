@@ -189,7 +189,6 @@ const handleCreate = (item) => {
 
 .add-icon {
   color: #fff;
-  filter: drop-shadow(0 1px 4px rgba(6, 78, 59, 0.5));
 }
 
 .handle-menu {
@@ -211,7 +210,6 @@ const handleCreate = (item) => {
     0 18px 46px rgba(0, 0, 0, 0.36),
     0 0 28px rgba(45, 212, 191, 0.16);
   white-space: nowrap;
-  backdrop-filter: blur(18px);
   z-index: 10060;
   pointer-events: auto;
 }

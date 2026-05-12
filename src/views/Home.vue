@@ -4,7 +4,6 @@
     class="home-shell min-h-screen h-screen overflow-y-auto text-[var(--text-primary)]"
     :class="{ 'is-perf-lite': performanceLite }"
     :style="stageStyle"
-    @pointermove="handlePointerMove"
     @pointerleave="resetPointerField"
     @scroll="handleHomeScroll"
   >
@@ -1115,9 +1114,7 @@ const heroTypeCycle = ref(0)
 const performanceLite = ref(false)
 const pointer = ref({ x: 0.5, y: 0.5 })
 const scrollProgress = ref(0)
-let pointerFrame = null
 let pendingPointer = null
-let scrollFrame = null
 let heroTypeTimer = null
 const onboardingStorageKey = 'yufeng-canvas-onboarding-v2'
 const homeTourStorageKey = 'yufeng-canvas-home-tour-v1'
@@ -1399,53 +1396,13 @@ const detectPerformanceLite = () => {
   return Boolean(constrainedCpuAndMemory || constrainedGraphics || overloadedViewport)
 }
 
-const handlePointerMove = (event) => {
-  if (performanceLite.value) return
-  if (window.getSelection?.()?.type === 'Range') return
-
-  const rect = event.currentTarget.getBoundingClientRect()
-  pendingPointer = {
-    clientX: event.clientX,
-    clientY: event.clientY,
-    rect: {
-      left: rect.left,
-      top: rect.top,
-      width: rect.width,
-      height: rect.height
-    }
-  }
-
-  if (pointerFrame) return
-
-  pointerFrame = window.requestAnimationFrame(() => {
-    pointerFrame = null
-    if (!pendingPointer) return
-
-    const { clientX, clientY, rect: pendingRect } = pendingPointer
-    const x = Math.min(1, Math.max(0, (clientX - pendingRect.left) / pendingRect.width))
-    const y = Math.min(1, Math.max(0, (clientY - pendingRect.top) / pendingRect.height))
-
-    pointer.value = { x, y }
-    pendingPointer = null
-  })
-}
-
 const handleHomeScroll = (event) => {
-  if (scrollFrame) return
-
   const target = event.currentTarget
-  scrollFrame = window.requestAnimationFrame(() => {
-    scrollFrame = null
-    const top = target?.scrollTop || 0
-    scrollProgress.value = Math.min(1, Math.max(0, top / 620))
-  })
+  const top = target?.scrollTop || 0
+  scrollProgress.value = Math.min(1, Math.max(0, top / 620))
 }
 
 const resetPointerField = () => {
-  if (pointerFrame) {
-    window.cancelAnimationFrame(pointerFrame)
-    pointerFrame = null
-  }
   pendingPointer = null
   pointer.value = { x: 0.5, y: 0.5 }
 }
@@ -2506,10 +2463,6 @@ onUnmounted(() => {
   stopHeroTypewriter()
   document.removeEventListener('visibilitychange', handleHeroTypewriterVisibility)
   window.removeEventListener('keydown', handleWelcomeKeydown)
-  if (scrollFrame) {
-    window.cancelAnimationFrame(scrollFrame)
-    scrollFrame = null
-  }
   resetPointerField()
 })
 </script>
@@ -2548,7 +2501,6 @@ onUnmounted(() => {
 
 .home-shell.is-perf-lite .liquid-stage::before {
   opacity: 0.24;
-  filter: blur(30px) saturate(1.12);
   animation-duration: 34s;
 }
 
@@ -2563,7 +2515,6 @@ onUnmounted(() => {
 
 .home-shell.is-perf-lite .prompt-panel-glow {
   opacity: 0.24;
-  filter: blur(18px);
 }
 
 .home-shell.is-perf-lite .y-signal,
@@ -2578,8 +2529,6 @@ onUnmounted(() => {
 .home-shell.is-perf-lite .composer-card,
 .home-shell.is-perf-lite .showcase-card,
 .home-shell.is-perf-lite .project-card {
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
 }
 
 .home-shell.is-perf-lite .mode-tabs button.active::after,
@@ -2690,7 +2639,6 @@ onUnmounted(() => {
   border-radius: 28px;
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.74), rgba(255, 255, 255, 0.42));
   box-shadow: 0 24px 70px rgba(15, 23, 42, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(28px) saturate(1.45);
 }
 
 .dark .home-header {
@@ -2813,7 +2761,6 @@ onUnmounted(() => {
   color: #082f2b;
   background: rgba(255, 255, 255, 0.58);
   box-shadow: 0 18px 46px rgba(15, 23, 42, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.68);
-  backdrop-filter: blur(22px);
 }
 
 .dark .workspace-brand-strip {
@@ -2876,7 +2823,6 @@ onUnmounted(() => {
     radial-gradient(circle at 20% 0%, rgba(111, 247, 232, 0.18), transparent 34%),
     rgba(255, 255, 255, 0.54);
   box-shadow: 0 24px 60px rgba(15, 23, 42, 0.10), inset 0 1px 0 rgba(255, 255, 255, 0.72);
-  backdrop-filter: blur(24px);
 }
 
 .dark .chat-history-panel {
@@ -3020,7 +2966,6 @@ onUnmounted(() => {
     linear-gradient(135deg, #082f2b 0%, #0f172a 45%, #0891b2 100%);
   -webkit-background-clip: text;
   background-clip: text;
-  filter: drop-shadow(0 18px 34px rgba(15, 23, 42, 0.1));
 }
 
 .dark .hero-copy h1 {
@@ -3028,7 +2973,6 @@ onUnmounted(() => {
     linear-gradient(135deg, #f8fffc 0%, #c9fff0 38%, #70d6ff 78%, #ffffff 100%);
   -webkit-background-clip: text;
   background-clip: text;
-  filter: drop-shadow(0 20px 40px rgba(0, 255, 202, 0.12));
 }
 
 .hero-copy {
@@ -3072,7 +3016,6 @@ onUnmounted(() => {
       rgba(111, 247, 232, 0.16),
       rgba(111, 247, 232, 0) 58%
     );
-  filter: blur(24px);
   opacity: 0.58;
 }
 
@@ -3227,13 +3170,11 @@ onUnmounted(() => {
 
 .hero-copy-enter-from {
   opacity: 0;
-  filter: blur(8px);
   transform: translateY(18px);
 }
 
 .hero-copy-leave-to {
   opacity: 0;
-  filter: blur(8px);
   transform: translateY(-14px);
 }
 
@@ -3264,7 +3205,6 @@ onUnmounted(() => {
   color: rgba(8, 47, 73, 0.72);
   background: rgba(255, 255, 255, 0.52);
   box-shadow: 0 18px 46px rgba(15, 23, 42, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.68);
-  backdrop-filter: blur(18px);
   font-size: 13px;
   font-weight: 850;
   letter-spacing: 0.08em;
@@ -3363,7 +3303,6 @@ onUnmounted(() => {
   font-size: 13px;
   cursor: pointer;
   box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
-  backdrop-filter: blur(18px);
   transition: transform 0.2s ease, border-color 0.2s ease, color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
 }
 
@@ -3391,7 +3330,6 @@ onUnmounted(() => {
   position: absolute;
   inset: -50px;
   background: conic-gradient(from 120deg, rgba(0, 214, 255, 0.22), rgba(34, 255, 181, 0.26), rgba(2, 6, 23, 0), rgba(0, 214, 255, 0.22));
-  filter: blur(28px);
   opacity: 0.8;
 }
 
@@ -3433,7 +3371,6 @@ onUnmounted(() => {
   font-size: 11px;
   font-weight: 850;
   box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12);
-  backdrop-filter: blur(18px);
 }
 
 .dark .prism-chip {
@@ -3500,7 +3437,6 @@ onUnmounted(() => {
   border-radius: 20px;
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.58), rgba(255, 255, 255, 0.22));
   box-shadow: 0 18px 44px rgba(15, 23, 42, 0.08);
-  backdrop-filter: blur(20px);
 }
 
 .dark .hero-metrics div {
@@ -3631,7 +3567,6 @@ onUnmounted(() => {
     linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
-  filter: drop-shadow(0 0 9px rgba(235, 251, 255, 0.92)) drop-shadow(0 0 20px rgba(76, 232, 255, 0.45));
 }
 
 .chat-home,
@@ -4026,7 +3961,6 @@ onUnmounted(() => {
     radial-gradient(circle at 16% 0%, rgba(45, 212, 191, 0.18), transparent 34%),
     rgba(255, 255, 255, 0.76);
   box-shadow: 0 30px 90px rgba(15, 23, 42, 0.20), inset 0 1px 0 rgba(255, 255, 255, 0.68);
-  backdrop-filter: blur(26px) saturate(1.25);
 }
 
 .dark .home-runtime-panel {
@@ -4222,7 +4156,6 @@ onUnmounted(() => {
   background:
     radial-gradient(circle at 18% 18%, rgba(255, 255, 255, 0.55), transparent 15%),
     radial-gradient(circle at 84% 82%, rgba(80, 255, 224, 0.28), transparent 30%);
-  filter: blur(18px);
   transition: opacity 0.2s ease;
 }
 
@@ -4251,9 +4184,6 @@ onUnmounted(() => {
     linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
-  filter:
-    drop-shadow(0 0 9px rgba(245, 253, 255, 0.98))
-    drop-shadow(0 0 22px rgba(105, 235, 255, 0.46));
   transition: opacity 0.18s ease;
 }
 
@@ -4657,7 +4587,6 @@ onUnmounted(() => {
   background:
     radial-gradient(ellipse at 30% 50%, rgba(34, 255, 181, 0.18), transparent 58%),
     radial-gradient(ellipse at 68% 50%, rgba(14, 165, 233, 0.16), transparent 60%);
-  filter: blur(20px);
   transform: translate(-50%, -50%);
 }
 
@@ -4692,7 +4621,6 @@ onUnmounted(() => {
   font-weight: 800;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  backdrop-filter: blur(18px);
 }
 
 .dark .brand-footer p {
@@ -4854,7 +4782,6 @@ onUnmounted(() => {
   color: rgba(255, 255, 255, 0.94);
   font-size: 12px;
   font-weight: 850;
-  backdrop-filter: blur(14px);
   transform: translateY(8px);
   opacity: 0;
   transition: transform 0.24s ease, opacity 0.24s ease;
@@ -4875,7 +4802,6 @@ onUnmounted(() => {
   border-radius: 28px;
   background: rgba(255, 255, 255, 0.58);
   box-shadow: 0 18px 50px rgba(15, 23, 42, 0.08);
-  backdrop-filter: blur(18px);
 }
 
 .dark .inspiration-toolbar {
@@ -4985,7 +4911,6 @@ onUnmounted(() => {
   color: white;
   font-size: 11px;
   font-weight: 850;
-  backdrop-filter: blur(12px);
 }
 
 .inspiration-image-placeholder {
@@ -5027,7 +4952,6 @@ onUnmounted(() => {
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.42));
   text-align: left;
   box-shadow: 0 22px 52px rgba(15, 23, 42, 0.1);
-  backdrop-filter: blur(16px);
   transition: transform 0.24s ease, border-color 0.24s ease, box-shadow 0.24s ease;
 }
 
@@ -5617,7 +5541,6 @@ onUnmounted(() => {
     radial-gradient(circle at 84% 12%, rgba(56, 189, 248, 0.2), transparent 36%),
     linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(236, 253, 245, 0.7));
   box-shadow: 0 38px 120px rgba(15, 23, 42, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.75);
-  backdrop-filter: blur(30px) saturate(1.42);
 }
 
 :global(.dark .onboarding-modal.n-card) {

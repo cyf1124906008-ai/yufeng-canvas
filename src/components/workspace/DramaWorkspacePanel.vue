@@ -517,7 +517,6 @@ function saveSettings() {
   background: rgba(15,23,42,0.62);
   color: white;
   box-shadow: none;
-  backdrop-filter: none;
 }
 .dws-header { padding: 12px 14px; border-bottom: 1px solid rgba(255,255,255,0.08); background: linear-gradient(to right, rgba(52,211,153,0.08), transparent); }
 .dws-tag { font-size: 9px; text-transform: uppercase; letter-spacing: 0.2em; color: rgba(255,255,255,0.4); margin-bottom: 2px; }
@@ -589,7 +588,7 @@ function saveSettings() {
 
 .dws-generating { text-align: center; padding: 20px; color: rgba(255,255,255,0.5); font-size: 12px; }
 .dws-empty { text-align: center; padding: 16px; color: rgba(255,255,255,0.4); font-size: 11px; }
-.dws-error { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(220,38,38,0.15); border-top: 1px solid rgba(248,113,113,0.2); padding: 10px 14px; backdrop-filter: blur(8px); }
+.dws-error { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(220,38,38,0.15); border-top: 1px solid rgba(248,113,113,0.2); padding: 10px 14px; }
 .dws-error p { font-size: 11px; color: #fca5a5; margin-bottom: 6px; }
 .dws-error-actions { display: flex; gap: 6px; }
 .dws-settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }

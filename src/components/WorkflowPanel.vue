@@ -508,7 +508,6 @@ const vClickOutside = {
     radial-gradient(circle at 12% 0%, rgba(85, 245, 182, 0.22), transparent 30%),
     radial-gradient(circle at 92% 16%, rgba(24, 183, 255, 0.2), transparent 34%),
     linear-gradient(135deg, rgba(255, 255, 255, 0.86), rgba(241, 245, 249, 0.68));
-  backdrop-filter: none;
   border-radius: 34px;
   border: 1px solid rgba(255, 255, 255, 0.58);
   box-shadow: 0 36px 120px rgba(15, 23, 42, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.74);
@@ -539,7 +538,6 @@ const vClickOutside = {
   content: "";
   position: absolute;
   border-radius: 999px;
-  filter: blur(20px);
 }
 
 .panel-atmosphere::before {
@@ -695,7 +693,6 @@ const vClickOutside = {
     radial-gradient(circle at 50% 24%, rgba(85, 245, 182, 0.22), transparent 36%),
     linear-gradient(135deg, rgba(255, 255, 255, 0.84), rgba(236, 253, 245, 0.76));
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.58), 0 28px 80px rgba(4, 120, 87, 0.2);
-  backdrop-filter: none;
   text-align: center;
 }
 
@@ -754,7 +751,6 @@ const vClickOutside = {
   font-size: 12px;
   font-weight: 800;
   box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
-  backdrop-filter: none;
   transition: all 0.2s ease;
 }
 
@@ -797,7 +793,6 @@ const vClickOutside = {
   overflow: hidden;
   cursor: pointer;
   box-shadow: 0 20px 48px rgba(15, 23, 42, 0.1);
-  backdrop-filter: none;
   transition: transform 0.24s ease, box-shadow 0.24s ease, border-color 0.24s ease;
 }
 
@@ -863,7 +858,6 @@ const vClickOutside = {
   background: rgba(5, 19, 27, 0.76);
   color: #EFFFF8;
   font-size: 11px;
-  backdrop-filter: none;
 }
 
 .card-body {

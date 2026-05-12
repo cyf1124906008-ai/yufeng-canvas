@@ -76,7 +76,6 @@ const edgeStyle = computed(() => ({
   stroke: '#60a5fa',
   strokeWidth: 4.2,
   strokeLinecap: 'round',
-  filter: 'drop-shadow(0 0 8px rgba(96, 165, 250, 0.58))',
   ...props.style
 }))
 
@@ -114,7 +113,6 @@ const handleRoleSelect = (role) => {
     radial-gradient(circle at 20% 0%, rgba(255, 255, 255, 0.32), transparent 42%),
     linear-gradient(135deg, rgba(30, 64, 175, 0.92), rgba(14, 116, 144, 0.86));
   box-shadow: 0 12px 28px rgba(15, 23, 42, 0.28), 0 0 18px rgba(96, 165, 250, 0.28);
-  backdrop-filter: blur(12px);
   font-size: 11px;
   font-weight: 900;
   transition: transform 0.16s ease, box-shadow 0.16s ease;

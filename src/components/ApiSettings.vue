@@ -860,7 +860,6 @@ const openAssetsFolder = async () => {
     radial-gradient(circle at 92% 8%, rgba(14, 165, 233, 0.16), transparent 34%),
     linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(241, 245, 249, 0.78));
   box-shadow: 0 38px 120px rgba(15, 23, 42, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.72);
-  backdrop-filter: blur(28px) saturate(1.28);
 }
 
 :global(.dark) :deep(.api-settings-modal.n-card) {
@@ -890,7 +889,6 @@ const openAssetsFolder = async () => {
   border: 1px solid rgba(148, 163, 184, 0.2);
   background: rgba(255, 255, 255, 0.44);
   border-radius: 18px;
-  backdrop-filter: blur(16px);
 }
 
 :global(.dark) .endpoint-list {
@@ -934,7 +932,6 @@ const openAssetsFolder = async () => {
     radial-gradient(circle at 12% 0%, rgba(34, 255, 181, 0.14), transparent 38%),
     linear-gradient(135deg, rgba(240, 253, 250, 0.72), rgba(255, 255, 255, 0.44));
   box-shadow: 0 18px 46px rgba(15, 23, 42, 0.08);
-  backdrop-filter: blur(18px);
 }
 
 :global(.dark) .data-backup-card {
@@ -1036,7 +1033,6 @@ const openAssetsFolder = async () => {
     linear-gradient(135deg, rgba(255, 255, 255, 0.58), rgba(255, 255, 255, 0.32)),
     radial-gradient(circle at 16% 0%, rgba(34, 255, 181, 0.1), transparent 36%);
   box-shadow: 0 18px 46px rgba(15, 23, 42, 0.08);
-  backdrop-filter: blur(18px);
 }
 
 :global(.dark) .model-group {

@@ -277,9 +277,6 @@ onBeforeUnmount(() => {
   height: calc(100% + 14px);
   overflow: visible;
   pointer-events: none;
-  filter:
-    drop-shadow(0 0 7px rgba(234, 247, 255, 0.96))
-    drop-shadow(0 0 16px rgba(99, 255, 219, 0.7));
 }
 
 .tour-border-track,

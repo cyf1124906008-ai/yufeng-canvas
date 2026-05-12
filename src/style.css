@@ -99,11 +99,6 @@ button:not(:disabled) {
 
 /* Liquid glass node system | 液态玻璃节点系统 */
 .vue-flow__node {
-  filter: drop-shadow(0 18px 34px rgba(15, 23, 42, 0.12));
-}
-
-.dark .vue-flow__node {
-  filter: drop-shadow(0 18px 36px rgba(0, 0, 0, 0.32));
 }
 
 .text-node,

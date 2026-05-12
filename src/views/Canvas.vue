@@ -537,7 +537,7 @@
         <!-- Processing indicator | 处理中指示器 -->
         <div
           v-if="isProcessing"
-          class="processing-card mb-3 p-3 animate-pulse"
+          class="processing-card mb-3 p-3"
         >
           <div class="flex items-center gap-2 text-sm text-[var(--accent-color)] mb-2">
             <n-spin :size="14" />
@@ -2992,7 +2992,6 @@ onUnmounted(() => {
   box-shadow:
     0 24px 70px rgba(15, 23, 42, 0.2),
     inset 0 1px 0 rgba(255, 255, 255, 0.78);
-  backdrop-filter: blur(22px) saturate(1.3);
 }
 
 .vue-flow__minimap.canvas-minimap.is-raised {
@@ -3149,20 +3148,17 @@ onUnmounted(() => {
 
 .canvas-flow .vue-flow__edge-path {
   stroke-width: 3.2;
-  filter: drop-shadow(0 0 5px rgba(45, 212, 191, 0.34));
 }
 
 .canvas-flow .vue-flow__edge.selected .vue-flow__edge-path,
 .canvas-flow .vue-flow__edge:hover .vue-flow__edge-path {
   stroke-width: 4.5;
-  filter: drop-shadow(0 0 10px rgba(94, 234, 212, 0.7));
 }
 
 .canvas-flow .vue-flow__connection-path {
   stroke: rgba(34, 211, 238, 0.95);
   stroke-width: 4;
   stroke-dasharray: 9 8;
-  filter: drop-shadow(0 0 10px rgba(34, 211, 238, 0.56));
 }
 
 .canvas-header {
@@ -3173,7 +3169,6 @@ onUnmounted(() => {
   border-radius: 28px;
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.74), rgba(255, 255, 255, 0.42));
   box-shadow: 0 22px 70px rgba(15, 23, 42, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.66);
-  backdrop-filter: blur(28px) saturate(1.35);
 }
 
 .dark .canvas-header {
@@ -3186,7 +3181,6 @@ onUnmounted(() => {
   position: absolute;
   pointer-events: none;
   border-radius: 999px;
-  filter: blur(26px);
   opacity: 0.72;
   z-index: 0;
 }
@@ -3217,7 +3211,6 @@ onUnmounted(() => {
     linear-gradient(135deg, rgba(255, 255, 255, 0.76), rgba(255, 255, 255, 0.42)),
     radial-gradient(circle at 16% 0%, rgba(34, 255, 181, 0.1), transparent 34%);
   box-shadow: 0 24px 68px rgba(15, 23, 42, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.66);
-  backdrop-filter: blur(26px) saturate(1.3);
 }
 
 .dark .canvas-toolbar,
@@ -3433,7 +3426,6 @@ onUnmounted(() => {
     radial-gradient(circle at 15% 0%, rgba(94, 234, 212, 0.18), transparent 38%),
     rgba(248, 250, 252, 0.92);
   box-shadow: 0 24px 68px rgba(15, 23, 42, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.74);
-  backdrop-filter: blur(24px) saturate(1.25);
 }
 
 .dark .canvas-context-menu {
@@ -3508,7 +3500,6 @@ onUnmounted(() => {
     radial-gradient(circle at 18% 8%, rgba(255, 255, 255, 0.92), transparent 36%),
     linear-gradient(135deg, rgba(236, 253, 245, 0.9), rgba(207, 250, 254, 0.74));
   box-shadow: 0 18px 48px rgba(15, 23, 42, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.72);
-  backdrop-filter: blur(18px) saturate(1.24);
   font-size: 13px;
   font-weight: 900;
   transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
@@ -3558,8 +3549,6 @@ onUnmounted(() => {
 }
 
 .canvas-shell.is-perf-lite .composer-trigger {
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
   box-shadow: 0 12px 34px rgba(15, 23, 42, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.46);
 }
 
@@ -3580,8 +3569,6 @@ onUnmounted(() => {
 .canvas-shell.is-perf-lite .composer-card,
 .canvas-shell.is-perf-lite .processing-card,
 .canvas-shell.is-perf-lite .runtime-log-panel {
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
   box-shadow: 0 12px 34px rgba(15, 23, 42, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.46);
 }
 
@@ -3613,7 +3600,6 @@ onUnmounted(() => {
 .canvas-suggestions button {
   border: 1px solid rgba(148, 163, 184, 0.25);
   background: rgba(255, 255, 255, 0.66);
-  backdrop-filter: blur(14px);
 }
 
 .dark .canvas-suggestions button {
@@ -3648,7 +3634,6 @@ onUnmounted(() => {
     radial-gradient(circle at 16% 0%, rgba(255, 255, 255, 0.9), transparent 42%),
     linear-gradient(135deg, rgba(220, 252, 231, 0.78), rgba(186, 230, 253, 0.56));
   box-shadow: 0 14px 36px rgba(20, 184, 166, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.68);
-  backdrop-filter: blur(16px) saturate(1.35);
   font-size: 12px;
   font-weight: 900;
 }
@@ -3661,14 +3646,7 @@ onUnmounted(() => {
   box-shadow: 0 0 0 5px rgba(34, 197, 94, 0.14), 0 0 18px rgba(34, 197, 94, 0.8);
 }
 
-.canvas-shell.is-perf-lite .live-run-chip,
-.canvas-shell.is-perf-lite .canvas-suggestions button {
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-}
-
 .canvas-shell.is-perf-lite .live-run-chip i {
-  animation: none;
   box-shadow: none;
 }
 
@@ -3692,7 +3670,6 @@ onUnmounted(() => {
     radial-gradient(circle at 12% 0%, rgba(34, 255, 181, 0.12), transparent 34%),
     linear-gradient(135deg, rgba(255, 255, 255, 0.88), rgba(241, 245, 249, 0.74));
   box-shadow: 0 34px 110px rgba(15, 23, 42, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(28px) saturate(1.32);
 }
 
 .dark .runtime-log-panel {
@@ -3860,7 +3837,6 @@ onUnmounted(() => {
   color: var(--text-primary);
   background: rgba(255, 255, 255, 0.72);
   box-shadow: 0 24px 80px rgba(15, 23, 42, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(22px);
 }
 
 .node-inspector-panel {
@@ -4168,7 +4144,6 @@ onUnmounted(() => {
   .zoom-dock button,
   .node-menu-pop button,
   .live-run-chip i {
-    animation: none;
     transition: none;
   }
 

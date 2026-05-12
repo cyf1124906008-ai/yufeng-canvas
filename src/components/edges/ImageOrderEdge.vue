@@ -100,7 +100,6 @@ const edgeStyle = computed(() => ({
   stroke: '#38bdf8',
   strokeWidth: 4.2,
   strokeLinecap: 'round',
-  filter: 'drop-shadow(0 0 8px rgba(56, 189, 248, 0.56))',
   ...props.style
 }))
 

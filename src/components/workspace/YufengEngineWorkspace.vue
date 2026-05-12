@@ -92,7 +92,6 @@ watch(
     radial-gradient(circle at 16% 0%, rgba(52, 211, 153, 0.18), transparent 34%),
     linear-gradient(145deg, rgba(15, 23, 42, 0.95), rgba(7, 24, 39, 0.92));
   box-shadow: 0 28px 80px rgba(2, 6, 23, 0.42);
-  backdrop-filter: blur(20px) saturate(1.2);
 }
 
 .workspace-header {

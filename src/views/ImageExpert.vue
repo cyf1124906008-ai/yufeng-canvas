@@ -712,7 +712,6 @@ onMounted(() => {
   padding: 18px;
   background: rgba(255, 255, 255, 0.68);
   box-shadow: 0 20px 70px rgba(15, 23, 42, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(22px);
 }
 
 .dark .expert-card {

@@ -197,7 +197,6 @@ onMounted(async () => {
     radial-gradient(circle at 90% 8%, rgba(56, 189, 248, 0.18), transparent 34%),
     linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(236, 253, 245, 0.72));
   box-shadow: 0 36px 120px rgba(15, 23, 42, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.72);
-  backdrop-filter: blur(28px) saturate(1.38);
 }
 
 :global(.dark .support-modal.n-card) {

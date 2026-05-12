@@ -379,7 +379,6 @@ onUnmounted(() => {
     radial-gradient(circle at 86% 12%, rgba(56, 189, 248, 0.18), transparent 34%),
     linear-gradient(135deg, rgba(255, 255, 255, 0.88), rgba(236, 253, 245, 0.68));
   box-shadow: 0 26px 72px rgba(15, 23, 42, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.72);
-  backdrop-filter: blur(24px) saturate(1.35);
   z-index: 200;
 }
 
