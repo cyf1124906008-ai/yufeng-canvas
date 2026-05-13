@@ -5539,4 +5539,330 @@ onUnmounted(() => {
     font-size: clamp(34px, 10vw, 48px);
   }
 }
+
+/* Minimal home skin: keep the product functional, remove visual noise. */
+.home-shell,
+.home-shell.is-perf-lite {
+  background: var(--bg-primary);
+}
+
+.dark .home-shell,
+.dark .home-shell.is-perf-lite {
+  background: #050b14;
+}
+
+.y-signal,
+.mesh-grid,
+.hero-prism,
+.prompt-panel-glow,
+.brand-footer,
+.welcome-continue,
+.hero-metrics,
+.feature-strip {
+  display: none !important;
+}
+
+.home-header {
+  top: 0;
+  width: 100%;
+  border-width: 0 0 1px;
+  border-radius: 0;
+  background: var(--bg-primary);
+  box-shadow: none;
+}
+
+.dark .home-header {
+  background: #050b14;
+  box-shadow: none;
+}
+
+.brand-logo {
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  box-shadow: none;
+}
+
+.brand-subtitle,
+.hero-eyebrow {
+  display: none;
+}
+
+.home-main {
+  width: min(1120px, calc(100vw - 32px));
+  padding: 28px 18px 64px;
+}
+
+.home-main.is-workspace {
+  width: min(1280px, calc(100vw - 32px));
+}
+
+.hero-grid {
+  min-height: auto;
+  gap: 22px;
+  padding-top: 22px;
+}
+
+.hero-grid.is-collapsed {
+  grid-template-columns: minmax(190px, 240px) minmax(0, 1fr);
+}
+
+.hero-copy {
+  max-width: 760px;
+}
+
+.hero-line {
+  min-height: 150px;
+}
+
+.hero-title-line {
+  font-size: clamp(40px, 6vw, 76px);
+}
+
+.hero-title-typewriter::before {
+  display: none;
+}
+
+.hero-desc {
+  max-width: 620px;
+  margin-top: 14px;
+  font-size: 15px;
+  line-height: 1.75;
+}
+
+.mode-card,
+.workspace-brand-strip,
+.inspiration-toolbar,
+.project-card,
+.inspiration-card,
+.showcase-card,
+.empty-state,
+::global(.onboarding-modal.n-card) {
+  border: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  box-shadow: none;
+}
+
+.dark .mode-card,
+.dark .workspace-brand-strip,
+.dark .inspiration-toolbar,
+.dark .project-card,
+.dark .inspiration-card,
+.dark .showcase-card,
+.dark .empty-state,
+::global(.dark .onboarding-modal.n-card) {
+  background: #07111f;
+  box-shadow: none;
+}
+
+.mode-card {
+  min-height: auto;
+  padding: 18px;
+  border-radius: 20px;
+}
+
+.mode-tabs {
+  gap: 6px;
+  margin-bottom: 14px;
+  padding: 4px;
+  border-radius: 16px;
+  background: var(--bg-secondary);
+  box-shadow: none;
+}
+
+.mode-tabs button {
+  gap: 8px;
+  min-height: 46px;
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: transparent;
+}
+
+.mode-tabs button small,
+.integrated-launch-card small,
+.entry-copy span,
+.section-desc,
+.inspiration-tags,
+.inspiration-meta {
+  display: none;
+}
+
+.mode-tabs button.active,
+.dark .mode-tabs button.active {
+  background: var(--bg-primary);
+  box-shadow: none;
+}
+
+.mode-tabs button.active::after {
+  display: none;
+}
+
+.quick-canvas-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.integrated-launch-grid,
+.integrated-inline-actions {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 10px 0 14px;
+}
+
+.integrated-launch-card,
+.integrated-inline-actions button {
+  min-height: auto;
+  border-radius: 14px;
+  padding: 11px 12px;
+  background: var(--bg-secondary);
+  box-shadow: none;
+}
+
+.integrated-launch-card:hover,
+.mode-tabs button:hover,
+.showcase-card:hover,
+.inspiration-card:hover,
+.project-card:hover,
+.source-link:hover,
+.new-project-button:hover,
+.secondary-action:hover,
+.ghost-chip:hover,
+.header-pill:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+.integrated-launch-card span,
+.integrated-launch-card b {
+  margin: 0;
+  font-size: 11px;
+}
+
+.integrated-launch-card strong {
+  margin: 4px 0;
+  font-size: 14px;
+}
+
+.chat-thread {
+  max-height: 260px;
+}
+
+.chat-image-controls,
+.suggestion-cloud {
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.showcase-section,
+.inspiration-section,
+.projects-section {
+  margin-top: 36px;
+}
+
+.section-title {
+  margin-bottom: 12px;
+}
+
+.section-title h2 {
+  font-size: 21px;
+}
+
+.showcase-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.showcase-card,
+.showcase-card-1,
+.showcase-card-2,
+.showcase-card-3 {
+  grid-column: auto;
+  height: 168px;
+  border-radius: 18px;
+}
+
+.showcase-card::after,
+.project-card::before,
+.inspiration-card::before {
+  display: none;
+}
+
+.showcase-card:hover img,
+.inspiration-card:hover .inspiration-image img,
+.inspiration-card.is-awesome-case:hover .inspiration-image img {
+  transform: none;
+}
+
+.showcase-overlay {
+  padding: 14px;
+  background: linear-gradient(180deg, transparent 8%, rgba(2, 6, 23, 0.78));
+}
+
+.showcase-overlay h3 {
+  font-size: 17px;
+}
+
+.showcase-overlay p,
+.showcase-overlay b {
+  display: none;
+}
+
+.inspiration-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.inspiration-card {
+  border-radius: 16px;
+}
+
+.inspiration-image {
+  aspect-ratio: 16 / 9;
+}
+
+.inspiration-body {
+  padding: 11px;
+}
+
+.inspiration-body h3 {
+  font-size: 14px;
+}
+
+.inspiration-body p {
+  -webkit-line-clamp: 2;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.project-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.project-card {
+  padding: 8px;
+  border-radius: 18px;
+}
+
+.project-thumb {
+  border-radius: 12px;
+}
+
+@media (max-width: 960px) {
+  .hero-grid.is-collapsed,
+  .quick-canvas-actions,
+  .integrated-launch-grid,
+  .integrated-inline-actions,
+  .showcase-grid,
+  .inspiration-grid,
+  .project-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .home-main {
+    width: min(100% - 22px, 720px);
+    padding: 18px 12px 72px;
+  }
+}
 </style>
