@@ -5555,7 +5555,6 @@ onUnmounted(() => {
 .mesh-grid,
 .hero-prism,
 .prompt-panel-glow,
-.brand-footer,
 .welcome-continue,
 .hero-metrics,
 .feature-strip {
@@ -5847,6 +5846,38 @@ onUnmounted(() => {
 
 .project-thumb {
   border-radius: 12px;
+}
+
+/* Keep bottom brand identity, but make it quiet and static. */
+.brand-footer {
+  display: grid !important;
+  min-height: 150px;
+  margin-top: 48px;
+  overflow: hidden;
+  perspective: none;
+}
+
+.brand-footer-glow {
+  display: none;
+}
+
+.brand-footer p {
+  color: rgba(15, 23, 42, 0.08);
+  text-shadow: none;
+  transform: none;
+  -webkit-text-stroke: 0;
+}
+
+.dark .brand-footer p {
+  color: rgba(238, 242, 247, 0.08);
+  text-shadow: none;
+  -webkit-text-stroke: 0;
+}
+
+.brand-footer span {
+  bottom: 22px;
+  background: var(--bg-secondary);
+  border-color: var(--border-color);
 }
 
 @media (max-width: 960px) {

@@ -28,7 +28,7 @@ html, body, #app {
 /* Light mode variables | æµ…è‰²æ¨¡å¼å˜é‡ */
 :root {
   --bg-primary: #f8fafc;
-  --bg-secondary: #ffffff;
+  --bg-secondary: #fbfcfd;
   --bg-tertiary: #f1f5f9;
   --text-primary: #1e293b;
   --text-secondary: #64748b;
@@ -557,7 +557,7 @@ body :is(.suggestion-cloud button, .canvas-suggestions button):hover {
 }
 
 
-/* Global minimal skin | È«¾Ö¼«¼ò½çÃæ¸²¸Ç
+/* Global minimal skin | È«ï¿½Ö¼ï¿½ï¿½ï¿½ï¿½ï¿½æ¸²ï¿½ï¿½
    Keep functionality intact; flatten visual hierarchy across the app. */
 * {
   transition: none !important;
@@ -565,9 +565,9 @@ body :is(.suggestion-cloud button, .canvas-suggestions button):hover {
 }
 
 :root {
-  --bg-primary: #f7f8fa;
+  --bg-primary: #eef4f2;
   --bg-secondary: #ffffff;
-  --bg-tertiary: #f2f4f7;
+  --bg-tertiary: #e8eef2;
   --text-primary: #172033;
   --text-secondary: #667085;
   --text-tertiary: #8a94a6;
@@ -602,8 +602,12 @@ body,
 .canvas-shell,
 .home-shell,
 .image-expert-page {
-  background: var(--bg-primary) !important;
+  background: linear-gradient(135deg, #edf6f2 0%, #f4f7fb 52%, #eaf1f4 100%) !important;
   color: var(--text-primary) !important;
+}
+
+.dark :is(body, #app, .vue-flow, .canvas-shell, .home-shell, .image-expert-page) {
+  background: linear-gradient(135deg, #07111d 0%, #0a1619 52%, #0b111c 100%) !important;
 }
 
 /* Flatten app surfaces. */
