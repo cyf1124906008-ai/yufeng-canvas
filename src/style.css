@@ -556,3 +556,284 @@ body :is(.suggestion-cloud button, .canvas-suggestions button):hover {
   line-height: 1.4;
 }
 
+
+/* Global minimal skin | 全局极简界面覆盖
+   Keep functionality intact; flatten visual hierarchy across the app. */
+* {
+  transition: none !important;
+  scroll-behavior: auto !important;
+}
+
+:root {
+  --bg-primary: #f7f8fa;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #f2f4f7;
+  --text-primary: #172033;
+  --text-secondary: #667085;
+  --text-tertiary: #8a94a6;
+  --border-color: #d9dee7;
+  --accent-color: #19b46b;
+  --accent-hover: #11945a;
+  --glass-control-bg: #ffffff;
+  --glass-control-primary: #19b46b;
+  --glass-control-border: var(--border-color);
+  --glass-control-shadow: none;
+}
+
+.dark {
+  --bg-primary: #0b111c;
+  --bg-secondary: #111827;
+  --bg-tertiary: #1b2433;
+  --text-primary: #eef2f7;
+  --text-secondary: #a1aab8;
+  --text-tertiary: #778194;
+  --border-color: #2d3748;
+  --accent-color: #38d083;
+  --accent-hover: #28b86f;
+  --glass-control-bg: #111827;
+  --glass-control-primary: #24b86f;
+  --glass-control-border: var(--border-color);
+  --glass-control-shadow: none;
+}
+
+body,
+#app,
+.vue-flow,
+.canvas-shell,
+.home-shell,
+.image-expert-page {
+  background: var(--bg-primary) !important;
+  color: var(--text-primary) !important;
+}
+
+/* Flatten app surfaces. */
+:is(
+  .text-node,
+  .image-config-node,
+  .video-config-node,
+  .llm-config-node,
+  .image-node,
+  .video-node,
+  .cloud-workflow-node,
+  .comfy-workflow-node,
+  .drama-shot-node,
+  .canvas-toolbar,
+  .zoom-dock,
+  .composer-card,
+  .composer-trigger,
+  .processing-card,
+  .runtime-log-panel,
+  .agent-task-panel,
+  .node-inspector-panel,
+  .workflow-panel,
+  .workspace-panel,
+  .engine-workspace,
+  .yufeng-engine-workspace,
+  .dws-panel,
+  .tour-card,
+  .support-card,
+  .qr-card,
+  .data-backup-card,
+  .model-discovery-card,
+  .update-progress-card,
+  .api-provider-card,
+  .n-card,
+  .n-dialog,
+  .n-modal,
+  .n-popover,
+  .n-dropdown-menu,
+  .n-drawer-content,
+  .mentions-picker,
+  .node-handle-menu,
+  .edge-order-badge,
+  .role-edge-label
+) {
+  background: var(--bg-secondary) !important;
+  background-image: none !important;
+  border-color: var(--border-color) !important;
+  box-shadow: none !important;
+}
+
+.dark :is(
+  .text-node,
+  .image-config-node,
+  .video-config-node,
+  .llm-config-node,
+  .image-node,
+  .video-node,
+  .cloud-workflow-node,
+  .comfy-workflow-node,
+  .drama-shot-node,
+  .canvas-toolbar,
+  .zoom-dock,
+  .composer-card,
+  .composer-trigger,
+  .processing-card,
+  .runtime-log-panel,
+  .agent-task-panel,
+  .node-inspector-panel,
+  .workflow-panel,
+  .workspace-panel,
+  .engine-workspace,
+  .yufeng-engine-workspace,
+  .dws-panel,
+  .tour-card,
+  .support-card,
+  .qr-card,
+  .data-backup-card,
+  .model-discovery-card,
+  .update-progress-card,
+  .api-provider-card,
+  .n-card,
+  .n-dialog,
+  .n-modal,
+  .n-popover,
+  .n-dropdown-menu,
+  .n-drawer-content,
+  .mentions-picker,
+  .node-handle-menu,
+  .edge-order-badge,
+  .role-edge-label
+) {
+  background: var(--bg-secondary) !important;
+  background-image: none !important;
+}
+
+/* Remove decorative overlays without touching functional handles/canvas. */
+:is(
+  .text-node,
+  .image-config-node,
+  .video-config-node,
+  .llm-config-node,
+  .image-node,
+  .video-node,
+  .composer-card,
+  .composer-trigger,
+  .processing-card,
+  .runtime-log-panel,
+  .agent-task-panel,
+  .node-inspector-panel,
+  .workflow-panel,
+  .support-card,
+  .qr-card,
+  .tour-card,
+  .update-progress-card,
+  .project-card,
+  .showcase-card,
+  .inspiration-card
+)::before,
+:is(
+  .text-node,
+  .image-config-node,
+  .video-config-node,
+  .llm-config-node,
+  .image-node,
+  .video-node,
+  .composer-card,
+  .composer-trigger,
+  .processing-card,
+  .runtime-log-panel,
+  .agent-task-panel,
+  .node-inspector-panel,
+  .workflow-panel,
+  .support-card,
+  .qr-card,
+  .tour-card,
+  .update-progress-card,
+  .project-card,
+  .showcase-card,
+  .inspiration-card
+)::after {
+  display: none !important;
+}
+
+/* Simpler canvas: keep a static grid only. */
+.canvas-shell::before,
+.canvas-shell::after,
+.canvas-flow::before,
+.canvas-flow::after {
+  display: none !important;
+}
+
+.canvas-flow {
+  background:
+    linear-gradient(var(--border-color) 1px, transparent 1px),
+    linear-gradient(90deg, var(--border-color) 1px, transparent 1px),
+    var(--bg-primary) !important;
+  background-size: 32px 32px !important;
+}
+
+.dark .canvas-flow {
+  background:
+    linear-gradient(rgba(255,255,255,0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.055) 1px, transparent 1px),
+    var(--bg-primary) !important;
+  background-size: 32px 32px !important;
+}
+
+/* Compact, consistent controls. */
+:is(button, input, textarea, select, .n-input, .n-button, .n-base-selection, .n-input-wrapper) {
+  box-shadow: none !important;
+}
+
+:is(.primary-action, .send-button, .n-button--primary-type, .canvas-toolbar button:first-child) {
+  background: var(--accent-color) !important;
+  color: #fff !important;
+  box-shadow: none !important;
+}
+
+:is(.secondary-action, .ghost-chip, .header-pill, .new-project-button, .canvas-toolbar button, .zoom-dock button, .composer-trigger) {
+  background: var(--bg-secondary) !important;
+  border: 1px solid var(--border-color) !important;
+  color: var(--text-primary) !important;
+  box-shadow: none !important;
+}
+
+/* Nodes: tighter radius, plain surfaces, readable fields. */
+:is(.text-node, .image-config-node, .video-config-node, .llm-config-node, .image-node, .video-node, .cloud-workflow-node, .comfy-workflow-node, .drama-shot-node) {
+  border-radius: 14px !important;
+  overflow: visible !important;
+}
+
+:is(.text-node, .image-config-node, .video-config-node, .llm-config-node, .cloud-workflow-node, .comfy-workflow-node, .drama-shot-node) > div:first-child {
+  background: transparent !important;
+  border-bottom: 1px solid var(--border-color) !important;
+}
+
+.canvas-flow .vue-flow__node.selected,
+.canvas-flow .vue-flow__node:hover {
+  filter: none !important;
+}
+
+/* Keep handles obvious and clickable. */
+.canvas-flow .vue-flow__handle,
+.vue-flow__handle {
+  width: 18px !important;
+  height: 18px !important;
+  border: 3px solid var(--bg-secondary) !important;
+  background: var(--accent-color) !important;
+  box-shadow: 0 0 0 1px var(--accent-color) !important;
+  opacity: 1 !important;
+}
+
+.canvas-flow .vue-flow__handle-left {
+  left: -10px !important;
+}
+
+.canvas-flow .vue-flow__handle-right {
+  right: -10px !important;
+}
+
+/* Panels and modals: less rounded, less padded visual weight. */
+:is(.canvas-toolbar, .zoom-dock, .composer-card, .runtime-log-panel, .agent-task-panel, .node-inspector-panel, .workflow-panel, .workspace-panel, .engine-workspace, .yufeng-engine-workspace, .dws-panel) {
+  border-radius: 14px !important;
+}
+
+:is(.n-card, .n-dialog) {
+  border-radius: 16px !important;
+}
+
+/* Remove heavy media hover effects. */
+:is(img, video) {
+  filter: none !important;
+}
