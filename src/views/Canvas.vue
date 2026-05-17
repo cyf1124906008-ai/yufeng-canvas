@@ -730,6 +730,8 @@ import YufengEngineWorkspace from '../components/workspace/YufengEngineWorkspace
 import AppHeader from '../components/AppHeader.vue'
 import GuidedTour from '../components/GuidedTour.vue'
 import { CANVAS_PROMPT_SUGGESTIONS } from '../config/promptLibrary'
+import { WORKFLOW_TEMPLATES } from '../config/workflows'
+import { COMPLEX_WORKFLOW_TEMPLATES } from '../config/complexWorkflows'
 import { buildCanvasSnapshot, buildCanvasAgentSystemPrompt, parseAgentCommandResponse, classifyCommandRisk, buildLocalCommandPlan } from '../integrations/canvas/agentPlanner'
 
 import { executeCommandBatch, validateCommandBatch, executeCommand, dryRunCommandBatch, COMMAND_REGISTRY } from '../integrations/canvas/commands'
@@ -2546,15 +2548,30 @@ const runCanvasQuickAction = (prompt) => {
 
 const handleInitialCanvasAction = (rawAction) => {
   let action = rawAction
+  let payload = null
   try {
     const parsed = JSON.parse(rawAction)
+    payload = parsed || null
     action = parsed?.action || rawAction
   } catch {
     action = rawAction
   }
 
-  const allowed = new Set(['dramaShots', 'productLaunch', 'image2video', 'txt2img', 'characterBible', 'cloudProWorkflow'])
+  const allowed = new Set(['dramaShots', 'productLaunch', 'image2video', 'txt2img', 'characterBible', 'cloudProWorkflow', 'workflowTemplate'])
   if (!allowed.has(action)) return
+
+  if (action === 'workflowTemplate') {
+    const workflowId = payload?.workflowId
+    const workflow = [...WORKFLOW_TEMPLATES, ...COMPLEX_WORKFLOW_TEMPLATES].find((item) => item.id === workflowId)
+    if (!workflow) {
+      window.$message?.warning('未找到工作流模板')
+      return
+    }
+    handleAddWorkflow({ workflow, options: {} })
+    showStudioCockpit.value = false
+    closeEngineWorkspace()
+    return
+  }
 
   if (action === 'dramaShots') {
     executeCommand('createDramaProject', { title: '短剧创作项目', premise: '' })

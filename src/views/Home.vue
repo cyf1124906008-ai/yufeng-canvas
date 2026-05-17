@@ -79,6 +79,14 @@
             <n-icon :size="17"><SparklesOutline /></n-icon>
             <span>短剧分镜</span>
           </button>
+          <button :class="{ active: homeViewMode === 'inspiration' }" @click="homeViewMode = 'inspiration'">
+            <n-icon :size="17"><FolderOutline /></n-icon>
+            <span>灵感库</span>
+          </button>
+          <button :class="{ active: homeViewMode === 'workflows' }" @click="homeViewMode = 'workflows'">
+            <n-icon :size="17"><DocumentTextOutline /></n-icon>
+            <span>工作流模板</span>
+          </button>
         </nav>
 
         <div v-if="chatHistory.length" class="gemini-sidebar-section">
@@ -124,6 +132,7 @@
         </header>
 
         <div
+          v-if="homeViewMode === 'chat'"
           class="gemini-center"
           :class="{ 'has-chat': chatMessages.length || chatLoading || chatImageLoading }"
         >
@@ -262,6 +271,109 @@
             </button>
           </div>
         </div>
+
+        <section v-else-if="homeViewMode === 'inspiration'" class="gemini-library">
+          <div class="gemini-library-head">
+            <div>
+              <p>INSPIRATION LIBRARY</p>
+              <h2>灵感库</h2>
+              <span>已整合 {{ awesomeCaseCount }} 个案例。点击案例会把提示词带回 AI 对话，你可以继续修改或直接生成。</span>
+            </div>
+            <button @click="openPromptSource">来源</button>
+          </div>
+
+          <div class="gemini-library-toolbar">
+            <div class="gemini-library-search">
+              <n-icon :size="16"><SearchOutline /></n-icon>
+              <input v-model="inspirationSearch" placeholder="搜索海报、人像、电商、短剧、Case 编号..." />
+            </div>
+            <button v-if="inspirationSearch || inspirationCategory !== 'all'" @click="resetInspirationFilters">清空</button>
+          </div>
+
+          <div class="gemini-chip-row">
+            <button
+              v-for="category in inspirationCategories"
+              :key="category.key"
+              :class="{ active: inspirationCategory === category.key }"
+              @click="inspirationCategory = category.key"
+            >
+              {{ category.label }} <span>{{ category.count }}</span>
+            </button>
+          </div>
+
+          <div class="gemini-case-grid">
+            <button
+              v-for="item in visibleInspirationCases"
+              :key="item.id || item.title"
+              class="gemini-case-card"
+              @click="useInspirationCase(item)"
+            >
+              <img v-if="item.image" :src="item.image" :alt="item.title" loading="lazy" />
+              <div v-else class="gemini-case-placeholder">Y</div>
+              <span v-if="item.caseNumber" class="case-badge">Case {{ item.caseNumber }}</span>
+              <div>
+                <b>{{ item.displayTitle || item.shortTitle || item.title }}</b>
+                <p>{{ item.displayExcerpt || item.excerpt || item.prompt }}</p>
+              </div>
+            </button>
+          </div>
+
+          <div v-if="visibleInspirationCases.length < filteredInspirationCases.length" class="gemini-more-row">
+            <button @click="loadMoreInspiration">再加载 48 个案例</button>
+          </div>
+        </section>
+
+        <section v-else class="gemini-library">
+          <div class="gemini-library-head">
+            <div>
+              <p>WORKFLOW TEMPLATES</p>
+              <h2>工作流模板</h2>
+              <span>复杂工作流会直接创建画布项目并搭好节点链路；简单模板只作为快速入口。</span>
+            </div>
+            <button @click="homeViewMode = 'chat'">回到对话</button>
+          </div>
+
+          <div class="gemini-library-toolbar">
+            <div class="gemini-library-search">
+              <n-icon :size="16"><SearchOutline /></n-icon>
+              <input v-model="workflowSearch" placeholder="搜索角色一致性、首帧视频、电商、修复、放大..." />
+            </div>
+            <button v-if="workflowSearch || workflowCategory !== 'all'" @click="resetWorkflowFilters">清空</button>
+          </div>
+
+          <div class="gemini-chip-row">
+            <button
+              v-for="category in workflowCategories"
+              :key="category.key"
+              :class="{ active: workflowCategory === category.key }"
+              @click="workflowCategory = category.key"
+            >
+              {{ category.label }} <span>{{ category.count }}</span>
+            </button>
+          </div>
+
+          <div class="gemini-workflow-grid">
+            <button
+              v-for="workflow in visibleHomeWorkflows"
+              :key="workflow.id"
+              class="gemini-workflow-card"
+              @click="createProjectFromWorkflow(workflow)"
+            >
+              <img v-if="workflow.cover" :src="workflow.cover" :alt="workflow.name" loading="lazy" />
+              <div v-else class="gemini-workflow-placeholder">WF</div>
+              <div>
+                <span>{{ workflow.category || 'workflow' }}</span>
+                <b>{{ workflow.name }}</b>
+                <p>{{ workflow.description }}</p>
+                <small>{{ getHomeWorkflowNodeCount(workflow) }} 个节点 · 一键加入画布</small>
+              </div>
+            </button>
+          </div>
+
+          <div v-if="visibleHomeWorkflows.length < filteredHomeWorkflows.length" class="gemini-more-row">
+            <button @click="loadMoreWorkflows">再加载 36 个工作流</button>
+          </div>
+        </section>
 
         <footer class="gemini-brand-mark" aria-label="YUFENG Canvas">
           <p>YUFENG Canvas</p>
@@ -1130,6 +1242,8 @@ import {
   INSPIRATION_CASES,
   PROMPT_LIBRARY_SOURCE
 } from '../config/promptLibrary'
+import { WORKFLOW_TEMPLATES } from '../config/workflows'
+import { COMPLEX_WORKFLOW_TEMPLATES } from '../config/complexWorkflows'
 
 const router = useRouter()
 const route = useRoute()
@@ -1143,6 +1257,7 @@ const showDeleteModal = ref(false)
 const showTrashModal = ref(false)
 const isWorkspacePage = ref(false)
 const activeMode = ref('create')
+const homeViewMode = ref('chat')
 const inputText = ref('')
 const chatText = ref('')
 const chatMessages = ref([])
@@ -1314,6 +1429,9 @@ const awesomeCaseCount = inspirationCases.filter((item) => item.caseNumber || it
 const inspirationSearch = ref('')
 const inspirationCategory = ref('all')
 const inspirationVisibleCount = ref(48)
+const workflowSearch = ref('')
+const workflowCategory = ref('all')
+const workflowVisibleCount = ref(36)
 const heroTypeLines = [
   '把想法变成图片、视频和短剧',
   '一句话搭建你的创作工作流',
@@ -1406,6 +1524,45 @@ const filteredInspirationCases = computed(() => {
 
 const visibleInspirationCases = computed(() => filteredInspirationCases.value.slice(0, inspirationVisibleCount.value))
 
+const publicHomeWorkflows = computed(() => [...WORKFLOW_TEMPLATES, ...COMPLEX_WORKFLOW_TEMPLATES])
+
+const workflowCategories = computed(() => {
+  const all = publicHomeWorkflows.value
+  const stats = all.reduce((map, workflow) => {
+    const key = workflow.category || 'other'
+    const current = map.get(key) || { key, label: getWorkflowCategoryLabel(key), count: 0 }
+    current.count += 1
+    map.set(key, current)
+    return map
+  }, new Map())
+
+  return [
+    { key: 'all', label: '全部', count: all.length },
+    ...Array.from(stats.values()).sort((a, b) => b.count - a.count)
+  ]
+})
+
+const filteredHomeWorkflows = computed(() => {
+  const query = workflowSearch.value.trim().toLowerCase()
+  return publicHomeWorkflows.value.filter((workflow) => {
+    const matchesCategory = workflowCategory.value === 'all' || workflow.category === workflowCategory.value
+    if (!matchesCategory) return false
+    if (!query) return true
+    return [
+      workflow.name,
+      workflow.description,
+      workflow.category,
+      workflow.complexity,
+      workflow.sourceName,
+      workflow.inputSummary,
+      workflow.outputSummary,
+      ...(workflow.parameters || [])
+    ].filter(Boolean).join(' ').toLowerCase().includes(query)
+  })
+})
+
+const visibleHomeWorkflows = computed(() => filteredHomeWorkflows.value.slice(0, workflowVisibleCount.value))
+
 const loadMoreInspiration = () => {
   inspirationVisibleCount.value += 48
 }
@@ -1416,8 +1573,62 @@ const resetInspirationFilters = () => {
   inspirationVisibleCount.value = 48
 }
 
+const getWorkflowCategoryLabel = (category) => {
+  const labels = {
+    image: '图片',
+    video: '视频',
+    drama: '短剧',
+    ecommerce: '电商',
+    character: '角色',
+    poster: '海报',
+    repair: '修复',
+    professional: '专业',
+    other: '其他'
+  }
+  return labels[category] || category || '其他'
+}
+
+const loadMoreWorkflows = () => {
+  workflowVisibleCount.value += 36
+}
+
+const resetWorkflowFilters = () => {
+  workflowSearch.value = ''
+  workflowCategory.value = 'all'
+  workflowVisibleCount.value = 36
+}
+
+const getHomeWorkflowNodeCount = (workflow) => {
+  try {
+    return workflow.createNodes({ x: 0, y: 0 })?.nodes?.length || 0
+  } catch {
+    return 0
+  }
+}
+
+const useInspirationCase = async (item) => {
+  homeViewMode.value = 'chat'
+  chatText.value = item?.prompt || item?.originalPrompt || item?.excerpt || item?.title || ''
+  await nextTick()
+  chatTextareaRef.value?.focus?.()
+}
+
+const createProjectFromWorkflow = (workflow) => {
+  if (!workflow?.id) return
+  const id = createProject(workflow.name || '工作流项目', PROJECT_TYPES.MIXED)
+  sessionStorage.setItem('yufeng-canvas-initial-action', JSON.stringify({
+    action: 'workflowTemplate',
+    workflowId: workflow.id
+  }))
+  router.push(`/canvas/${id}`)
+}
+
 watch([inspirationSearch, inspirationCategory], () => {
   inspirationVisibleCount.value = 48
+})
+
+watch([workflowSearch, workflowCategory], () => {
+  workflowVisibleCount.value = 36
 })
 
 const heroTypeChars = computed(() => Array.from(heroTypeText.value))
@@ -1487,6 +1698,7 @@ const restoreChatSession = (id) => {
   if (!session) return
 
   enterWorkspace()
+  homeViewMode.value = 'chat'
   activeMode.value = 'chat'
   activeChatId.value = id
   chatMessages.value = Array.isArray(session.messages) ? session.messages : []
@@ -1496,6 +1708,7 @@ const restoreChatSession = (id) => {
 const startNewChat = () => {
   persistCurrentChat()
   enterWorkspace()
+  homeViewMode.value = 'chat'
   activeMode.value = 'chat'
   activeChatId.value = ''
   chatMessages.value = []
@@ -6482,6 +6695,190 @@ onUnmounted(() => {
   text-transform: uppercase;
 }
 
+.gemini-library {
+  width: min(1040px, calc(100vw - 360px));
+  height: calc(100vh - 96px);
+  margin: 20px auto 0;
+  padding: 8px 2px 28px;
+  overflow-y: auto;
+}
+
+.gemini-library-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 18px;
+}
+
+.gemini-library-head p {
+  margin: 0 0 6px;
+  color: #10b981;
+  font-size: 12px;
+  font-weight: 850;
+  letter-spacing: 0.16em;
+}
+
+.gemini-library-head h2 {
+  margin: 0 0 8px;
+  font-size: clamp(28px, 3vw, 42px);
+  line-height: 1.05;
+  letter-spacing: -0.05em;
+}
+
+.gemini-library-head span {
+  color: var(--text-secondary);
+}
+
+.gemini-library-head button,
+.gemini-library-toolbar > button,
+.gemini-more-row button {
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  min-height: 34px;
+  padding: 0 14px;
+  cursor: pointer;
+}
+
+.gemini-library-toolbar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.gemini-library-search {
+  flex: 1;
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  background: var(--bg-secondary);
+}
+
+.gemini-library-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text-primary);
+}
+
+.gemini-chip-row {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 2px 0 16px;
+}
+
+.gemini-chip-row button {
+  flex: 0 0 auto;
+  min-height: 32px;
+  border: 0;
+  border-radius: 999px;
+  padding: 0 12px;
+  background: rgba(15, 23, 42, 0.06);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.gemini-chip-row button.active {
+  background: #1fce7c;
+  color: #042013;
+  font-weight: 800;
+}
+
+.gemini-chip-row span {
+  opacity: 0.72;
+}
+
+.gemini-case-grid,
+.gemini-workflow-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.gemini-case-card,
+.gemini-workflow-card {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  border-radius: 20px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.gemini-case-card img,
+.gemini-case-placeholder,
+.gemini-workflow-card img,
+.gemini-workflow-placeholder {
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+  display: grid;
+  place-items: center;
+  background: rgba(15, 23, 42, 0.06);
+  color: var(--text-muted);
+  font-weight: 900;
+}
+
+.gemini-case-card > div:last-child,
+.gemini-workflow-card > div:last-child {
+  padding: 12px;
+}
+
+.gemini-case-card b,
+.gemini-workflow-card b {
+  display: block;
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.gemini-case-card p,
+.gemini-workflow-card p {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin: 6px 0 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.gemini-workflow-card span,
+.gemini-workflow-card small {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.case-badge {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  border-radius: 999px;
+  padding: 4px 8px;
+  background: rgba(15, 23, 42, 0.78);
+  color: white;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.gemini-more-row {
+  display: flex;
+  justify-content: center;
+  padding: 18px 0 6px;
+}
+
 @media (max-width: 900px) {
   .gemini-home-shell {
     grid-template-columns: 1fr;
@@ -6500,6 +6897,16 @@ onUnmounted(() => {
     width: min(100% - 32px, 720px);
     height: calc(100vh - 74px);
     padding-top: 12px;
+  }
+
+  .gemini-library {
+    width: min(100% - 32px, 720px);
+    height: calc(100vh - 74px);
+  }
+
+  .gemini-case-grid,
+  .gemini-workflow-grid {
+    grid-template-columns: 1fr;
   }
 
   .gemini-topbar {
