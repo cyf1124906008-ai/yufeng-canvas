@@ -113,8 +113,27 @@
         </header>
 
         <div class="gemini-center">
-          <p class="gemini-hello">御风，你好</p>
+          <p class="gemini-hello">你好</p>
           <h1>今天想创作什么？</h1>
+          <p class="gemini-typewriter" :aria-label="heroTypewriterAriaLabel">
+            <span
+              class="gemini-typewriter-text"
+              :class="{
+                'is-typing': heroTypePhase === 'typing',
+                'is-holding': heroTypePhase === 'holding',
+                'is-erasing': heroTypePhase === 'erasing'
+              }"
+            >
+              <span
+                v-for="(char, index) in heroTypeChars"
+                :key="`${heroTypeCycle}-${index}-${char}`"
+                class="gemini-typewriter-char"
+              >
+                {{ char }}
+              </span>
+            </span>
+            <span class="gemini-typewriter-dot" aria-hidden="true"></span>
+          </p>
 
           <div class="gemini-composer">
             <textarea
@@ -1198,10 +1217,11 @@ const inspirationSearch = ref('')
 const inspirationCategory = ref('all')
 const inspirationVisibleCount = ref(48)
 const heroTypeLines = [
-  '聊出创意方向',
-  '搭建视觉画布',
-  '编排多模型流程',
-  '协同智能体创作'
+  '把想法变成图片、视频和短剧',
+  '一句话搭建你的创作工作流',
+  '从分镜、首帧到视频连续生成',
+  '让 AI 帮你整理项目、素材和节点',
+  '用云端模型完成专业视觉创作'
 ]
 const heroTypeText = ref('')
 const heroTypeIndex = ref(0)
@@ -1305,7 +1325,7 @@ watch([inspirationSearch, inspirationCategory], () => {
 const heroTypeChars = computed(() => Array.from(heroTypeText.value))
 const heroTypewriterAriaLabel = computed(() => {
   const fallback = heroTypeLines[heroTypeIndex.value] || heroTypeLines[0]
-  return `和 AI 一起，${heroTypeText.value || fallback}`
+  return heroTypeText.value || fallback
 })
 
 const enterWorkspace = () => {
@@ -1552,6 +1572,12 @@ const startHeroTypewriter = () => {
 
   heroTypeIndex.value = 0
   heroTypeCycle.value += 1
+
+  if (shouldReduceHeroMotion()) {
+    heroTypeText.value = heroTypeLines[0]
+    heroTypePhase.value = 'holding'
+    return
+  }
 
   heroTypeText.value = ''
   heroTypePhase.value = 'idle'
@@ -6189,11 +6215,41 @@ onUnmounted(() => {
 }
 
 .gemini-center h1 {
-  margin: 0 0 28px;
+  margin: 0 0 12px;
   font-size: clamp(32px, 4vw, 48px);
   line-height: 1.08;
   font-weight: 760;
   letter-spacing: -0.06em;
+}
+
+.gemini-typewriter {
+  min-height: 32px;
+  margin: 0 0 28px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-size: clamp(17px, 1.6vw, 22px);
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.gemini-typewriter-text {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.gemini-typewriter-char {
+  display: inline-block;
+}
+
+.gemini-typewriter-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: #24d18b;
+  flex: 0 0 auto;
 }
 
 .gemini-composer {
