@@ -4,7 +4,7 @@
     class="home-shell min-h-screen h-screen overflow-y-auto text-[var(--text-primary)]"
     :class="{ 'is-perf-lite': performanceLite }"
   >
-    <AppHeader class="home-header">
+    <AppHeader v-if="isWorkspacePage" class="home-header">
       <template #left>
         <button class="brand-lockup" title="回到首页顶部" @click="scrollToTop">
           <img src="../assets/logo.png" alt="YUFENG Canvas" class="brand-logo" />
@@ -46,7 +46,115 @@
       </template>
     </AppHeader>
 
+    <section v-if="!isWorkspacePage" class="gemini-home-shell">
+      <aside class="gemini-sidebar">
+        <div class="gemini-sidebar-top">
+          <button class="gemini-icon-button" title="菜单">
+            <n-icon :size="20"><EllipsisHorizontalOutline /></n-icon>
+          </button>
+          <button class="gemini-icon-button" title="搜索项目">
+            <n-icon :size="18"><SearchOutline /></n-icon>
+          </button>
+        </div>
+
+        <button class="gemini-new-chat" @click="enterBlankCanvas">
+          <n-icon :size="18"><CreateOutline /></n-icon>
+          <span>新建项目</span>
+        </button>
+
+        <nav class="gemini-nav" aria-label="YUFENG 快捷入口">
+          <button @click="enterBlankCanvas">
+            <n-icon :size="17"><AddOutline /></n-icon>
+            <span>空白画布</span>
+          </button>
+          <button @click="createIntegratedProject('cloudProWorkflow')">
+            <n-icon :size="17"><ImageOutline /></n-icon>
+            <span>制作图片</span>
+          </button>
+          <button @click="createIntegratedProject('image2video')">
+            <n-icon :size="17"><VideocamOutline /></n-icon>
+            <span>制作视频</span>
+          </button>
+          <button @click="createIntegratedProject('dramaShots')">
+            <n-icon :size="17"><SparklesOutline /></n-icon>
+            <span>短剧分镜</span>
+          </button>
+        </nav>
+
+        <div v-if="recentHomeProjects.length" class="gemini-sidebar-section">
+          <strong>最近项目</strong>
+          <button
+            v-for="project in recentHomeProjects"
+            :key="project.id"
+            @click="openProject(project)"
+          >
+            {{ project.name || '未命名项目' }}
+          </button>
+        </div>
+
+        <div class="gemini-sidebar-bottom">
+          <button @click="showTrashModal = true">
+            <n-icon :size="17"><TrashOutline /></n-icon>
+            <span>回收站</span>
+          </button>
+          <button @click="showApiSettings = true">
+            <n-icon :size="17"><SettingsOutline /></n-icon>
+            <span>设置</span>
+          </button>
+        </div>
+      </aside>
+
+      <main class="gemini-main">
+        <header class="gemini-topbar">
+          <strong>YUFENG Canvas</strong>
+          <button @click="showApiSettings = true">
+            {{ isApiConfigured ? '模型已连接' : '配置模型 API' }}
+          </button>
+        </header>
+
+        <div class="gemini-center">
+          <p class="gemini-hello">御风，你好</p>
+          <h1>今天想创作什么？</h1>
+
+          <div class="gemini-composer">
+            <textarea
+              v-model="inputText"
+              placeholder="描述你想做的图片、视频、短剧或工作流..."
+              @keydown.enter.ctrl.prevent="handleCreateWithInput"
+            />
+            <div class="gemini-composer-footer">
+              <div class="gemini-tools">
+                <button title="进入画布" @click="enterBlankCanvas">+</button>
+                <button @click="createIntegratedProject('cloudProWorkflow')">图片</button>
+                <button @click="createIntegratedProject('image2video')">视频</button>
+                <button @click="createIntegratedProject('dramaShots')">短剧</button>
+              </div>
+              <button class="gemini-send" @click="handleCreateWithInput">开始</button>
+            </div>
+          </div>
+
+          <div class="gemini-suggestions">
+            <button @click="inputText = '做一张产品发布海报，包含主视觉、卖点和社媒版本'">
+              产品海报
+            </button>
+            <button @click="inputText = '做一个古装短剧第一集，生成 8 个分镜'">
+              短剧分镜
+            </button>
+            <button @click="inputText = '把一张参考图变成视频首帧到视频工作流'">
+              图生视频
+            </button>
+          </div>
+        </div>
+
+        <footer class="gemini-brand-mark" aria-label="YUFENG Canvas">
+          <p>YUFENG Canvas</p>
+          <span>Visual AI workflow studio</span>
+        </footer>
+      </main>
+    </section>
+
     <main
+      v-if="isWorkspacePage"
       class="home-main"
       :class="{ 'is-workspace': isWorkspacePage }"
       @click.self="handleWelcomeContinue"
@@ -5894,6 +6002,313 @@ onUnmounted(() => {
   .home-main {
     width: min(100% - 22px, 720px);
     padding: 18px 12px 72px;
+  }
+}
+
+.gemini-home-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  background:
+    linear-gradient(180deg, rgba(241, 247, 255, 0.82), rgba(246, 250, 255, 0.92)),
+    var(--bg-primary);
+}
+
+.dark .gemini-home-shell {
+  background:
+    linear-gradient(180deg, rgba(10, 16, 25, 0.96), rgba(13, 22, 34, 0.96)),
+    var(--bg-primary);
+}
+
+.gemini-sidebar {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 12px;
+  background: #e8eef6;
+  border-right: 1px solid rgba(148, 163, 184, 0.22);
+}
+
+.dark .gemini-sidebar {
+  background: #101827;
+  border-right-color: rgba(148, 163, 184, 0.16);
+}
+
+.gemini-sidebar-top,
+.gemini-composer-footer,
+.gemini-tools,
+.gemini-topbar {
+  display: flex;
+  align-items: center;
+}
+
+.gemini-sidebar-top {
+  justify-content: space-between;
+}
+
+.gemini-icon-button,
+.gemini-new-chat,
+.gemini-nav button,
+.gemini-sidebar-section button,
+.gemini-sidebar-bottom button,
+.gemini-topbar button,
+.gemini-tools button,
+.gemini-suggestions button,
+.gemini-send {
+  border: 0;
+  font: inherit;
+  color: var(--text-primary);
+  background: transparent;
+  cursor: pointer;
+}
+
+.gemini-icon-button {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+}
+
+.gemini-icon-button:hover,
+.gemini-nav button:hover,
+.gemini-sidebar-bottom button:hover,
+.gemini-sidebar-section button:hover,
+.gemini-suggestions button:hover,
+.gemini-tools button:hover {
+  background: rgba(15, 23, 42, 0.06);
+}
+
+.dark .gemini-icon-button:hover,
+.dark .gemini-nav button:hover,
+.dark .gemini-sidebar-bottom button:hover,
+.dark .gemini-sidebar-section button:hover,
+.dark .gemini-suggestions button:hover,
+.dark .gemini-tools button:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.gemini-new-chat {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 42px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.52);
+  text-align: left;
+  font-weight: 700;
+}
+
+.dark .gemini-new-chat {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.gemini-nav,
+.gemini-sidebar-section,
+.gemini-sidebar-bottom {
+  display: grid;
+  gap: 4px;
+}
+
+.gemini-nav button,
+.gemini-sidebar-bottom button {
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 10px;
+  border-radius: 12px;
+  text-align: left;
+}
+
+.gemini-sidebar-section {
+  margin-top: 10px;
+}
+
+.gemini-sidebar-section strong {
+  padding: 0 10px 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.gemini-sidebar-section button {
+  min-height: 34px;
+  padding: 0 10px;
+  border-radius: 10px;
+  overflow: hidden;
+  text-align: left;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--text-secondary);
+}
+
+.gemini-sidebar-bottom {
+  margin-top: auto;
+}
+
+.gemini-main {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.gemini-topbar {
+  height: 56px;
+  justify-content: space-between;
+  padding: 0 28px;
+}
+
+.gemini-topbar strong {
+  font-size: 16px;
+  letter-spacing: -0.02em;
+}
+
+.gemini-topbar button {
+  min-height: 32px;
+  padding: 0 13px;
+  border-radius: 999px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+}
+
+.gemini-center {
+  width: min(720px, calc(100vw - 360px));
+  margin: auto auto 0;
+  padding-bottom: 11vh;
+}
+
+.gemini-hello {
+  margin: 0 0 4px;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.gemini-center h1 {
+  margin: 0 0 28px;
+  font-size: clamp(32px, 4vw, 48px);
+  line-height: 1.08;
+  font-weight: 760;
+  letter-spacing: -0.06em;
+}
+
+.gemini-composer {
+  border-radius: 28px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  box-shadow: 0 8px 28px rgba(15, 23, 42, 0.08);
+  padding: 18px;
+}
+
+.dark .gemini-composer {
+  box-shadow: none;
+}
+
+.gemini-composer textarea {
+  width: 100%;
+  min-height: 76px;
+  resize: none;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  line-height: 1.6;
+}
+
+.gemini-composer textarea::placeholder {
+  color: var(--text-muted);
+}
+
+.gemini-composer-footer {
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.gemini-tools {
+  gap: 8px;
+}
+
+.gemini-tools button,
+.gemini-suggestions button {
+  min-height: 34px;
+  padding: 0 13px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.05);
+  color: var(--text-secondary);
+}
+
+.dark .gemini-tools button,
+.dark .gemini-suggestions button {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.gemini-send {
+  min-height: 36px;
+  padding: 0 18px;
+  border-radius: 999px;
+  background: #1fce7c;
+  color: #042013;
+  font-weight: 800;
+}
+
+.gemini-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.gemini-brand-mark {
+  margin-top: auto;
+  padding: 34px 24px 28px;
+  text-align: center;
+  pointer-events: none;
+}
+
+.gemini-brand-mark p {
+  margin: 0;
+  font-size: clamp(44px, 8vw, 118px);
+  line-height: 0.9;
+  font-weight: 950;
+  letter-spacing: -0.08em;
+  color: rgba(15, 23, 42, 0.07);
+}
+
+.dark .gemini-brand-mark p {
+  color: rgba(238, 242, 247, 0.06);
+}
+
+.gemini-brand-mark span {
+  display: inline-block;
+  margin-top: 12px;
+  color: var(--text-muted);
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+@media (max-width: 900px) {
+  .gemini-home-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .gemini-sidebar {
+    display: none;
+  }
+
+  .gemini-center {
+    width: min(100% - 32px, 720px);
+    padding-top: 18vh;
+  }
+
+  .gemini-topbar {
+    padding: 0 16px;
   }
 }
 </style>
