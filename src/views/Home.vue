@@ -248,14 +248,26 @@
                 <button @click="fillChatPrompt('帮我做一个短剧第一集，生成角色、场景和 8 个分镜')">短剧</button>
                 <button @click="enterBlankCanvas">画布</button>
               </div>
-              <button
-                class="gemini-send"
-                :disabled="chatLoading || chatReadingUrls || (!chatText.trim() && !chatAttachments.length)"
-                @click="sendHomeChat"
-              >
-                <n-spin v-if="chatLoading" :size="14" />
-                <span v-else>发送</span>
-              </button>
+              <div class="gemini-composer-actions">
+                <select
+                  v-model="modelStore.selectedChatModel"
+                  class="gemini-model-select"
+                  title="选择对话模型"
+                >
+                  <option value="">自动</option>
+                  <option v-for="model in chatModelOptions" :key="model.key" :value="model.key">
+                    {{ model.label || model.key }}
+                  </option>
+                </select>
+                <button
+                  class="gemini-send"
+                  :disabled="chatLoading || chatReadingUrls || (!chatText.trim() && !chatAttachments.length)"
+                  @click="sendHomeChat"
+                >
+                  <n-spin v-if="chatLoading" :size="14" />
+                  <span v-else>发送</span>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -6627,6 +6639,7 @@ onUnmounted(() => {
 }
 
 .gemini-composer-footer {
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
 }
@@ -6647,6 +6660,30 @@ onUnmounted(() => {
 .dark .gemini-tools button,
 .dark .gemini-suggestions button {
   background: rgba(255, 255, 255, 0.08);
+}
+
+.gemini-composer-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.gemini-model-select {
+  max-width: 176px;
+  height: 34px;
+  border: 0;
+  border-radius: 999px;
+  padding: 0 28px 0 12px;
+  background: rgba(15, 23, 42, 0.05);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+}
+
+.dark .gemini-model-select {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-secondary);
 }
 
 .gemini-send {
