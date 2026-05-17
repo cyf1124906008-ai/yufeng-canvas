@@ -57,9 +57,9 @@
           </button>
         </div>
 
-        <button class="gemini-new-chat" @click="enterBlankCanvas">
+        <button class="gemini-new-chat" @click="startNewChat">
           <n-icon :size="18"><CreateOutline /></n-icon>
-          <span>新建项目</span>
+          <span>新对话</span>
         </button>
 
         <nav class="gemini-nav" aria-label="YUFENG 快捷入口">
@@ -80,6 +80,17 @@
             <span>短剧分镜</span>
           </button>
         </nav>
+
+        <div v-if="chatHistory.length" class="gemini-sidebar-section">
+          <strong>最近对话</strong>
+          <button
+            v-for="item in chatHistory.slice(0, 6)"
+            :key="item.id"
+            @click="restoreChatSession(item.id)"
+          >
+            {{ item.title || '新对话' }}
+          </button>
+        </div>
 
         <div v-if="recentHomeProjects.length" class="gemini-sidebar-section">
           <strong>最近项目</strong>
@@ -112,54 +123,141 @@
           </button>
         </header>
 
-        <div class="gemini-center">
-          <p class="gemini-hello">你好</p>
-          <h1>今天想创作什么？</h1>
-          <p class="gemini-typewriter" :aria-label="heroTypewriterAriaLabel">
-            <span
-              class="gemini-typewriter-text"
-              :class="{
-                'is-typing': heroTypePhase === 'typing',
-                'is-holding': heroTypePhase === 'holding',
-                'is-erasing': heroTypePhase === 'erasing'
-              }"
+        <div
+          class="gemini-center"
+          :class="{ 'has-chat': chatMessages.length || chatLoading || chatImageLoading }"
+        >
+          <div v-if="chatMessages.length || chatLoading || chatImageLoading" class="gemini-chat-thread">
+            <div
+              v-for="message in chatMessages"
+              :key="message.id"
+              class="chat-message"
+              :class="message.role"
             >
-              <span
-                v-for="(char, index) in heroTypeChars"
-                :key="`${heroTypeCycle}-${index}-${char}`"
-                class="gemini-typewriter-char"
-              >
-                {{ char }}
-              </span>
-            </span>
-            <span class="gemini-typewriter-dot" aria-hidden="true"></span>
-          </p>
+              <div v-if="message.content">{{ message.content }}</div>
+              <div v-if="message.images?.length" class="chat-image-grid">
+                <figure v-for="(image, index) in message.images" :key="image.id || image.url">
+                  <img :src="image.url" :alt="`聊天生成图片 ${index + 1}`" />
+                  <figcaption>
+                    <button @click="generateImageInChat(image.prompt || message.prompt || message.content, { addUserMessage: false })">重新生成</button>
+                    <button @click="varyChatImage(image)">变化</button>
+                    <button @click="upscaleChatImage(image)">放大</button>
+                    <button @click="placeChatImageIntoCanvas(image)">放入画布</button>
+                  </figcaption>
+                </figure>
+              </div>
+              <div v-if="message.role === 'assistant' && !message.images?.length" class="chat-action-row">
+                <button @click="generateImageInChat(message.content, { addUserMessage: false })">用这段生成图片</button>
+                <button @click="fillChatPrompt(`请把下面内容优化成更适合生图的中文 Prompt：\n${message.content}`)">优化提示词</button>
+                <button @click="createFromTemplate(message.content)">放入画布</button>
+              </div>
+            </div>
+            <div v-if="chatLoading && currentResponse" class="chat-message assistant">
+              {{ currentResponse }}
+            </div>
+            <div v-else-if="chatLoading" class="chat-message assistant thinking">
+              <n-spin :size="14" />
+              正在思考...
+            </div>
+            <div v-if="chatImageLoading" class="chat-message assistant thinking">
+              <n-spin :size="14" />
+              正在调用图片模型生成...
+            </div>
+          </div>
 
-          <div class="gemini-composer">
+          <div v-else class="gemini-welcome">
+            <p class="gemini-hello">你好</p>
+            <h1>今天想创作什么？</h1>
+            <p class="gemini-typewriter" :aria-label="heroTypewriterAriaLabel">
+              <span
+                class="gemini-typewriter-text"
+                :class="{
+                  'is-typing': heroTypePhase === 'typing',
+                  'is-holding': heroTypePhase === 'holding',
+                  'is-erasing': heroTypePhase === 'erasing'
+                }"
+              >
+                <span
+                  v-for="(char, index) in heroTypeChars"
+                  :key="`${heroTypeCycle}-${index}-${char}`"
+                  class="gemini-typewriter-char"
+                >
+                  {{ char }}
+                </span>
+              </span>
+              <span class="gemini-typewriter-dot" aria-hidden="true"></span>
+            </p>
+          </div>
+
+          <div v-if="chatAttachments.length" class="gemini-attachments">
+            <span
+              v-for="attachment in chatAttachments"
+              :key="attachment.id"
+              class="attachment-chip"
+            >
+              <n-icon :size="14">
+                <ImageOutline v-if="attachment.kind === 'image'" />
+                <DocumentOutline v-else />
+              </n-icon>
+              {{ attachment.name }}
+              <button @click="removeChatAttachment(attachment.id)">?</button>
+            </span>
+          </div>
+
+          <div
+            class="gemini-composer"
+            :class="{ 'is-selected': focusedEntry === 'chat' }"
+            data-tour="chat-composer"
+            @focusin="focusedEntry = 'chat'"
+            @focusout="handleComposerFocusOut('chat', $event)"
+          >
+            <input
+              ref="chatFileInputRef"
+              id="home-chat-file-input"
+              type="file"
+              multiple
+              accept="image/*,.txt,.md,.json,.csv"
+              class="hidden-file-input"
+              tabindex="-1"
+              aria-label="上传图片或文本资料"
+              @change="handleChatFiles"
+            />
             <textarea
-              v-model="inputText"
+              ref="chatTextareaRef"
+              v-model="chatText"
+              aria-label="AI 对话输入框"
               placeholder="描述你想做的图片、视频、短剧或工作流..."
-              @keydown.enter.ctrl.prevent="handleCreateWithInput"
+              :disabled="chatLoading || chatReadingUrls"
+              @keydown.enter.exact.prevent="sendHomeChat"
+              @keydown.enter.ctrl.prevent="sendHomeChat"
             />
             <div class="gemini-composer-footer">
               <div class="gemini-tools">
-                <button title="进入画布" @click="enterBlankCanvas">+</button>
-                <button @click="createIntegratedProject('cloudProWorkflow')">图片</button>
-                <button @click="createIntegratedProject('image2video')">视频</button>
-                <button @click="createIntegratedProject('dramaShots')">短剧</button>
+                <button title="上传参考图或资料" @click.prevent="triggerChatFilePicker">+</button>
+                <button @click="chatText.trim() ? generateImageFromComposer() : fillChatPrompt('帮我做一张产品发布海报，包含主视觉、卖点和社媒版本')">图片</button>
+                <button @click="fillChatPrompt('帮我把一张参考图或首帧做成视频，并规划镜头运动')">视频</button>
+                <button @click="fillChatPrompt('帮我做一个短剧第一集，生成角色、场景和 8 个分镜')">短剧</button>
+                <button @click="enterBlankCanvas">画布</button>
               </div>
-              <button class="gemini-send" @click="handleCreateWithInput">开始</button>
+              <button
+                class="gemini-send"
+                :disabled="chatLoading || chatReadingUrls || (!chatText.trim() && !chatAttachments.length)"
+                @click="sendHomeChat"
+              >
+                <n-spin v-if="chatLoading" :size="14" />
+                <span v-else>发送</span>
+              </button>
             </div>
           </div>
 
           <div class="gemini-suggestions">
-            <button @click="inputText = '做一张产品发布海报，包含主视觉、卖点和社媒版本'">
+            <button @click="fillChatPrompt('做一张产品发布海报，包含主视觉、卖点和社媒版本')">
               产品海报
             </button>
-            <button @click="inputText = '做一个古装短剧第一集，生成 8 个分镜'">
+            <button @click="fillChatPrompt('做一个古装短剧第一集，生成 8 个分镜')">
               短剧分镜
             </button>
-            <button @click="inputText = '把一张参考图变成视频首帧到视频工作流'">
+            <button @click="fillChatPrompt('把一张参考图变成视频首帧到视频工作流')">
               图生视频
             </button>
           </div>
@@ -1329,12 +1427,11 @@ const heroTypewriterAriaLabel = computed(() => {
 })
 
 const enterWorkspace = () => {
-  isWorkspacePage.value = true
+  isWorkspacePage.value = false
+  activeMode.value = 'chat'
 }
 
 const handleWelcomeContinue = () => {
-  if (isWorkspacePage.value) return
-  enterWorkspace()
   activeMode.value = 'chat'
   nextTick(() => chatTextareaRef.value?.focus?.())
 }
@@ -1772,16 +1869,11 @@ const randomFill = () => {
 }
 
 const scrollPromptPanelIntoView = () => {
-  if (isWorkspacePage.value) return
-  document.querySelector('[data-tour="home-chat"]')?.scrollIntoView({
-    behavior: 'smooth',
-    block: 'center'
-  })
+  document.querySelector('[data-tour="chat-composer"]')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
 }
 
 const focusCreateEntry = async () => {
-  enterWorkspace()
-  activeMode.value = 'create'
+  activeMode.value = 'chat'
   focusedEntry.value = 'create'
   scrollPromptPanelIntoView()
   await nextTick()
@@ -1789,7 +1881,6 @@ const focusCreateEntry = async () => {
 }
 
 const focusChatEntry = async () => {
-  enterWorkspace()
   activeMode.value = 'chat'
   focusedEntry.value = 'chat'
   scrollPromptPanelIntoView()
@@ -6207,6 +6298,48 @@ onUnmounted(() => {
   padding-bottom: 11vh;
 }
 
+.gemini-center.has-chat {
+  width: min(880px, calc(100vw - 360px));
+  height: calc(100vh - 96px);
+  margin: 20px auto 0;
+  padding-bottom: 24px;
+  display: flex;
+  flex-direction: column;
+}
+
+.gemini-welcome {
+  margin-top: auto;
+}
+
+.gemini-chat-thread {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+  padding: 12px 2px 18px;
+}
+
+.gemini-chat-thread .chat-message {
+  max-width: min(760px, 92%);
+}
+
+.gemini-chat-thread .chat-message.user {
+  align-self: flex-end;
+}
+
+.gemini-chat-thread .chat-message.assistant {
+  align-self: flex-start;
+}
+
+.gemini-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 10px;
+}
+
 .gemini-hello {
   margin: 0 0 4px;
   font-size: 17px;
@@ -6361,6 +6494,12 @@ onUnmounted(() => {
   .gemini-center {
     width: min(100% - 32px, 720px);
     padding-top: 18vh;
+  }
+
+  .gemini-center.has-chat {
+    width: min(100% - 32px, 720px);
+    height: calc(100vh - 74px);
+    padding-top: 12px;
   }
 
   .gemini-topbar {
