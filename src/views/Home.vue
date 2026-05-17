@@ -756,7 +756,7 @@
       </footer>
     </main>
 
-    <aside class="side-rail hidden md:flex">
+    <aside v-if="isWorkspacePage" class="side-rail hidden md:flex">
       <button class="active" @click="scrollToTop" title="首页">
         <n-icon :size="19"><SparklesOutline /></n-icon>
         <span>首页</span>
