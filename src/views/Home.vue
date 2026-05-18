@@ -249,36 +249,45 @@
                 <button @click="enterBlankCanvas">画布</button>
               </div>
               <div class="gemini-composer-actions">
-                <select
-                  v-model="modelStore.selectedChatModel"
-                  class="gemini-model-select"
-                  title="选择对话模型"
-                >
-                  <option value="">自动</option>
-                  <option v-for="model in chatModelOptions" :key="model.key" :value="model.key">
-                    {{ model.label || model.key }}
-                  </option>
-                </select>
-                <select
-                  v-model="chatImageModel"
-                  class="gemini-model-select"
-                  title="选择图片模型"
-                >
-                  <option value="">图片模型</option>
-                  <option v-for="model in chatImageModelOptions" :key="model.key" :value="model.key">
-                    {{ model.label || model.key }}
-                  </option>
-                </select>
-                <select
-                  v-model="modelStore.selectedVideoModel"
-                  class="gemini-model-select"
-                  title="选择视频模型"
-                >
-                  <option value="">视频模型</option>
-                  <option v-for="model in chatVideoModelOptions" :key="model.key" :value="model.key">
-                    {{ model.label || model.key }}
-                  </option>
-                </select>
+                <label class="gemini-model-field">
+                  <span>对话</span>
+                  <select
+                    v-model="modelStore.selectedChatModel"
+                    class="gemini-model-select"
+                    title="选择对话模型"
+                  >
+                    <option value="">自动</option>
+                    <option v-for="model in chatModelOptions" :key="model.key" :value="model.key">
+                      {{ model.label || model.key }}
+                    </option>
+                  </select>
+                </label>
+                <label class="gemini-model-field">
+                  <span>图片</span>
+                  <select
+                    v-model="chatImageModel"
+                    class="gemini-model-select"
+                    title="选择图片模型"
+                  >
+                    <option value="">自动</option>
+                    <option v-for="model in chatImageModelOptions" :key="model.key" :value="model.key">
+                      {{ model.label || model.key }}
+                    </option>
+                  </select>
+                </label>
+                <label class="gemini-model-field">
+                  <span>视频</span>
+                  <select
+                    v-model="modelStore.selectedVideoModel"
+                    class="gemini-model-select"
+                    title="选择视频模型"
+                  >
+                    <option value="">自动</option>
+                    <option v-for="model in chatVideoModelOptions" :key="model.key" :value="model.key">
+                      {{ model.label || model.key }}
+                    </option>
+                  </select>
+                </label>
                 <button
                   class="gemini-send"
                   :disabled="chatLoading || chatReadingUrls || (!chatText.trim() && !chatAttachments.length)"
@@ -6770,22 +6779,31 @@ onUnmounted(() => {
 }
 
 .gemini-composer-footer {
+  display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 14px;
 }
 
 .gemini-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-self: stretch;
   gap: 8px;
 }
 
 .gemini-tools button,
 .gemini-suggestions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-height: 34px;
   padding: 0 13px;
   border-radius: 999px;
   background: rgba(15, 23, 42, 0.05);
   color: var(--text-secondary);
+  white-space: nowrap;
 }
 
 .dark .gemini-tools button,
@@ -6798,17 +6816,38 @@ onUnmounted(() => {
   flex-wrap: wrap;
   justify-content: flex-end;
   align-items: center;
-  gap: 8px;
+  align-self: stretch;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-color);
+}
+
+.gemini-model-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  height: 36px;
+  padding: 0 0 0 12px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.05);
+  color: var(--text-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.dark .gemini-model-field {
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .gemini-model-select {
   width: 148px;
-  max-width: 34vw;
+  max-width: 26vw;
   height: 34px;
   border: 0;
   border-radius: 999px;
-  padding: 0 28px 0 12px;
-  background: rgba(15, 23, 42, 0.05);
+  padding: 0 28px 0 0;
+  background: transparent;
   color: var(--text-secondary);
   font: inherit;
   font-size: 13px;
@@ -6816,7 +6855,7 @@ onUnmounted(() => {
 }
 
 .dark .gemini-model-select {
-  background: rgba(255, 255, 255, 0.08);
+  background: transparent;
   color: var(--text-secondary);
 }
 
@@ -6835,6 +6874,25 @@ onUnmounted(() => {
   justify-content: center;
   gap: 10px;
   margin-top: 18px;
+}
+
+@media (max-width: 980px) {
+  .gemini-composer-actions {
+    justify-content: flex-start;
+  }
+
+  .gemini-model-field {
+    flex: 1 1 180px;
+  }
+
+  .gemini-model-select {
+    width: 100%;
+    max-width: none;
+  }
+
+  .gemini-send {
+    flex: 1 1 120px;
+  }
 }
 
 .gemini-brand-mark {
