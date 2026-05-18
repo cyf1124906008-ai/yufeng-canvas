@@ -5,6 +5,13 @@
  */
 
 const pendingResults = new Map()
+let electronNet = null
+
+try {
+  electronNet = require('electron')?.net || null
+} catch {
+  electronNet = null
+}
 
 // Maximum time to keep a pending result for recovery (30 minutes)
 const PENDING_RESULT_TTL = 30 * 60 * 1000
@@ -50,7 +57,14 @@ function buildMultipartBody(parts) {
 async function executeImageGeneration(config) {
   const { url, method = 'POST', headers = {}, body, taskId, isFormData } = config
 
-  if (!url) return { ok: false, error: '缺少请求 URL' }
+  if (!url) return { ok: false, error: '\u7f3a\u5c11\u8bf7\u6c42 URL' }
+
+  let safeUrl
+  try {
+    safeUrl = new URL(url)
+  } catch {
+    return { ok: false, error: `\u56fe\u7247\u63a5\u53e3\u5730\u5740\u65e0\u6548\uff1a${url}` }
+  }
 
   try {
     const fetchOptions = { method, headers: { ...headers } }
@@ -80,7 +94,12 @@ async function executeImageGeneration(config) {
       }
     }
 
-    const resp = await fetch(url, fetchOptions)
+    // Electron's network stack follows the app/system proxy and certificate
+    // behavior better than Node's global fetch on Windows desktop builds.
+    const fetchImpl = typeof electronNet?.fetch === 'function'
+      ? electronNet.fetch.bind(electronNet)
+      : fetch
+    const resp = await fetchImpl(url, fetchOptions)
     const contentType = resp.headers.get('content-type') || ''
 
     let data
@@ -105,7 +124,20 @@ async function executeImageGeneration(config) {
 
     return { ok: true, data, status: resp.status }
   } catch (e) {
-    return { ok: false, error: e.message || '图片生成请求失败' }
+    const cause = e?.cause || {}
+    const code = cause.code || cause.errno || e.code || ''
+    const detail = [
+      e?.message,
+      code ? `\u9519\u8bef\u7801\uff1a${code}` : '',
+      safeUrl?.host ? `\u63a5\u53e3\uff1a${safeUrl.host}` : ''
+    ].filter(Boolean).join('\uff1b')
+
+    return {
+      ok: false,
+      error: detail
+        ? `\u56fe\u7247\u63a5\u53e3\u7f51\u7edc\u8bf7\u6c42\u5931\u8d25\uff1a${detail}\u3002\u8bf7\u68c0\u67e5\u56fe\u7247\u6a21\u578b Base URL\u3001\u7f51\u7edc\u4ee3\u7406\u6216\u4f9b\u5e94\u5546\u670d\u52a1\u72b6\u6001\u3002`
+        : '\u56fe\u7247\u751f\u6210\u8bf7\u6c42\u5931\u8d25\uff0c\u8bf7\u68c0\u67e5\u56fe\u7247\u6a21\u578b Base URL\u3001\u7f51\u7edc\u4ee3\u7406\u6216\u4f9b\u5e94\u5546\u670d\u52a1\u72b6\u6001\u3002'
+    }
   }
 }
 
