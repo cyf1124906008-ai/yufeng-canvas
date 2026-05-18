@@ -263,10 +263,10 @@
             <div class="gemini-composer-footer">
               <div class="gemini-tools">
                 <button title="上传参考图或资料" @click.prevent="triggerChatFilePicker">+</button>
-                <button @click="chatText.trim() ? generateImageFromComposer() : fillChatPrompt('帮我做一张产品发布海报，包含主视觉、卖点和社媒版本')">图片</button>
-                <button @click="fillChatPrompt('帮我把一张参考图或首帧做成视频，并规划镜头运动')">视频</button>
-                <button @click="fillChatPrompt('帮我做一个短剧第一集，生成角色、场景和 8 个分镜')">短剧</button>
-                <button @click="enterBlankCanvas">画布</button>
+                <button :class="{ active: chatActionMode === 'image' }" @click="setChatActionMode('image')">图片</button>
+                <button :class="{ active: chatActionMode === 'video' }" @click="setChatActionMode('video')">视频</button>
+                <button :class="{ active: chatActionMode === 'drama' }" @click="setChatActionMode('drama')">短剧</button>
+                <button :class="{ active: chatActionMode === 'canvas' }" @click="setChatActionMode('canvas')">画布</button>
               </div>
               <div class="gemini-composer-actions">
                 <label class="gemini-model-field">
@@ -320,14 +320,19 @@
             </div>
           </div>
 
+          <div v-if="chatActionMode !== 'chat'" class="gemini-action-hint">
+            当前模式：{{ chatActionModeLabel }}。点击发送会直接{{ chatActionModeVerb }}，不是只填一段文字。
+            <button @click="setChatActionMode('chat')">切回对话</button>
+          </div>
+
           <div class="gemini-suggestions">
-            <button @click="fillChatPrompt('做一张产品发布海报，包含主视觉、卖点和社媒版本')">
+            <button @click="applyQuickSuggestion('image', '做一张产品发布海报，包含主视觉、卖点和社媒版本')">
               产品海报
             </button>
-            <button @click="fillChatPrompt('做一个古装短剧第一集，生成 8 个分镜')">
+            <button @click="applyQuickSuggestion('drama', '做一个古装短剧第一集，生成 8 个分镜')">
               短剧分镜
             </button>
-            <button @click="fillChatPrompt('把一张参考图变成视频首帧到视频工作流')">
+            <button @click="applyQuickSuggestion('video', '把一张参考图变成视频首帧到视频工作流')">
               图生视频
             </button>
           </div>
@@ -1333,6 +1338,7 @@ const chatMessages = ref([])
 const chatAttachments = ref([])
 const chatHistory = ref([])
 const activeChatId = ref('')
+const chatActionMode = ref('chat')
 const chatImageModel = ref('')
 const chatImageResolution = ref('auto')
 const chatImageSize = ref('1024x1024')
@@ -1367,6 +1373,19 @@ const effectiveChatImageModel = computed(() =>
 )
 const isChatImageConfigured = computed(() => !!modelStore.currentImageApiKey && !!effectiveChatImageModel.value)
 const homeReleaseUrl = computed(() => `${getGithubUrl().replace(/\/$/, '')}/releases`)
+const chatActionModeLabel = computed(() => ({
+  chat: '对话',
+  image: '图片生成',
+  video: '视频工作流',
+  drama: '短剧分镜',
+  canvas: '画布'
+}[chatActionMode.value] || '对话'))
+const chatActionModeVerb = computed(() => ({
+  image: '生成图片',
+  video: '创建视频链路',
+  drama: '创建短剧分镜项目',
+  canvas: '进入画布'
+}[chatActionMode.value] || '发送对话'))
 const chatImageResolutionOptions = [
   { label: '自动', key: 'auto', target: 0 },
   { label: '720p', key: '720p', target: 1280 },
@@ -2296,6 +2315,17 @@ const fillChatPrompt = async (prompt) => {
   await focusChatEntry()
 }
 
+const setChatActionMode = async (mode = 'chat') => {
+  chatActionMode.value = mode
+  await focusChatEntry()
+}
+
+const applyQuickSuggestion = async (mode, prompt) => {
+  chatActionMode.value = mode
+  chatText.value = prompt
+  await focusChatEntry()
+}
+
 const randomFillAndFocus = async () => {
   randomFill()
   await focusCreateEntry()
@@ -2477,12 +2507,32 @@ const createIntegratedProject = (actionId) => {
   router.push(`/canvas/${id}`)
 }
 
+const createIntegratedProjectFromComposer = (actionId, fallbackPrompt = '') => {
+  const content = chatText.value.trim() || fallbackPrompt
+  if (content) {
+    sessionStorage.setItem('ai-canvas-initial-prompt', content)
+  }
+  chatText.value = ''
+  chatAttachments.value = []
+  createIntegratedProject(actionId)
+}
+
 const enterBlankCanvas = () => {
   const id = createProject('未命名项目')
   if (!localStorage.getItem('yufeng-canvas-canvas-tour-v1')) {
     sessionStorage.setItem('yufeng-canvas-start-canvas-tour', '1')
   }
   router.push(`/canvas/${id}`)
+}
+
+const enterBlankCanvasFromComposer = () => {
+  const content = chatText.value.trim()
+  if (content) {
+    sessionStorage.setItem('ai-canvas-initial-prompt', content)
+  }
+  chatText.value = ''
+  chatAttachments.value = []
+  enterBlankCanvas()
 }
 
 const readFileAsDataUrl = (file) => new Promise((resolve, reject) => {
@@ -2671,6 +2721,22 @@ const shouldGenerateImageFromChat = (content) => {
 
 const submitHomeComposer = async () => {
   const content = chatText.value.trim()
+  if (chatActionMode.value === 'image') {
+    await generateImageFromComposer()
+    return
+  }
+  if (chatActionMode.value === 'video') {
+    createIntegratedProjectFromComposer('image2video', '创建一个首帧到视频的工作流')
+    return
+  }
+  if (chatActionMode.value === 'drama') {
+    createIntegratedProjectFromComposer('dramaShots', '创建一个短剧项目，生成角色、场景和 8 个分镜')
+    return
+  }
+  if (chatActionMode.value === 'canvas') {
+    enterBlankCanvasFromComposer()
+    return
+  }
   if (shouldGenerateImageFromChat(content)) {
     await generateImageFromComposer()
     return
@@ -6962,9 +7028,20 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 
+.gemini-tools button.active {
+  background: #1fce7c;
+  color: #042013;
+  font-weight: 800;
+}
+
 .dark .gemini-tools button,
 .dark .gemini-suggestions button {
   background: rgba(255, 255, 255, 0.08);
+}
+
+.dark .gemini-tools button.active {
+  background: #34d399;
+  color: #042013;
 }
 
 .gemini-composer-actions {
@@ -7030,6 +7107,26 @@ onUnmounted(() => {
   justify-content: center;
   gap: 10px;
   margin-top: 18px;
+}
+
+.gemini-action-hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.gemini-action-hint button {
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
 }
 
 @media (max-width: 980px) {
