@@ -259,6 +259,26 @@
                     {{ model.label || model.key }}
                   </option>
                 </select>
+                <select
+                  v-model="chatImageModel"
+                  class="gemini-model-select"
+                  title="选择图片模型"
+                >
+                  <option value="">图片模型</option>
+                  <option v-for="model in chatImageModelOptions" :key="model.key" :value="model.key">
+                    {{ model.label || model.key }}
+                  </option>
+                </select>
+                <select
+                  v-model="modelStore.selectedVideoModel"
+                  class="gemini-model-select"
+                  title="选择视频模型"
+                >
+                  <option value="">视频模型</option>
+                  <option v-for="model in chatVideoModelOptions" :key="model.key" :value="model.key">
+                    {{ model.label || model.key }}
+                  </option>
+                </select>
                 <button
                   class="gemini-send"
                   :disabled="chatLoading || chatReadingUrls || (!chatText.trim() && !chatAttachments.length)"
@@ -1302,6 +1322,7 @@ const isImageConfigured = computed(() => !!modelStore.currentImageApiKey && !!mo
 const isVideoConfigured = computed(() => !!modelStore.currentVideoApiKey && !!modelStore.selectedVideoModel)
 const chatModelOptions = computed(() => modelStore.chatModelOptions)
 const chatImageModelOptions = computed(() => modelStore.imageModelOptions)
+const chatVideoModelOptions = computed(() => modelStore.videoModelOptions)
 const homeRuntimeErrorCount = computed(() => runtimeLogs.value.filter((log) => log.level === 'error').length)
 const effectiveChatImageModel = computed(() =>
   chatImageModel.value || modelStore.selectedImageModel || modelStore.availableImageModels[0]?.key || ''
@@ -6719,12 +6740,15 @@ onUnmounted(() => {
 
 .gemini-composer-actions {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   align-items: center;
   gap: 8px;
 }
 
 .gemini-model-select {
-  max-width: 176px;
+  width: 148px;
+  max-width: 34vw;
   height: 34px;
   border: 0;
   border-radius: 999px;
