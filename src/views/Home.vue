@@ -237,8 +237,8 @@
               aria-label="AI 对话输入框"
               placeholder="描述你想做的图片、视频、短剧或工作流..."
               :disabled="chatLoading || chatReadingUrls"
-              @keydown.enter.exact.prevent="sendHomeChat"
-              @keydown.enter.ctrl.prevent="sendHomeChat"
+              @keydown.enter.exact.prevent="submitHomeComposer"
+              @keydown.enter.ctrl.prevent="submitHomeComposer"
             />
             <div class="gemini-composer-footer">
               <div class="gemini-tools">
@@ -262,7 +262,7 @@
                 <button
                   class="gemini-send"
                   :disabled="chatLoading || chatReadingUrls || (!chatText.trim() && !chatAttachments.length)"
-                  @click="sendHomeChat"
+                  @click="submitHomeComposer"
                 >
                   <n-spin v-if="chatLoading" :size="14" />
                   <span v-else>发送</span>
@@ -2462,6 +2462,59 @@ const buildChatPayload = (content, webContexts = []) => {
   }
 }
 
+const shouldGenerateImageFromChat = (content) => {
+  const text = String(content || '').trim().toLowerCase()
+  if (!text) return false
+
+  const explicitTextOnly = [
+    '提示词',
+    'prompt',
+    '方案',
+    '建议',
+    '怎么写',
+    '如何写',
+    '不要生成',
+    '先别生成',
+    '先不要生成',
+    '只给',
+    '帮我写',
+    '改写'
+  ]
+  if (explicitTextOnly.some((keyword) => text.includes(keyword))) return false
+
+  const imageIntent = [
+    '做一张',
+    '生成一张',
+    '画一张',
+    '出一张',
+    '来一张',
+    '做张',
+    '生成图片',
+    '生成图',
+    '做图片',
+    '画图',
+    '生图',
+    '图片',
+    '海报',
+    '产品图',
+    '角色图',
+    '头像',
+    '封面',
+    '主视觉',
+    '赛车图片'
+  ]
+  return imageIntent.some((keyword) => text.includes(keyword))
+}
+
+const submitHomeComposer = async () => {
+  const content = chatText.value.trim()
+  if (shouldGenerateImageFromChat(content)) {
+    await generateImageFromComposer()
+    return
+  }
+  await sendHomeChat()
+}
+
 const sendHomeChat = async () => {
   enterWorkspace()
   const content = chatText.value.trim()
@@ -2526,7 +2579,7 @@ const normalizeImageUrl = (image) => {
 
 const buildChatImagePrompt = (text) => {
   const content = String(text || '').trim()
-  return content || '生成一张高质量商业视觉图片，主体清晰，构图稳定，细节丰富。'
+  return content || '\u751f\u6210\u4e00\u5f20\u9ad8\u8d28\u91cf\u5546\u4e1a\u89c6\u89c9\u56fe\u7247\uff0c\u4e3b\u4f53\u6e05\u6670\uff0c\u6784\u56fe\u7a33\u5b9a\uff0c\u7ec6\u8282\u4e30\u5bcc\u3002'
 }
 
 const buildChatImageRequestPrompt = (prompt) => {
@@ -2535,7 +2588,7 @@ const buildChatImageRequestPrompt = (prompt) => {
   const resolution = chatImageResolutionOptions.find((item) => item.key === chatImageResolution.value)?.label
   if (!resolution) return prompt
 
-  return `${prompt}\n\n质量目标：尽量接近 ${resolution} 的清晰细节；如果当前模型尺寸受限，请按模型支持的最高可用尺寸生成，保持画面清晰、细节完整。`
+  return `${prompt}\n\n\u8d28\u91cf\u76ee\u6807\uff1a\u5c3d\u91cf\u63a5\u8fd1 ${resolution} \u7684\u6e05\u6670\u7ec6\u8282\uff1b\u5982\u679c\u5f53\u524d\u6a21\u578b\u5c3a\u5bf8\u53d7\u9650\uff0c\u8bf7\u6309\u6a21\u578b\u652f\u6301\u7684\u6700\u9ad8\u53ef\u7528\u5c3a\u5bf8\u751f\u6210\uff0c\u4fdd\u6301\u753b\u9762\u6e05\u6670\u3001\u7ec6\u8282\u5b8c\u6574\u3002`
 }
 
 const generateImageInChat = async (sourcePrompt, options = {}) => {
@@ -2545,7 +2598,7 @@ const generateImageInChat = async (sourcePrompt, options = {}) => {
 
   if (!isChatImageConfigured.value) {
     showApiSettings.value = true
-    window.$message?.warning('请先选择图片模型，并配置可用的 API Key')
+    window.$message?.warning('\u8bf7\u5148\u9009\u62e9\u56fe\u7247\u6a21\u578b\uff0c\u5e76\u914d\u7f6e\u53ef\u7528\u7684 API Key')
     return
   }
 
@@ -2555,7 +2608,7 @@ const generateImageInChat = async (sourcePrompt, options = {}) => {
     chatMessages.value.push({
       id: `user_image_${Date.now()}`,
       role: 'user',
-      content: `生成图片：${imagePrompt}\n模型：${model}`
+      content: `\u751f\u6210\u56fe\u7247\uff1a${imagePrompt}\n\u6a21\u578b\uff1a${model}`
     })
   }
 
@@ -2579,7 +2632,9 @@ const generateImageInChat = async (sourcePrompt, options = {}) => {
     chatMessages.value.push({
       id: `assistant_image_${Date.now()}`,
       role: 'assistant',
-      content: images.length ? `已使用 ${model} 生成 ${images.length} 张图片。你可以继续变化、放大、复制 Prompt 或放入画布。` : '图片接口返回成功，但没有解析到图片地址。',
+      content: images.length
+        ? `\u5df2\u4f7f\u7528 ${model} \u751f\u6210 ${images.length} \u5f20\u56fe\u7247\u3002\u4f60\u53ef\u4ee5\u7ee7\u7eed\u53d8\u5316\u3001\u653e\u5927\u3001\u590d\u5236 Prompt \u6216\u653e\u5165\u753b\u5e03\u3002`
+        : '\u56fe\u7247\u63a5\u53e3\u8fd4\u56de\u6210\u529f\uff0c\u4f46\u6ca1\u6709\u89e3\u6790\u5230\u56fe\u7247\u5730\u5740\u3002',
       prompt: requestPrompt,
       model,
       images
@@ -2589,7 +2644,7 @@ const generateImageInChat = async (sourcePrompt, options = {}) => {
     chatMessages.value.push({
       id: `assistant_image_error_${Date.now()}`,
       role: 'assistant',
-      content: err.message || '图片生成失败，请检查图片模型、API Key 或运行日志。'
+      content: err.message || '\u56fe\u7247\u751f\u6210\u5931\u8d25\uff0c\u8bf7\u68c0\u67e5\u56fe\u7247\u6a21\u578b\u3001API Key \u6216\u8fd0\u884c\u65e5\u5fd7\u3002'
     })
     persistCurrentChat()
   }
