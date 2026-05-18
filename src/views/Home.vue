@@ -2603,6 +2603,47 @@ const buildChatImagePrompt = (text) => {
   return content || '\u751f\u6210\u4e00\u5f20\u9ad8\u8d28\u91cf\u5546\u4e1a\u89c6\u89c9\u56fe\u7247\uff0c\u4e3b\u4f53\u6e05\u6670\uff0c\u6784\u56fe\u7a33\u5b9a\uff0c\u7ec6\u8282\u4e30\u5bcc\u3002'
 }
 
+const cleanOptimizedImagePrompt = (value, fallback) => {
+  const text = String(value || '')
+    .replace(/```[\s\S]*?```/g, (block) => block.replace(/```(?:json|text|prompt)?/gi, '').replace(/```/g, ''))
+    .replace(/^(prompt|提示词|优化后提示词)\s*[:：]/i, '')
+    .trim()
+
+  if (!text || text.length < 8) return fallback
+  return text.slice(0, 3000)
+}
+
+const optimizeImagePromptWithChatModel = async (sourcePrompt, options = {}) => {
+  const originalPrompt = buildChatImagePrompt(sourcePrompt)
+  if (!isChatConfigured.value || !modelStore.selectedChatModel) {
+    return { prompt: originalPrompt, optimized: false, plannerModel: '' }
+  }
+
+  try {
+    const optimized = await sendChat(originalPrompt, true, {
+      model: modelStore.selectedChatModel,
+      images: options.referenceImages?.map((url) => ({ url })) || [],
+      isolated: true,
+      systemPrompt: [
+        '\u4f60\u662f YUFENG Canvas \u7684\u56fe\u7247\u751f\u6210\u63d0\u793a\u8bcd\u89c4\u5212\u5668\u3002',
+        '\u4efb\u52a1\uff1a\u5148\u7406\u89e3\u7528\u6237\u9700\u6c42\uff0c\u7136\u540e\u6539\u5199\u6210\u4e00\u6bb5\u9002\u5408\u56fe\u7247\u6a21\u578b\u76f4\u63a5\u751f\u6210\u7684\u63d0\u793a\u8bcd\u3002',
+        '\u53ea\u8f93\u51fa\u6700\u7ec8\u63d0\u793a\u8bcd\uff0c\u4e0d\u8981\u89e3\u91ca\uff0c\u4e0d\u8981 Markdown\uff0c\u4e0d\u8981\u7ed9\u65b9\u6848\u5217\u8868\u3002',
+        '\u63d0\u793a\u8bcd\u5e94\u5305\u542b\uff1a\u4e3b\u4f53\u3001\u573a\u666f\u3001\u98ce\u683c\u3001\u6784\u56fe\u3001\u5149\u7ebf\u3001\u955c\u5934\u3001\u7ec6\u8282\u3001\u8d28\u611f\u3002',
+        '\u4f18\u5148\u4f7f\u7528\u4e2d\u6587\uff1b\u5fc5\u8981\u7684\u4e13\u4e1a\u98ce\u683c\u8bcd\u53ef\u4fdd\u7559\u82f1\u6587\u3002'
+      ].join('\n')
+    })
+    const prompt = cleanOptimizedImagePrompt(optimized, originalPrompt)
+    return {
+      prompt,
+      optimized: prompt !== originalPrompt,
+      plannerModel: modelStore.selectedChatModel
+    }
+  } catch (err) {
+    console.warn('[home] image prompt optimization failed, fallback to original prompt:', err)
+    return { prompt: originalPrompt, optimized: false, plannerModel: modelStore.selectedChatModel }
+  }
+}
+
 const buildChatImageRequestPrompt = (prompt) => {
   if (chatImageResolution.value === 'auto') return prompt
 
@@ -2614,8 +2655,6 @@ const buildChatImageRequestPrompt = (prompt) => {
 
 const generateImageInChat = async (sourcePrompt, options = {}) => {
   enterWorkspace()
-  const imagePrompt = buildChatImagePrompt(sourcePrompt)
-  const requestPrompt = buildChatImageRequestPrompt(imagePrompt)
 
   if (!isChatImageConfigured.value) {
     showApiSettings.value = true
@@ -2624,12 +2663,22 @@ const generateImageInChat = async (sourcePrompt, options = {}) => {
   }
 
   const model = effectiveChatImageModel.value
+  const originalPrompt = buildChatImagePrompt(options.originalPrompt || sourcePrompt)
+  const promptPlan = await optimizeImagePromptWithChatModel(sourcePrompt, options)
+  const imagePrompt = promptPlan.prompt
+  const requestPrompt = buildChatImageRequestPrompt(imagePrompt)
 
   if (options.addUserMessage !== false) {
     chatMessages.value.push({
       id: `user_image_${Date.now()}`,
       role: 'user',
-      content: `\u751f\u6210\u56fe\u7247\uff1a${imagePrompt}\n\u6a21\u578b\uff1a${model}`
+      content: [
+        `\u751f\u6210\u56fe\u7247\uff1a${originalPrompt}`,
+        `\u56fe\u7247\u6a21\u578b\uff1a${model}`,
+        promptPlan.optimized && promptPlan.plannerModel
+          ? `\u6587\u672c\u6a21\u578b\u5148\u89c4\u5212\uff1a${promptPlan.plannerModel}`
+          : ''
+      ].filter(Boolean).join('\n')
     })
   }
 
@@ -2654,9 +2703,11 @@ const generateImageInChat = async (sourcePrompt, options = {}) => {
       id: `assistant_image_${Date.now()}`,
       role: 'assistant',
       content: images.length
-        ? `\u5df2\u4f7f\u7528 ${model} \u751f\u6210 ${images.length} \u5f20\u56fe\u7247\u3002\u4f60\u53ef\u4ee5\u7ee7\u7eed\u53d8\u5316\u3001\u653e\u5927\u3001\u590d\u5236 Prompt \u6216\u653e\u5165\u753b\u5e03\u3002`
+        ? `${promptPlan.optimized ? '\u5df2\u5148\u7528\u6587\u672c\u6a21\u578b\u4f18\u5316\u63d0\u793a\u8bcd\uff0c' : ''}\u5df2\u4f7f\u7528 ${model} \u751f\u6210 ${images.length} \u5f20\u56fe\u7247\u3002\u4f60\u53ef\u4ee5\u7ee7\u7eed\u53d8\u5316\u3001\u653e\u5927\u3001\u590d\u5236 Prompt \u6216\u653e\u5165\u753b\u5e03\u3002`
         : '\u56fe\u7247\u63a5\u53e3\u8fd4\u56de\u6210\u529f\uff0c\u4f46\u6ca1\u6709\u89e3\u6790\u5230\u56fe\u7247\u5730\u5740\u3002',
       prompt: requestPrompt,
+      sourcePrompt: originalPrompt,
+      plannerModel: promptPlan.plannerModel,
       model,
       images
     })
@@ -2679,7 +2730,11 @@ const generateImageFromComposer = async () => {
   const referenceImages = payload.imageAttachments.map((item) => item.url).filter(Boolean)
   chatText.value = ''
   chatAttachments.value = []
-  await generateImageInChat(payload.modelContent, { addUserMessage: true, referenceImages })
+  await generateImageInChat(payload.modelContent, {
+    addUserMessage: true,
+    referenceImages,
+    originalPrompt: payload.content
+  })
 }
 
 const varyChatImage = async (image) => {

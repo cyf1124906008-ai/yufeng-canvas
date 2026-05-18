@@ -803,7 +803,7 @@ export const useChat = (options = {}) => {
       const systemPrompt = chatOptions.systemPrompt || options.systemPrompt
       const msgList = [
         ...(systemPrompt ? [{ role: 'system', content: systemPrompt }] : []),
-        ...messages.value,
+        ...(chatOptions.isolated ? [] : messages.value),
         { role: 'user', content: userContent }
       ]
 
@@ -831,8 +831,10 @@ export const useChat = (options = {}) => {
           currentResponse.value = fullResponse
         }
 
-        messages.value.push({ role: 'user', content })
-        messages.value.push({ role: 'assistant', content: fullResponse })
+        if (!chatOptions.isolated) {
+          messages.value.push({ role: 'user', content })
+          messages.value.push({ role: 'assistant', content: fullResponse })
+        }
         addRuntimeLog('success', `AI 文本完成：${chatModel}`, {
           durationMs: elapsedMs(startedAt)
         })
