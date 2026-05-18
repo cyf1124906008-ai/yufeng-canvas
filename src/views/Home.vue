@@ -126,9 +126,29 @@
       <main class="gemini-main">
         <header class="gemini-topbar">
           <strong>YUFENG Canvas</strong>
-          <button @click="showApiSettings = true">
-            {{ isApiConfigured ? '模型已连接' : '配置模型 API' }}
-          </button>
+          <div class="gemini-topbar-actions">
+            <button
+              class="gemini-topbar-icon"
+              :disabled="homeUpdateChecking"
+              title="检查更新"
+              @click="checkHomeUpdate"
+            >
+              <n-spin v-if="homeUpdateChecking" :size="14" />
+              <n-icon v-else :size="17"><CloudDownloadOutline /></n-icon>
+              <span>检查更新</span>
+            </button>
+            <button class="gemini-topbar-icon" title="联系作者 / 使用支持" @click="showSupport = true">
+              <n-icon :size="17"><MailOutline /></n-icon>
+              <span>联系作者</span>
+            </button>
+            <button title="重新查看使用指引" @click="startHomeTour">使用指引</button>
+            <button title="查看主页请求日志" @click="showHomeRuntimeLogs = !showHomeRuntimeLogs">
+              日志<span v-if="homeRuntimeErrorCount"> · {{ homeRuntimeErrorCount }}</span>
+            </button>
+            <button @click="showApiSettings = true">
+              {{ isApiConfigured ? '模型已连接' : '配置模型 API' }}
+            </button>
+          </div>
         </header>
 
         <div
@@ -1096,6 +1116,7 @@
     </aside>
 
     <ApiSettings v-model:show="showApiSettings" @saved="refreshApiConfig" />
+    <SupportModal v-model:show="showSupport" />
 
     <n-modal
       v-model:show="showOnboarding"
@@ -1230,9 +1251,10 @@
 <script setup>
 import { computed, h, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { NButton, NDropdown, NIcon, NInput, NModal, NSpin } from 'naive-ui'
+import { NButton, NDropdown, NIcon, NInput, NModal, NSpin, useDialog } from 'naive-ui'
 import {
   AddOutline,
+  CloudDownloadOutline,
   ColorPaletteOutline,
   CopyOutline,
   DocumentOutline,
@@ -1247,6 +1269,7 @@ import {
   SparklesOutline,
   ChatbubbleOutline,
   HelpCircleOutline,
+  MailOutline,
   TrashOutline,
   VideocamOutline,
   CreateOutline
@@ -1274,6 +1297,9 @@ import { PROJECT_TYPES } from '../config/projectSchema'
 import ApiSettings from '../components/ApiSettings.vue'
 import AppHeader from '../components/AppHeader.vue'
 import GuidedTour from '../components/GuidedTour.vue'
+import SupportModal from '../components/SupportModal.vue'
+import { getGithubUrl } from '../config/distribution'
+import { backupUserDataNow } from '../utils/appDataBackup'
 const showcaseBrand = './showcase/showcase-brand.png'
 const showcaseStoryboard = './showcase/showcase-storyboard.png'
 const showcaseVideo = './showcase/showcase-video.png'
@@ -1289,8 +1315,10 @@ import { COMPLEX_WORKFLOW_TEMPLATES } from '../config/complexWorkflows'
 const router = useRouter()
 const route = useRoute()
 const modelStore = useModelStore()
+const dialog = useDialog()
 
 const showApiSettings = ref(false)
+const showSupport = ref(false)
 const showHomeRuntimeLogs = ref(false)
 const showOnboarding = ref(false)
 const showHomeTour = ref(false)
@@ -1308,6 +1336,7 @@ const activeChatId = ref('')
 const chatImageModel = ref('')
 const chatImageResolution = ref('auto')
 const chatImageSize = ref('1024x1024')
+const homeUpdateChecking = ref(false)
 const chatImageCount = ref(1)
 const chatFileInputRef = ref(null)
 const chatReadingUrls = ref(false)
@@ -1337,6 +1366,7 @@ const effectiveChatImageModel = computed(() =>
   chatImageModel.value || modelStore.selectedImageModel || modelStore.availableImageModels[0]?.key || ''
 )
 const isChatImageConfigured = computed(() => !!modelStore.currentImageApiKey && !!effectiveChatImageModel.value)
+const homeReleaseUrl = computed(() => `${getGithubUrl().replace(/\/$/, '')}/releases`)
 const chatImageResolutionOptions = [
   { label: '自动', key: 'auto', target: 0 },
   { label: '720p', key: '720p', target: 1280 },
@@ -1367,6 +1397,109 @@ const chatImageSizeOptions = computed(() => {
 
   return safeChatImageSizeOptions
 })
+
+const openHomeReleasePage = (url = '') => {
+  const target = url || homeReleaseUrl.value
+  if (window.desktopApp?.openExternal) {
+    window.desktopApp.openExternal(target)
+  } else {
+    window.open(target, '_blank')
+  }
+}
+
+const promptHomeUpdateBackup = (onConfirmed) => {
+  dialog.warning({
+    title: '更新前备份提醒',
+    content: '建议先备份当前本地项目数据和生成素材，再继续更新。大体积图片/视频素材建议同时备份素材目录。',
+    positiveText: '我已备份，继续',
+    negativeText: '立即备份',
+    onPositiveClick: () => onConfirmed?.(),
+    onNegativeClick: () => {
+      backupUserDataNow()
+      window.$message?.success('数据备份已保存到本地。')
+    }
+  })
+}
+
+const handleHomeUpdateStatus = (status = {}) => {
+  if (status.status === 'not-available') {
+    dialog.success({
+      title: '已经是最新版本',
+      content: `当前版本 ${status.currentVersion || '未知'}，无需更新。`,
+      positiveText: '知道了'
+    })
+    return
+  }
+
+  if (status.status === 'available') {
+    dialog.info({
+      title: `发现新版本 ${status.latestVersion || ''}`,
+      content: `当前版本 ${status.currentVersion || '未知'}。建议先备份本地数据，再下载更新。`,
+      positiveText: window.desktopApp?.downloadUpdate ? '备份并下载' : '打开下载页',
+      negativeText: '稍后',
+      onPositiveClick: () => {
+        if (!window.desktopApp?.downloadUpdate) {
+          openHomeReleasePage(status.downloadUrl || status.releaseUrl)
+          return
+        }
+        promptHomeUpdateBackup(async () => {
+          window.$message?.loading('开始下载更新...', { duration: 1400 })
+          await window.desktopApp.downloadUpdate()
+        })
+      }
+    })
+    return
+  }
+
+  if (status.status === 'downloaded') {
+    dialog.success({
+      title: '更新已下载完成',
+      content: `新版本 ${status.latestVersion || ''} 已准备好。建议先备份当前数据，再重启安装。`,
+      positiveText: '备份并安装',
+      negativeText: '稍后',
+      onPositiveClick: () => promptHomeUpdateBackup(() => window.desktopApp?.installUpdate?.())
+    })
+    return
+  }
+
+  if (status.status === 'manual') {
+    openHomeReleasePage(status.downloadUrl || status.releaseUrl)
+  }
+}
+
+const checkHomeUpdate = async () => {
+  if (homeUpdateChecking.value) return
+
+  const desktopApp = window.desktopApp
+  if (!desktopApp?.checkUpdate) {
+    dialog.info({
+      title: '当前环境不支持客户端更新',
+      content: '请打开 GitHub Release 下载最新版安装包。',
+      positiveText: '打开 Release',
+      negativeText: '取消',
+      onPositiveClick: () => openHomeReleasePage()
+    })
+    return
+  }
+
+  homeUpdateChecking.value = true
+  window.$message?.loading('正在检查更新...', { duration: 1200 })
+
+  try {
+    const status = await desktopApp.checkUpdate()
+    handleHomeUpdateStatus(status)
+  } catch (err) {
+    dialog.warning({
+      title: '更新检查失败',
+      content: `${err.message || '网络请求失败'}。如果一直失败，可以打开 GitHub Release 手动下载。`,
+      positiveText: '打开 Release',
+      negativeText: '取消',
+      onPositiveClick: () => openHomeReleasePage()
+    })
+  } finally {
+    homeUpdateChecking.value = false
+  }
+}
 
 const {
   loading: chatLoading,
@@ -6641,6 +6774,7 @@ onUnmounted(() => {
   height: 56px;
   justify-content: space-between;
   padding: 0 28px;
+  gap: 16px;
 }
 
 .gemini-topbar strong {
@@ -6648,13 +6782,35 @@ onUnmounted(() => {
   letter-spacing: -0.02em;
 }
 
+.gemini-topbar-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .gemini-topbar button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   min-height: 32px;
   padding: 0 13px;
   border-radius: 999px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
   color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.gemini-topbar button:disabled {
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+
+.gemini-topbar-icon {
+  padding: 0 12px;
 }
 
 .gemini-center {
