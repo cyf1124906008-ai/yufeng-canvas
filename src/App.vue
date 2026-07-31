@@ -4,20 +4,15 @@
  * Provides naive-ui config and router view
  */
 import { computed, onMounted, ref } from 'vue'
-import { NButton, NConfigProvider, NDialogProvider, NMessageProvider, NModal, NInput, darkTheme } from 'naive-ui'
+import { NButton, NConfigProvider, NDialogProvider, NMessageProvider, NModal, darkTheme } from 'naive-ui'
 import { isDark } from './stores/theme'
 import AppFeedbackProvider from './components/AppFeedbackProvider.vue'
 import SupportModal from './components/SupportModal.vue'
 
 const SUPPORT_HINT_STORAGE_KEY = 'yufeng-canvas-support-hint-v1'
-const INVITE_STORAGE_KEY = 'yufeng-canvas-invite-pass-v1'
-const INVITE_CODE = 'sbsw'
 
 const showSupportHint = ref(false)
 const showSupportModal = ref(false)
-const invitePassed = ref(false)
-const inviteCode = ref('')
-const inviteError = ref('')
 
 // Naive UI theme based on dark mode | 基于深色模式的 Naive UI 主题
 const theme = computed(() => isDark.value ? darkTheme : null)
@@ -68,41 +63,7 @@ const openSupportFromHint = () => {
   showSupportModal.value = true
 }
 
-const submitInviteCode = () => {
-  const value = String(inviteCode.value || '').trim()
-  if (value === INVITE_CODE) {
-    try {
-      localStorage.setItem(INVITE_STORAGE_KEY, 'yes')
-    } catch {
-      // Local storage can be unavailable in restricted environments.
-    }
-
-    invitePassed.value = true
-    inviteError.value = ''
-
-    try {
-      showSupportHint.value = localStorage.getItem(SUPPORT_HINT_STORAGE_KEY) !== 'yes'
-    } catch {
-      showSupportHint.value = true
-    }
-    return
-  }
-
-  inviteError.value = '邀请码不正确，请重新输入。'
-}
-
 onMounted(() => {
-  try {
-    invitePassed.value = localStorage.getItem(INVITE_STORAGE_KEY) === 'yes'
-  } catch {
-    invitePassed.value = false
-  }
-
-  if (!invitePassed.value) {
-    showSupportHint.value = false
-    return
-  }
-
   try {
     showSupportHint.value = localStorage.getItem(SUPPORT_HINT_STORAGE_KEY) !== 'yes'
   } catch {
@@ -116,43 +77,7 @@ onMounted(() => {
     <n-message-provider>
       <n-dialog-provider>
         <app-feedback-provider>
-          <router-view v-if="invitePassed" />
-
-          <n-modal
-            :show="!invitePassed"
-            preset="card"
-            class="invite-gate-modal"
-            :bordered="false"
-            :mask-closable="false"
-            :close-on-esc="false"
-          >
-            <div class="invite-gate">
-              <div class="invite-gate-mark">
-                <img src="./assets/logo.png" alt="YUFENG Canvas" />
-              </div>
-              <p class="invite-gate-kicker">YUFENG CANVAS</p>
-              <h2>请输入邀请码</h2>
-              <p class="invite-gate-desc">
-                当前版本需要通过邀请码后才能使用。验证通过后，本机后续打开会自动进入。
-              </p>
-              <n-input
-                v-model:value="inviteCode"
-                class="invite-gate-input"
-                placeholder="输入邀请码"
-                size="large"
-                round
-                clearable
-                autofocus
-                @keydown.enter="submitInviteCode"
-              />
-              <p v-if="inviteError" class="invite-gate-error">{{ inviteError }}</p>
-              <div class="invite-gate-actions">
-                <n-button type="primary" round size="large" @click="submitInviteCode">
-                  进入 YUFENG Canvas
-                </n-button>
-              </div>
-            </div>
-          </n-modal>
+          <router-view />
 
           <n-modal
             v-model:show="showSupportHint"
@@ -190,94 +115,6 @@ onMounted(() => {
 </template>
 
 <style>
-.invite-gate-modal {
-  width: min(460px, calc(100vw - 32px));
-  border: 1px solid rgba(203, 255, 239, 0.26);
-  border-radius: 34px;
-  overflow: hidden;
-  background:
-    radial-gradient(circle at 14% 0%, rgba(70, 245, 203, 0.22), transparent 36%),
-    radial-gradient(circle at 92% 100%, rgba(56, 189, 248, 0.18), transparent 40%),
-    rgba(5, 18, 32, 0.9);
-  box-shadow:
-    0 44px 140px rgba(0, 0, 0, 0.5),
-    inset 0 1px 0 rgba(255, 255, 255, 0.14);
-}
-
-.invite-gate-modal .n-card__content {
-  padding: 34px;
-}
-
-.invite-gate {
-  color: #eafff8;
-}
-
-.invite-gate-mark {
-  display: grid;
-  place-items: center;
-  width: 70px;
-  height: 70px;
-  margin-bottom: 20px;
-  border: 1px solid rgba(125, 249, 231, 0.3);
-  border-radius: 24px;
-  background: rgba(255, 255, 255, 0.08);
-  box-shadow: 0 20px 54px rgba(20, 184, 166, 0.24);
-}
-
-.invite-gate-mark img {
-  width: 50px;
-  height: 50px;
-  border-radius: 16px;
-}
-
-.invite-gate-kicker {
-  margin: 0 0 10px;
-  color: #5ff6d2;
-  font-size: 12px;
-  font-weight: 950;
-  letter-spacing: 0.2em;
-}
-
-.invite-gate h2 {
-  margin: 0;
-  color: #f8fffc;
-  font-size: clamp(30px, 4.5vw, 42px);
-  font-weight: 950;
-  letter-spacing: -0.05em;
-  line-height: 1.04;
-}
-
-.invite-gate-desc {
-  margin: 16px 0 22px;
-  color: rgba(234, 255, 248, 0.72);
-  font-size: 14px;
-  line-height: 1.7;
-}
-
-.invite-gate-input {
-  margin-bottom: 10px;
-}
-
-.invite-gate-error {
-  margin: 8px 0 0;
-  color: #ff9a9a;
-  font-size: 13px;
-  font-weight: 800;
-}
-
-.invite-gate-actions {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 20px;
-}
-
-.invite-gate-actions .n-button {
-  min-width: 158px;
-  height: 44px;
-  border-radius: 18px;
-  font-weight: 900;
-}
-
 .support-hint-modal {
   width: min(520px, calc(100vw - 32px));
   border: 1px solid rgba(203, 255, 239, 0.22);
