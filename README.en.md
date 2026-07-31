@@ -36,6 +36,7 @@ It is designed for:
 | Feature | Description |
 | --- | --- |
 | Chat | Use your configured text model to brainstorm, structure ideas, and polish prompts. |
+| Creative Agent Autopilot | Describe the final deliverable; the Agent chooses one next action at a time, routes capabilities to configured models, creates Canvas nodes, and waits for real image or video results. |
 | Image generation | Text-to-image, image-to-image, reference images, ordered references, and ratio/size selection. |
 | Video generation | Text-to-video, first/last frame references, ratio, duration, polling, and downloads. |
 | Node workflows | Connect text, image, video, and config nodes into reusable visual pipelines. |
@@ -106,6 +107,12 @@ git clone https://github.com/cyf1124906008-ai/yufeng-canvas.git
 cd yufeng-canvas
 pnpm install
 pnpm dev
+```
+
+Run the Agent core and model routing tests:
+
+```bash
+pnpm test
 ```
 
 ## Build Desktop App

@@ -537,15 +537,37 @@
         <!-- Processing indicator | 处理中指示器 -->
         <div
           v-if="isProcessing"
-          class="processing-card mb-3 p-3"
+          class="processing-card autopilot-run-card mb-3 p-3"
         >
-          <div class="flex items-center gap-2 text-sm text-[var(--accent-color)] mb-2">
-            <n-spin :size="14" />
-            <span>正在生成提示词...</span>
-          </div>
-          <div v-if="currentResponse" class="text-sm text-[var(--text-primary)] whitespace-pre-wrap">
-            {{ currentResponse }}
-          </div>
+          <template v-if="creativeAgentIsRunning">
+            <div class="autopilot-run-head">
+              <div>
+                <span class="autopilot-run-kicker">AUTOPILOT</span>
+                <strong>{{ creativeAgentStageText }}</strong>
+              </div>
+              <n-spin v-if="creativeAgentIsRunning" :size="14" />
+            </div>
+            <p v-if="creativeAgentLastStepText" class="autopilot-run-step">
+              {{ creativeAgentLastStepText }}
+            </p>
+            <button
+              v-if="creativeAgentIsRunning"
+              type="button"
+              class="autopilot-cancel-button"
+              @click="cancelAutopilot"
+            >
+              取消任务
+            </button>
+          </template>
+          <template v-else>
+            <div class="flex items-center gap-2 text-sm text-[var(--accent-color)] mb-2">
+              <n-spin :size="14" />
+              <span>正在处理...</span>
+            </div>
+            <div v-if="currentResponse" class="text-sm text-[var(--text-primary)] whitespace-pre-wrap">
+              {{ currentResponse }}
+            </div>
+          </template>
         </div>
 
         <template v-if="showCanvasComposer">
@@ -582,9 +604,12 @@
                 </button>
               </div>
               <div class="flex items-center gap-3">
-                <label class="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
+                <label
+                  class="flex items-center gap-2 text-sm text-[var(--text-secondary)]"
+                  title="开启后由 Creative Agent 自主规划并执行；关闭后保留手动 Canvas 模式"
+                >
                   <n-switch v-model:value="autoExecute" size="small" />
-                  自动执行
+                  Autopilot
                 </label>
                 <button
                   @click="sendMessage"
@@ -685,7 +710,7 @@
  * Canvas view component | 画布视图组件
  * Main infinite canvas with Vue Flow integration
  */
-import { ref, computed, onMounted, onUnmounted, watch, nextTick, markRaw } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick, markRaw, unref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { VueFlow, useVueFlow } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
@@ -717,6 +742,7 @@ import {
 import { nodes, edges, runtimeLogs, clearRuntimeLogs, addRuntimeLog, addNode, addNodes, addEdge, addEdges, updateNode, removeNode, duplicateNode, initSampleData, loadProject, saveProject, detachCurrentProject, canvasViewport, updateViewport, undo, redo, canUndo, canRedo, manualSaveHistory, startBatchOperation, endBatchOperation } from '../stores/canvas'
 import { loadAllModels } from '../stores/models'
 import { useChat, useWorkflowOrchestrator } from '../hooks'
+import { useCreativeAgent } from '@/agent/runtime/useCreativeAgent'
 import { useModelStore } from '../stores/pinia'
 import { projects, initProjectsStore, updateProject, renameProject, deleteProject, duplicateProject, currentProject, currentProjectId as projectStoreCurrentId } from '../stores/projects'
 import { initTaskStore } from '../stores/tasks'
@@ -732,7 +758,7 @@ import GuidedTour from '../components/GuidedTour.vue'
 import { CANVAS_PROMPT_SUGGESTIONS } from '../config/promptLibrary'
 import { WORKFLOW_TEMPLATES } from '../config/workflows'
 import { COMPLEX_WORKFLOW_TEMPLATES } from '../config/complexWorkflows'
-import { buildCanvasSnapshot, buildCanvasAgentSystemPrompt, parseAgentCommandResponse, classifyCommandRisk, buildLocalCommandPlan } from '../integrations/canvas/agentPlanner'
+import { buildCanvasSnapshot, classifyCommandRisk, buildLocalCommandPlan } from '../integrations/canvas/agentPlanner'
 
 import { executeCommandBatch, validateCommandBatch, executeCommand, dryRunCommandBatch, COMMAND_REGISTRY } from '../integrations/canvas/commands'
 import { generateDramaContent, convertGeneratedDataToProject } from '../integrations/drama/dramaGenerator'
@@ -776,16 +802,50 @@ const {
 // Workflow orchestrator hook | 工作流编排 hook
 const {
   isAnalyzing: workflowAnalyzing,
-  isExecuting: workflowExecuting,
-  currentStep: workflowStep,
-  totalSteps: workflowTotalSteps,
-  executionLog: workflowLog,
-  analyzeIntent,
-  executeWorkflow,
-  createTextToImageWorkflow,
-  createMultiAngleStoryboard,
-  WORKFLOW_TYPES
+  isExecuting: workflowExecuting
 } = useWorkflowOrchestrator()
+
+// Creative Agent is the primary Autopilot runtime. The legacy planner and
+// workflow orchestrator below remain available as compatibility fallbacks.
+const {
+  isRunning: creativeAgentIsRunning,
+  currentState: creativeAgentState,
+  statusText: creativeAgentStatusText,
+  run: runCreativeAgent,
+  cancel: cancelCreativeAgent
+} = useCreativeAgent({ sendChat, modelStore })
+
+const creativeAgentStageText = computed(() => {
+  return unref(creativeAgentStatusText) || creativeAgentState.value?.status || '正在准备'
+})
+
+const creativeAgentLastStepText = computed(() => {
+  const state = creativeAgentState.value || {}
+  const steps = Array.isArray(state.steps)
+    ? state.steps
+    : (Array.isArray(state.plan?.steps)
+        ? state.plan.steps
+        : (Array.isArray(state.actions) ? state.actions : []))
+  const step = steps[steps.length - 1] || state.currentStep
+
+  if (!step) return ''
+  if (typeof step === 'string') return step
+
+  const actionText = typeof step.action === 'string'
+    ? step.action
+    : (step.action?.name || step.action?.tool)
+
+  const stepName = step.name || step.tool || actionText
+  const stepReason = step.reason || step.description || step.message
+
+  if (stepName && stepReason) return `${stepName} · ${stepReason}`
+  return stepReason || step.title || step.label || stepName || ''
+})
+
+const cancelAutopilot = () => {
+  cancelCreativeAgent()
+  window.$message?.info('Autopilot 任务已取消')
+}
 
 // Custom node components | 自定义节点组件
 import TextNode from '../components/nodes/TextNode.vue'
@@ -864,7 +924,7 @@ const openEngineWorkspace = () => {
 }
 const showStudioCockpit = ref(false)
 const chatInput = ref('')
-const autoExecute = ref(false)
+const autoExecute = ref(true)
 const showCanvasComposer = ref(false)
 const composerTextareaRef = ref(null)
 const isMobile = ref(false)
@@ -2612,6 +2672,8 @@ const handleEnterKey = (e) => {
   sendMessage()
 }
 
+const isExplicitCanvasControlIntent = (value) => /(?:删除|移除|删掉|去掉|批量生成|全部首帧|所有首帧|所有镜头视频|修改第\s*\d+\s*个?镜头|更新第\s*\d+\s*个?镜头|comfyui?|运行当前工作流)/i.test(String(value || ''))
+
 // Handle AI polish | 处理 AI 润色
 const handlePolish = async () => {
   const input = chatInput.value.trim()
@@ -2671,53 +2733,41 @@ const sendMessage = async () => {
     const baseY = maxY + 200
 
     if (autoExecute.value) {
-      // Auto-execute mode: try Canvas Agent Planner first, fallback to workflow orchestrator
-      window.$message?.info('正在分析指令...')
+      // Keep explicit maintenance commands available, while all creative goals
+      // go through the real Agent loop below.
+      if (isExplicitCanvasControlIntent(content)) {
+        const controlPlan = buildLocalCommandPlan(content, buildCanvasSnapshot())
+        if (controlPlan) {
+          executeCanvasCommandPlan(controlPlan)
+          return
+        }
+      }
+
+      window.$message?.info('Autopilot 正在理解创作目标...')
 
       try {
-        const snapshot = buildCanvasSnapshot()
-        const localPlan = buildLocalCommandPlan(content, snapshot)
-        let parsed
+        const agentResult = await runCreativeAgent(content, {
+          basePosition: { x: baseX, y: baseY }
+        })
 
-        if (localPlan) {
-          parsed = { ok: true, plan: localPlan }
-        } else {
-          if (!isChatConfigured.value) {
-            throw new Error('请先配置 API Key')
-          }
-          const systemPrompt = buildCanvasAgentSystemPrompt(snapshot)
-          const response = await sendChat(content, true, { systemPrompt })
-          parsed = parseAgentCommandResponse(response)
+        if (agentResult?.ok === false || ['error', 'failed'].includes(agentResult?.status)) {
+          throw new Error(agentResult.error || agentResult.message || 'Creative Agent 执行失败')
         }
 
-        if (parsed.ok && parsed.plan.commands.length > 0) {
-          const { plan } = parsed
-          const batchErr = validateCommandBatch(plan.commands)
-          if (batchErr) throw new Error(batchErr.message)
+        window.$message?.success('Autopilot 任务已完成')
+      } catch (creativeAgentError) {
+        const status = String(creativeAgentState.value?.status || '').toLowerCase()
+        const wasCancelled = ['cancelled', 'canceled'].includes(status) || creativeAgentError?.name === 'AbortError'
 
-          executeCanvasCommandPlan(plan)
-        } else {
-          // Fallback: parsed failed or no commands, use old workflow orchestrator
-          throw new Error(parsed.error || '无可执行命令')
+        if (wasCancelled) {
+          addRuntimeLog('info', 'Autopilot 任务已由用户取消')
+          return
         }
-      } catch (_agentErr) {
-        // Fallback to analyzeIntent + executeWorkflow
-        try {
-          const result = await analyzeIntent(content)
-          const workflowParams = {
-            workflow_type: result?.workflow_type || WORKFLOW_TYPES.TEXT_TO_IMAGE,
-            image_prompt: result?.image_prompt || content,
-            video_prompt: result?.video_prompt || content,
-            character: result?.character,
-            shots: result?.shots
-          }
-          window.$message?.info(`执行工作流: ${result?.description || '文生图'}`)
-          await executeWorkflow(workflowParams, { x: baseX, y: baseY })
-          window.$message?.success('工作流已启动')
-        } catch (err2) {
-          window.$message?.warning('使用默认文生图工作流')
-          await createTextToImageWorkflow(content, { x: baseX, y: baseY })
-        }
+
+        addRuntimeLog('error', 'Creative Agent 任务失败，已保留当前画布现场', {
+          error: creativeAgentError?.message || String(creativeAgentError)
+        })
+        throw creativeAgentError
       }
     } else {
       // Manual mode: just create nodes | 手动模式：仅创建节点
@@ -3957,6 +4007,57 @@ onUnmounted(() => {
 .agent-card small {
   color: var(--text-secondary);
   line-height: 1.5;
+}
+
+.autopilot-run-card {
+  min-width: min(420px, calc(100vw - 32px));
+}
+
+.autopilot-run-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--accent-color);
+}
+
+.autopilot-run-head > div {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+}
+
+.autopilot-run-kicker {
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.15em;
+}
+
+.autopilot-run-head strong {
+  color: var(--text-primary);
+  font-size: 13px;
+}
+
+.autopilot-run-step {
+  margin-top: 7px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.autopilot-cancel-button {
+  margin-top: 9px;
+  border: 1px solid rgba(239, 68, 68, 0.28);
+  border-radius: 999px;
+  padding: 5px 10px;
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.08);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.autopilot-cancel-button:hover {
+  background: rgba(239, 68, 68, 0.14);
 }
 
 .agent-actions,
