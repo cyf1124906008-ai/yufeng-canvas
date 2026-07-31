@@ -7,6 +7,38 @@ function abortError() {
   return error
 }
 
+function parseHttpStatus(message = '') {
+  const match = String(message).match(/(?:status(?:\s+code)?|http|状态码|错误码|返回)[^\d]{0,12}([1-5]\d{2})/i)
+  return match ? Number(match[1]) : null
+}
+
+function inferErrorCode(message = '', status) {
+  const text = String(message)
+  if (status === 401 || /(?:api\s*key|认证失败|未授权|unauthori[sz]ed)/i.test(text)) return 'AUTH_FAILED'
+  if (status === 403 || /(?:无权限|forbidden|permission denied)/i.test(text)) return 'FORBIDDEN'
+  if (status === 429 || /(?:限流|请求过多|rate[ -]?limit|too many requests)/i.test(text)) return 'RATE_LIMITED'
+  if (status != null && status >= 500) return 'UPSTREAM_ERROR'
+  if (/(?:超时|timed?\s*out|timeout)/i.test(text)) return 'PROVIDER_TIMEOUT'
+  if (/(?:服务不可用|服务器繁忙|service unavailable|temporar(?:y|ily) unavailable)/i.test(text)) return 'SERVICE_UNAVAILABLE'
+  if (/(?:参数无效|参数错误|invalid (?:param|argument)|unsupported|not supported)/i.test(text)) return 'INVALID_PARAMETER'
+  return ''
+}
+
+export function createCanvasNodeError(errorValue, nodeData = {}) {
+  const source = errorValue instanceof Error ? errorValue : null
+  const message = source?.message || String(errorValue || 'Canvas 节点执行失败')
+  const error = new Error(message)
+  const status = Number(
+    source?.status ?? source?.statusCode ?? nodeData.errorStatus ?? nodeData.statusCode ?? parseHttpStatus(message)
+  )
+  if (Number.isFinite(status) && status > 0) error.status = status
+  const code = source?.code || nodeData.errorCode || inferErrorCode(message, error.status)
+  if (code) error.code = code
+  if (typeof source?.retryable === 'boolean') error.retryable = source.retryable
+  else if (typeof nodeData.retryable === 'boolean') error.retryable = nodeData.retryable
+  return error
+}
+
 function waitForNodeState(check, {
   timeoutMs = 5 * 60 * 1000,
   signal,
@@ -56,7 +88,7 @@ export function waitForConfigOutput(configNodeId, options = {}) {
     const configNode = allNodes.find((node) => node.id === configNodeId)
     if (!configNode) return { ready: false }
     if (configNode.data?.error) {
-      return { error: new Error(configNode.data.error) }
+      return { error: createCanvasNodeError(configNode.data.error, configNode.data) }
     }
     if (configNode.data?.outputNodeId) {
       return { ready: true, value: configNode.data.outputNodeId }
@@ -83,7 +115,7 @@ export function waitForMediaOutput(outputNodeId, mediaType, options = {}) {
     const outputNode = allNodes.find((node) => node.id === outputNodeId)
     if (!outputNode) return { ready: false }
     if (outputNode.data?.error) {
-      return { error: new Error(outputNode.data.error) }
+      return { error: createCanvasNodeError(outputNode.data.error, outputNode.data) }
     }
     if (outputNode.data?.url && outputNode.data?.loading !== true) {
       return {

@@ -65,8 +65,21 @@ generate_image → analyze_image → accept / retry
 
 详细契约与验收边界见 [V0.2 Result Observation 设计](plans/agent-v0.2-result-observation.md)。
 
+## V0.3：Model Intelligence Router
+
+V0.3 已把“用户当前选中的模型”升级为可解释的候选排序：
+
+- `ModelProfile` 统一图片、视频和 Vision 模型的能力、质量、速度、成本、可靠性、可用性与支持参数；未知指标明确保持未知。
+- `ModelScorer` 先做能力、Provider、比例、分辨率、时长和参考图等硬过滤，再按 balanced / quality / speed / cost 策略评分。
+- 用户当前选择仍有有限偏好加分，但不能越过硬能力约束。
+- 创作目标中的“电影级 / 最高质量”“尽快”“预算有限”等表达可触发有限的本地策略推断；没有明确偏好时使用 balanced。
+- Canvas runtime 会按排序逐个尝试候选。只有 429、5xx、超时、网络中断和临时不可用会触发自动切换；认证、权限、参数、能力、内容安全和用户取消不会被掩盖。
+- 每个失败配置节点都会保留，最终错误包含脱敏 attempts 摘要，Agent observation 不接触 API Key 或媒体 URL。
+- 现有仅含 `key/label` 的模型配置继续兼容；Provider 模型列表返回的安全画像字段会被保留并用于路由。
+
+详细契约与验收边界见 [V0.3 Model Router 设计](plans/agent-v0.3-model-router.md)。
+
 ## 后续阶段
 
-- V0.3：基于质量、速度、成本、可靠性的 ModelProfile 路由和失败 fallback。
 - V0.4：Agent 根据观察结果动态插入编辑、放大等节点。
 - V0.5：长任务上下文、项目记忆、checkpoint、预算和调用统计。

@@ -37,6 +37,40 @@ const STORAGE_KEYS = {
 const API_KEY_CAPABILITIES = ['default', 'chat', 'image', 'video']
 const API_BASE_URL_CAPABILITIES = ['default', 'chat', 'image', 'video']
 const REQUIRE_USER_MODELS = DISTRIBUTION_CONFIG.models?.requireUserModels === true
+const MODEL_INTELLIGENCE_FIELDS = [
+  'capabilities',
+  'quality',
+  'qualityScore',
+  'quality_score',
+  'speed',
+  'speedScore',
+  'speed_score',
+  'latencyMs',
+  'latency_ms',
+  'cost',
+  'pricing',
+  'price',
+  'currency',
+  'costUnit',
+  'reliability',
+  'reliabilityScore',
+  'reliability_score',
+  'successRate',
+  'success_rate',
+  'availability',
+  'available',
+  'status',
+  'supported',
+  'supportsVision',
+  'modalities',
+  'limits'
+]
+
+const pickModelIntelligence = (model = {}) => Object.fromEntries(
+  MODEL_INTELLIGENCE_FIELDS
+    .filter((field) => model[field] !== undefined)
+    .map((field) => [field, model[field]])
+)
 
 const inferImageProtocol = (modelKey = '') => {
   const value = String(modelKey).toLowerCase()
@@ -289,6 +323,7 @@ const isModelSupported = (model, provider) => {
 }
 
 const buildCustomChatModel = (model, provider) => ({
+  ...pickModelIntelligence(model),
   label: model.label || model.key,
   key: model.key,
   isCustom: true,
@@ -296,6 +331,7 @@ const buildCustomChatModel = (model, provider) => ({
 })
 
 const buildCustomImageModel = (model, provider) => ({
+  ...pickModelIntelligence(model),
   label: model.label || model.key,
   key: model.key,
   isCustom: true,
@@ -315,6 +351,7 @@ const buildCustomImageModel = (model, provider) => ({
 })
 
 const buildCustomVideoModel = (model, provider) => ({
+  ...pickModelIntelligence(model),
   label: model.label || model.key,
   key: model.key,
   isCustom: true,
@@ -797,7 +834,8 @@ export const useModelStore = defineStore('model', () => {
         key,
         label: rawModel.label || rawModel.name || key,
         endpointTypes,
-        ownedBy: rawModel.owned_by || rawModel.ownedBy || ''
+        ownedBy: rawModel.owned_by || rawModel.ownedBy || '',
+        ...pickModelIntelligence(rawModel)
       }
       const capability = inferDiscoveredCapability(rawModel)
 
