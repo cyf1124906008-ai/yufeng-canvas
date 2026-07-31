@@ -34,7 +34,7 @@ V0.1 只实现一个 Creative Agent，不包含 Multi-Agent：
 - Canvas 显示 Agent 创建的节点和执行状态，用户仍可切换到手动模式编辑、重跑或接管。
 - 生成工具复用现有节点和 Provider 配置，不建立第二套图片/视频 API 客户端。
 
-V0.1 的“验证”只确认目标产物真实存在且生成节点没有报错。对画面内容和质量进行视觉评分、修改提示词并自主重做，属于 V0.2。
+V0.1 的“验证”只确认目标产物真实存在且生成节点没有报错。
 
 ## V0.1 工具契约
 
@@ -46,9 +46,27 @@ V0.1 的“验证”只确认目标产物真实存在且生成节点没有报错
 
 媒体 URL、API Key 和完整供应商响应不会写进 Planner 上下文；Planner 只看到完成状态、节点引用和必要的错误摘要。
 
+## V0.2：Result Observation
+
+V0.2 已把图片结果观察接进同一个逐步循环：
+
+```text
+generate_image → analyze_image → accept / retry
+                                      ↓
+                          improve prompt → generate_image
+```
+
+- 浏览器先验证真实图片能否解码，并读取尺寸、比例等技术信息。
+- 当前文本模型声明支持 Vision 时，`analyze_image` 会看图并返回结构化评价；最终分数和是否通过由本地 `QualityPolicy` 复算，不信任模型自报结论。
+- 未通过时，`PromptImprover` 保留原始目标并合并改进建议；默认最多重做两次，总候选不超过三张。
+- 没有 Vision 能力时只做降级技术检查，并在 Canvas 明确显示“未视觉验证”；运行方也可以关闭降级通过。
+- 每次候选和 Quality Check 节点都会保留。达到重做上限后任务失败并保留现场，不会假装交付成功。
+- 图片任务通过检查后才能结束；视频任务的首帧通过检查后才能进入视频生成。
+
+详细契约与验收边界见 [V0.2 Result Observation 设计](plans/agent-v0.2-result-observation.md)。
+
 ## 后续阶段
 
-- V0.2：图片/视频结果观察、质量评分、提示词修订和有限次数重做。
 - V0.3：基于质量、速度、成本、可靠性的 ModelProfile 路由和失败 fallback。
 - V0.4：Agent 根据观察结果动态插入编辑、放大等节点。
 - V0.5：长任务上下文、项目记忆、checkpoint、预算和调用统计。

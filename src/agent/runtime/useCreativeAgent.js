@@ -8,6 +8,7 @@ import {
 } from '../core/index.js'
 import { createModelRouter } from '../ModelRouter.js'
 import { createCreativeToolRegistry } from './createCreativeToolRegistry.js'
+import { presentReview } from './canvasReviewPresenter.js'
 import { appendRuntimeLog, sanitizeValue } from './runtimeLog.js'
 
 const DEFAULT_MAX_STEPS = 8
@@ -15,6 +16,7 @@ const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000
 
 const ACTION_LABELS = {
   generate_image: '生成图片',
+  analyze_image: '检查图片质量',
   generate_video: '生成视频',
   finish: '检查并交付结果'
 }
@@ -63,8 +65,12 @@ function eventStatusText(event) {
     case 'started': return '正在理解创作目标'
     case 'planning': return '正在决定下一步'
     case 'action': return actionName ? `已决定：${ACTION_LABELS[actionName] || actionName}` : '已制定下一步'
-    case 'tool_started': return actionName === 'generate_video' ? '正在生成视频' : '正在生成图片'
-    case 'tool_succeeded': return actionName === 'generate_video' ? '视频生成完成，正在检查' : '图片生成完成，正在检查'
+    case 'tool_started': return actionName === 'analyze_image'
+      ? '正在检查图片质量'
+      : actionName === 'generate_video' ? '正在生成视频' : '正在生成图片'
+    case 'tool_succeeded': return actionName === 'analyze_image'
+      ? '质量检查完成，正在决定下一步'
+      : actionName === 'generate_video' ? '视频生成完成，正在检查' : '图片生成完成，准备质量检查'
     case 'finish_blocked': return '结果尚未达到交付条件，继续执行'
     case 'completed': return '任务已完成'
     case 'failed': return '任务执行失败'
@@ -89,6 +95,7 @@ function createPlannerLlm(sendChat, modelStore) {
       `当前执行状态：${JSON.stringify(sanitizeValue(state))}`,
       messages?.length ? `最近上下文：${JSON.stringify(sanitizeValue(messages.slice(-8)))}` : '',
       '只决定现在要执行的一个动作。视频任务必须先有已完成图片，再调用 generate_video。',
+      '每张新图片都必须先调用 analyze_image；未通过时根据 nextPrompt 重做，通过后才能 finish 或生成视频。',
       'input 中给出适合生成模型的中文 prompt，但不要指定模型名或 Provider。'
     ].filter(Boolean).join('\n\n')
 
@@ -116,6 +123,8 @@ export function useCreativeAgent({
   getBasePosition,
   timeoutMs = DEFAULT_TIMEOUT_MS,
   maxSteps = DEFAULT_MAX_STEPS,
+  maxQualityRetries = 2,
+  allowDegradedReview = true,
   runtimeLogs: injectedRuntimeLogs,
   runner: injectedRunner
 } = {}) {
@@ -144,15 +153,24 @@ export function useCreativeAgent({
     modelStore,
     modelRouter,
     runtimeLogs,
+    sendChat,
+    presentReview,
+    qualityPolicy: { allowDegradedReview },
     getBasePosition: resolveBasePosition,
     timeoutMs
   })
   const contextManager = new ContextManager()
   const planner = new Planner({
     llm: createPlannerLlm(sendChat, modelStore),
-    systemPrompt: '你是 YUFENG Creative Agent。你按目标逐步调用工具，不能指定具体模型，不能假设媒体已生成。'
+    systemPrompt: '你是 YUFENG Creative Agent。你按目标逐步调用工具，不能指定具体模型，不能假设媒体已生成。',
+    observationEnabled: true,
+    maxQualityRetries,
+    allowDegradedReview
   })
-  const verifier = new Verifier()
+  const verifier = new Verifier({
+    requireImageReview: true,
+    allowDegradedReview
+  })
   const runner = injectedRunner || new AgentRunner({
     planner,
     toolRegistry,

@@ -857,6 +857,7 @@ import LLMConfigNode from '../components/nodes/LLMConfigNode.vue'
 import ComfyWorkflowNode from '../components/nodes/ComfyWorkflowNode.vue'
 import CloudImageWorkflowNode from '../components/nodes/CloudImageWorkflowNode.vue'
 import DramaShotNode from '../components/nodes/DramaShotNode.vue'
+import QualityCheckNode from '../components/nodes/QualityCheckNode.vue'
 import ImageRoleEdge from '../components/edges/ImageRoleEdge.vue'
 import PromptOrderEdge from '../components/edges/PromptOrderEdge.vue'
 import ImageOrderEdge from '../components/edges/ImageOrderEdge.vue'
@@ -877,7 +878,8 @@ const nodeTypes = {
   llmConfig: markRaw(LLMConfigNode),
   comfyWorkflow: markRaw(ComfyWorkflowNode),
   cloudImageWorkflow: markRaw(CloudImageWorkflowNode),
-  dramaShot: markRaw(DramaShotNode)
+  dramaShot: markRaw(DramaShotNode),
+  qualityCheck: markRaw(QualityCheckNode)
 }
 
 // Register custom edge types | 注册自定义边类型

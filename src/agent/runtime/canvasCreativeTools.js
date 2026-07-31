@@ -66,6 +66,7 @@ function createImageTool({ modelRouter, runtimeLogs, getBasePosition, timeoutMs 
       model: route.model,
       size: input.size || modelDefault(route, 'size', '1024x1024'),
       quality: input.quality || modelDefault(route, 'quality', 'standard'),
+      negative_prompt: input.negativePrompt || input.negative_prompt || '',
       autoExecute: true
     })
 
