@@ -5,7 +5,9 @@ const LIKELY_BARE_BASE64 = /^[a-z0-9+/]+={0,2}$/i
 
 function isLikelyBareBase64(value) {
   if (typeof value !== 'string' || value.length < 128) return false
-  const compact = value.replace(/\s/g, '')
+  const normalized = value.trim()
+  if (/[^\S\r\n]/.test(normalized)) return false
+  const compact = normalized.replace(/[\r\n]/g, '')
   return compact.length >= 128 && compact.length % 4 === 0 && LIKELY_BARE_BASE64.test(compact)
 }
 

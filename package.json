@@ -2,7 +2,7 @@
   "name": "yufeng-canvas",
   "productName": "YUFENG Agent",
   "private": true,
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "Autonomous creative agent desktop harness built with Vue, Vite and Electron",
   "repository": {
     "type": "git",

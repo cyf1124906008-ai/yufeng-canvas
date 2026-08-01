@@ -43,6 +43,15 @@ contextBridge.exposeInMainWorld('desktopApp', {
     saveDataUrl: (dataUrl, projectId) => ipcRenderer.invoke('app:assets:save-data-url', dataUrl, projectId),
     readAsDataUrl: (assetPath) => ipcRenderer.invoke('app:assets:read-as-data-url', assetPath)
   },
+  agentAssets: {
+    saveDataUrl: (dataUrl, runId) => ipcRenderer.invoke('app:agent-assets:save-data-url', dataUrl, runId),
+    readAsDataUrl: (assetRef, runId, assetProof) => ipcRenderer.invoke(
+      'app:agent-assets:read-as-data-url', assetRef, runId, assetProof
+    ),
+    deleteRefs: (runId, assetRefs, retainedRefs) => ipcRenderer.invoke(
+      'app:agent-assets:delete-refs', runId, assetRefs, retainedRefs
+    )
+  },
   imageGen: {
     generate: (config) => ipcRenderer.invoke('app:image:generate', config),
     getPendingResult: (taskId) => ipcRenderer.invoke('app:image:get-pending-result', taskId)

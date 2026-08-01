@@ -48,6 +48,7 @@ Creative Agent
 | Result Observation | 图片生成后自动做技术检查与视觉评价；未达标时改进提示词并有限重做。 |
 | Model Intelligence Router | 按能力、质量、速度、成本、可靠性与可用性排序，安全处理临时失败与 fallback。 |
 | Artifact Store | Planner 只接触稳定作品引用；媒体内容、API Key 和完整响应不进入 Agent 上下文。 |
+| Local Run History | 最多保留 50 条本地运行，可在刷新或重启后回看目标、轨迹与作品引用。 |
 | Desktop App | 同一套 Agent Workspace 可运行于 Windows、macOS Electron 应用，也可用于本地 Web 调试。 |
 
 当前只使用一个 Creative Agent，不做 Multi-Agent。旧 Canvas 源码暂时留作迁移参考，但没有用户入口，也不在 Agent 执行链路中；所有 `/canvas/...` 地址都会回到 Agent 首页。
@@ -110,6 +111,7 @@ pnpm desktop:dist:mac
 - [V0.2 Result Observation](docs/plans/agent-v0.2-result-observation.md)
 - [V0.3 Model Router](docs/plans/agent-v0.3-model-router.md)
 - [V0.4 Headless Runtime](docs/plans/agent-v0.4-headless-runtime.md)
+- [V0.5a Local Run History](docs/plans/agent-v0.5a-run-history.md)
 - [Local API / MCP](docs/local-api-mcp.md)
 
 ## Roadmap
@@ -118,7 +120,8 @@ pnpm desktop:dist:mac
 - ✅ V0.2：Result Observation、质量门禁和有限重做。
 - ✅ V0.3：Model Intelligence Router 与安全 fallback。
 - ✅ V0.4：无画布 Provider 工具、Agent Workspace、运行投影和桌面入口。
-- 下一阶段：持久化项目、checkpoint、预算控制、调用统计。
+- ✅ V0.5a：本地运行历史、安全脱敏、桌面图片引用恢复与中断状态识别。
+- 下一阶段：checkpoint / 续跑、预算控制、调用统计。
 - 后续阶段：无画布图片编辑 / 放大工具，以及视频内容观察。
 
 ## 技术栈

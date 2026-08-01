@@ -52,32 +52,65 @@
       </div>
     </section>
 
-    <section v-if="showRunPanel" class="run-stage">
-      <agent-run-panel
-        :snapshot="agent.snapshot.value"
-        :artifacts="agent.artifacts.value"
-        @stop="agent.cancel()"
-        @retry="retryRun"
-        @artifact-select="selectArtifact"
-      />
-    </section>
+    <section class="workspace-stage">
+      <aside class="history-column">
+        <button
+          v-if="viewingHistory"
+          type="button"
+          class="live-run-button"
+          @click="agent.showLiveRun()"
+        >
+          ← 返回当前任务
+        </button>
+        <agent-run-history-panel
+          :records="agent.historyRecords.value"
+          :selected-id="agent.selectedHistoryId.value"
+          :loading="agent.historyLoading.value"
+          @select="agent.selectHistory"
+          @delete="confirmDeleteHistory"
+          @clear="confirmClearHistory"
+        />
+        <p class="history-note">
+          历史只用于本地回看，不会被送给 Planner。删除时会同步清理 App 内的图片副本；远程链接过期后可能无法预览。
+        </p>
+      </aside>
 
-    <section v-else class="agent-capabilities">
-      <article>
-        <span>01</span>
-        <h2>理解目标</h2>
-        <p>把一句自然语言目标拆成当前最值得执行的一步，而不是预先写死整条工作流。</p>
-      </article>
-      <article>
-        <span>02</span>
-        <h2>自主调度</h2>
-        <p>只声明所需能力，由 Model Router 按质量、速度、成本与可用性选择模型。</p>
-      </article>
-      <article>
-        <span>03</span>
-        <h2>观察再行动</h2>
-        <p>每次真实执行后观察作品，再决定采用、重做或进入下一项创作任务。</p>
-      </article>
+      <div class="workspace-content">
+        <div v-if="viewingHistory" class="history-view-banner">
+          <div>
+            <span>READ-ONLY HISTORY</span>
+            <strong>正在回看已保存的 Agent 运行</strong>
+          </div>
+          <button type="button" @click="reuseHistoricalGoal">使用此目标新建任务</button>
+        </div>
+        <agent-run-panel
+          v-if="showRunPanel"
+          :snapshot="displaySnapshot"
+          :artifacts="displayArtifacts"
+          :read-only="viewingHistory"
+          @stop="stopRun"
+          @retry="retryRun"
+          @artifact-select="selectArtifact"
+        />
+
+        <section v-else class="agent-capabilities">
+          <article>
+            <span>01</span>
+            <h2>理解目标</h2>
+            <p>把一句自然语言目标拆成当前最值得执行的一步，而不是预先写死整条工作流。</p>
+          </article>
+          <article>
+            <span>02</span>
+            <h2>自主调度</h2>
+            <p>只声明所需能力，由 Model Router 按质量、速度、成本与可用性选择模型。</p>
+          </article>
+          <article>
+            <span>03</span>
+            <h2>观察再行动</h2>
+            <p>每次真实执行后观察作品，再决定采用、重做或进入下一项创作任务。</p>
+          </article>
+        </section>
+      </div>
     </section>
 
     <api-settings v-model:show="showSettings" />
@@ -93,6 +126,7 @@
 <script setup>
 import { computed, ref } from 'vue'
 import ApiSettings from '../components/ApiSettings.vue'
+import AgentRunHistoryPanel from '../components/agent/AgentRunHistoryPanel.vue'
 import AgentRunPanel from '../components/agent/AgentRunPanel.vue'
 import { useHeadlessCreativeAgent } from '../agent/runtime/useHeadlessCreativeAgent.js'
 import { useModelStore } from '../stores/pinia/index.js'
@@ -108,7 +142,10 @@ const examples = [
   '生成一张高端咖啡品牌主视觉，暖金色电影光影',
   '制作一个 10 秒咖啡广告，先生成首图再转成竖屏视频'
 ]
-const showRunPanel = computed(() => agent.snapshot.value.status !== 'idle' || !!agent.snapshot.value.goal)
+const viewingHistory = computed(() => !!agent.selectedHistoryId.value && !!agent.historySnapshot.value)
+const displaySnapshot = computed(() => viewingHistory.value ? agent.historySnapshot.value : agent.snapshot.value)
+const displayArtifacts = computed(() => viewingHistory.value ? agent.historyArtifacts.value : agent.artifacts.value)
+const showRunPanel = computed(() => viewingHistory.value || displaySnapshot.value.status !== 'idle' || !!displaySnapshot.value.goal)
 
 const startRun = async () => {
   const input = goal.value.trim()
@@ -130,6 +167,55 @@ const retryRun = async () => {
   }
 }
 
+const stopRun = ({ runId } = {}) => {
+  if (viewingHistory.value) return
+  const liveRunId = String(agent.snapshot.value.runId || '')
+  if (runId && liveRunId && String(runId) !== liveRunId) return
+  agent.cancel()
+}
+
+const reuseHistoricalGoal = () => {
+  const historicalGoal = String(displaySnapshot.value?.goal || '').trim()
+  if (!historicalGoal) {
+    window.$message?.warning('这条历史没有可复用的目标')
+    return
+  }
+  goal.value = historicalGoal
+  agent.showLiveRun()
+}
+
+const confirmAction = ({ title, content, positiveText }, action) => {
+  if (window.$dialog?.warning) {
+    window.$dialog.warning({
+      title,
+      content,
+      positiveText,
+      negativeText: '取消',
+      onPositiveClick: action
+    })
+    return
+  }
+  if (window.confirm(content)) action()
+}
+
+const confirmDeleteHistory = (runId) => {
+  const record = agent.historyRecords.value.find(item => String(item?.runId || item?.id || '') === String(runId))
+  const label = String(record?.goal || '').trim()
+  confirmAction({
+    title: '删除这条历史？',
+    content: `${label ? `“${label}”` : '这条运行记录'}将被删除，App 内对应的图片副本也会清理。此操作无法撤销。`,
+    positiveText: '确认删除'
+  }, () => agent.deleteHistory(runId))
+}
+
+const confirmClearHistory = () => {
+  confirmAction({
+    title: '清空全部历史？',
+    content: '所有运行记录和 App 内对应的图片副本都会删除。此操作无法撤销。',
+    positiveText: '确认清空'
+  }, () => agent.clearHistory())
+}
+
 const selectArtifact = ({ normalizedArtifact }) => {
   if (normalizedArtifact?.url) selectedArtifact.value = normalizedArtifact
 }
@@ -137,8 +223,10 @@ const selectArtifact = ({ normalizedArtifact }) => {
 
 <style scoped>
 .agent-workspace {
+  height: 100vh;
   min-height: 100vh;
   overflow-x: hidden;
+  overflow-y: auto;
   color: var(--text-primary, #e6fff8);
   background:
     radial-gradient(circle at 15% 0%, rgba(34, 255, 181, 0.12), transparent 31%),
@@ -303,14 +391,95 @@ const selectArtifact = ({ normalizedArtifact }) => {
 
 .goal-examples { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 16px; }
 .goal-examples button { border-radius: 999px; padding: 8px 12px; font-size: 11px; }
-.run-stage,
-.agent-capabilities {
+.workspace-stage {
   width: min(1180px, calc(100% - 36px));
   margin: 0 auto;
   padding: 0 0 72px;
 }
 
-.run-stage :deep(.agent-run-panel) {
+.workspace-stage {
+  display: grid;
+  grid-template-columns: minmax(250px, 300px) minmax(0, 1fr);
+  align-items: start;
+  gap: 16px;
+}
+
+.history-column {
+  position: sticky;
+  top: 92px;
+  display: grid;
+  gap: 9px;
+  min-width: 0;
+}
+
+.history-column :deep(.history-list) {
+  max-height: 440px;
+  overflow-y: auto;
+}
+
+.history-column :deep(.agent-run-history) {
+  color: #eafff8;
+  background: rgba(4, 23, 29, 0.88);
+  --text-primary: #effff9;
+  --text-secondary: rgba(214, 255, 244, 0.55);
+  --bg-secondary: #061b21;
+  --bg-tertiary: #0a2a31;
+}
+
+.history-note {
+  margin: 0;
+  padding: 0 8px;
+  color: rgba(214, 255, 244, 0.32);
+  font-size: 9px;
+  line-height: 1.65;
+}
+
+.live-run-button {
+  width: 100%;
+  border: 1px solid rgba(95, 246, 210, 0.3);
+  border-radius: 13px;
+  padding: 10px 12px;
+  color: #68f5d6;
+  background: rgba(45, 212, 191, 0.08);
+  font-size: 11px;
+  font-weight: 850;
+  text-align: left;
+}
+
+.workspace-content {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.history-view-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid rgba(95, 246, 210, 0.18);
+  border-radius: 14px;
+  padding: 10px 14px;
+  color: rgba(230, 255, 248, 0.68);
+  background: rgba(45, 212, 191, 0.06);
+  font-size: 10px;
+}
+
+.history-view-banner span { color: #5ff6d2; font-size: 9px; font-weight: 950; letter-spacing: 0.12em; }
+.history-view-banner > div { display: flex; flex-direction: column; gap: 2px; }
+.history-view-banner strong { font-size: 10px; }
+.history-view-banner button {
+  flex-shrink: 0;
+  border: 1px solid rgba(95, 246, 210, 0.26);
+  border-radius: 999px;
+  padding: 7px 10px;
+  color: #68f5d6;
+  background: rgba(45, 212, 191, 0.08);
+  font-size: 9px;
+  font-weight: 850;
+}
+
+.workspace-content :deep(.agent-run-panel) {
   color: #eafff8;
   background: rgba(4, 23, 29, 0.88);
   --text-primary: #effff9;
@@ -367,6 +536,9 @@ const selectArtifact = ({ normalizedArtifact }) => {
   .composer-footer { align-items: stretch; flex-direction: column; padding-left: 16px; }
   .run-button { width: 100%; }
   .agent-capabilities { grid-template-columns: 1fr; }
+  .workspace-stage { grid-template-columns: 1fr; }
+  .history-column { position: static; }
+  .history-column :deep(.history-list) { max-height: 280px; }
   .artifact-lightbox { padding: 20px; }
 }
 </style>

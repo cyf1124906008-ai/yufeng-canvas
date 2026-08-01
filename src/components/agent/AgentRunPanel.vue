@@ -209,6 +209,10 @@ const props = defineProps({
   artifacts: {
     type: Array,
     default: () => []
+  },
+  readOnly: {
+    type: Boolean,
+    default: false
   }
 })
 
@@ -237,7 +241,8 @@ const STATUS_META = {
   canceled: { label: '已停止', tone: 'stopped' },
   stopped: { label: '已停止', tone: 'stopped' },
   aborted: { label: '已停止', tone: 'stopped' },
-  paused: { label: '已暂停', tone: 'stopped' }
+  paused: { label: '已暂停', tone: 'stopped' },
+  interrupted: { label: '上次运行中断', tone: 'stopped' }
 }
 
 const MEDIA_REFERENCE_PATTERN = /^(?:data:|blob:|file:|https?:\/\/)/i
@@ -394,19 +399,21 @@ const normalizeArtifact = (raw, index) => {
 const normalizedArtifacts = computed(() => {
   const source = props.artifacts.length
     ? props.artifacts
-    : (Array.isArray(props.snapshot?.artifacts)
+    : (!props.readOnly && Array.isArray(props.snapshot?.artifacts)
         ? props.snapshot.artifacts
-        : (Array.isArray(props.snapshot?.outputs) ? props.snapshot.outputs : []))
+        : (!props.readOnly && Array.isArray(props.snapshot?.outputs) ? props.snapshot.outputs : []))
   return source.map(normalizeArtifact)
 })
 
 const explicitFinalObject = computed(() => {
+  if (props.readOnly) return null
   const delivery = props.snapshot?.finalDelivery || props.snapshot?.delivery || {}
   const final = props.snapshot?.finalArtifact || delivery?.artifact || props.snapshot?.result?.artifact
   return final && typeof final === 'object' ? final : null
 })
 
 const explicitFinalReference = computed(() => {
+  if (props.readOnly) return ''
   const final = explicitFinalObject.value || props.snapshot?.finalArtifact ||
     props.snapshot?.finalDelivery?.artifact || props.snapshot?.delivery?.artifact || props.snapshot?.result?.artifact
   if (typeof final === 'string') return final
@@ -487,8 +494,8 @@ const displayStepCount = computed(() => Math.max(
   ...normalizedTimeline.value.map(event => event.step || 0),
   0
 ))
-const isTerminal = computed(() => ['completed', 'complete', 'succeeded', 'success', 'failed', 'error', 'cancelled', 'canceled', 'stopped', 'aborted'].includes(rawStatus.value))
-const canStop = computed(() => ['queued', 'planning', 'running', 'waiting', 'retrying'].includes(rawStatus.value))
+const isTerminal = computed(() => ['completed', 'complete', 'succeeded', 'success', 'failed', 'error', 'cancelled', 'canceled', 'stopped', 'aborted', 'interrupted'].includes(rawStatus.value))
+const canStop = computed(() => !props.readOnly && ['queued', 'planning', 'running', 'waiting', 'retrying'].includes(rawStatus.value))
 const unsafeRetryCodes = new Set([
   'BACKGROUND_REQUEST_PENDING',
   'VIDEO_TASK_PENDING',
@@ -501,10 +508,13 @@ const unsafeProviderRetry = computed(() => (
   unsafeRetryCodes.has(text(props.snapshot?.error?.code)) ||
   unsafeRetryCodes.has(text(props.snapshot?.error?.providerCode))
 ))
-const canRetry = computed(() => ['failed', 'error'].includes(rawStatus.value) && !unsafeProviderRetry.value)
+const canRetry = computed(() => !props.readOnly && ['failed', 'error'].includes(rawStatus.value) && !unsafeProviderRetry.value)
 const terminalHint = computed(() => {
   if (unsafeProviderRetry.value) {
     return '供应商可能仍在后台执行；为避免重复计费，不提供一键重新执行。'
+  }
+  if (rawStatus.value === 'interrupted') {
+    return '上次运行在 App 关闭前没有完成。V0.5a 可回看记录，但不会自动重提供应商任务。'
   }
   if (['cancelled', 'canceled', 'stopped', 'aborted'].includes(rawStatus.value)) {
     return '任务已停止。供应商已接收的远端任务可能仍会继续，因此不会自动重新提交。'

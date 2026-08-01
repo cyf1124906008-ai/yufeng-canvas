@@ -8,6 +8,7 @@ try {
 const path = require('path')
 const http = require('http')
 const fs = require('fs')
+const { fileURLToPath } = require('url')
 const packageJson = require('../package.json')
 const comfyManager = require('./comfy/manager.cjs')
 const comfyInstaller = require('./comfy/installer.cjs')
@@ -70,6 +71,33 @@ let localApiState = {
 }
 
 const isPackagedRuntime = () => app.isPackaged && !rendererUrl
+
+const isTrustedRendererEvent = (event) => {
+  const source = String(event?.senderFrame?.url || event?.sender?.getURL?.() || '')
+  if (!source) return false
+  if (rendererUrl) {
+    try {
+      return new URL(source).origin === new URL(rendererUrl).origin
+    } catch {
+      return false
+    }
+  }
+  try {
+    const sourcePath = path.resolve(fileURLToPath(new URL(source)))
+    const rendererRoot = path.resolve(__dirname, '..', 'dist-desktop')
+    return sourcePath === rendererRoot || sourcePath.startsWith(rendererRoot + path.sep)
+  } catch {
+    return false
+  }
+}
+
+const requireTrustedRenderer = (event) => {
+  if (!isTrustedRendererEvent(event)) {
+    const error = new Error('拒绝来自非应用页面的 IPC 请求')
+    error.code = 'UNTRUSTED_RENDERER_IPC'
+    throw error
+  }
+}
 
 const getCurrentUpdateSource = () => updateSources[updateSourceIndex] || githubUpdateSource
 
@@ -394,7 +422,7 @@ const readJsonBody = (request) => new Promise((resolve, reject) => {
 const mcpTools = [
   {
     name: 'yufeng.health',
-    description: 'Return YUFENG Canvas local API health and version.',
+    description: 'Return YUFENG Agent local API health and version.',
     inputSchema: {
       type: 'object',
       properties: {}
@@ -996,8 +1024,26 @@ app.whenReady().then(() => {
   ipcMain.handle('app:comfy:fetch-image', (_event, baseUrl, imageMeta) => comfyExecutor.fetchImage(baseUrl, imageMeta))
 
   // Asset Persistence IPC
-  ipcMain.handle('app:assets:save-data-url', (_event, dataUrl, projectId) => assetManager.saveDataUrl(dataUrl, projectId))
-  ipcMain.handle('app:assets:read-as-data-url', (_event, assetPath) => assetManager.readAsDataUrl(assetPath))
+  ipcMain.handle('app:assets:save-data-url', (event, dataUrl, projectId) => {
+    requireTrustedRenderer(event)
+    return assetManager.saveDataUrl(dataUrl, projectId)
+  })
+  ipcMain.handle('app:assets:read-as-data-url', (event, assetPath) => {
+    requireTrustedRenderer(event)
+    return assetManager.readAsDataUrl(assetPath)
+  })
+  ipcMain.handle('app:agent-assets:save-data-url', (event, dataUrl, runId) => {
+    requireTrustedRenderer(event)
+    return assetManager.saveAgentDataUrl(dataUrl, runId)
+  })
+  ipcMain.handle('app:agent-assets:read-as-data-url', (event, assetRef, runId, assetProof) => {
+    requireTrustedRenderer(event)
+    return assetManager.readAgentAsDataUrl(assetRef, runId, assetProof)
+  })
+  ipcMain.handle('app:agent-assets:delete-refs', (event, runId, assetRefs, retainedRefs) => {
+    requireTrustedRenderer(event)
+    return assetManager.deleteAgentRefs(runId, assetRefs, retainedRefs)
+  })
 
   // Image Generation IPC (main-process execution for stability)
   ipcMain.handle('app:image:generate', (_event, config) => imageGeneration.executeImageGeneration(config))

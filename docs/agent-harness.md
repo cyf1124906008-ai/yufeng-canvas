@@ -26,6 +26,8 @@ ArtifactStore（私有媒体）
 analyze_image → QualityPolicy → continue / retry / done
    ↓
 RunProjector → Agent Workspace
+   ↓
+RunHistoryRepository → 本地只读回看
 ```
 
 关键边界：
@@ -35,6 +37,7 @@ RunProjector → Agent Workspace
 - 图片和视频的真实 URL 只保存在 ArtifactStore 与展示层；Planner 看到稳定 artifact ID。
 - API Key、裸 base64、完整 Provider 响应和媒体 URL不会进入 Planner 上下文或运行快照。
 - Agent Workspace 只投影运行状态，不承担执行职责；桌面 App 和 Web 调试页复用同一套 runtime。
+- 运行历史只在本地展示，不回灌 Planner 上下文；凭据、data URL、blob URL 和裸 base64 不进入持久化记录。
 
 ## 已完成阶段
 
@@ -73,6 +76,16 @@ RunProjector → Agent Workspace
 
 详细契约见 [V0.4 Headless Runtime](plans/agent-v0.4-headless-runtime.md)。
 
+### V0.5a：Local Run History
+
+- 运行投影和作品元数据最多保留 50 条，刷新或重启后可只读打开。
+- 桌面端 data URL 图片通过 IPC 落入 App 私有 assets 目录，历史只保存受控相对引用。
+- 只有无签名参数、无凭据且不指向本机/私网的 HTTPS 作品地址可作为 best-effort 线索；带 Token 或签名的 Provider URL 只保留元数据。
+- App 上次退出时仍在运行的记录会标记为 `interrupted`，不自动重提远程任务。
+- 这一阶段不是 checkpoint：可回看，不会从中断的某一步续跑。
+
+详细契约见 [V0.5a Local Run History](plans/agent-v0.5a-run-history.md)。
+
 ## 动态决策的边界
 
 `InterventionPolicy` 已作为纯决策核心保留并有测试覆盖，可根据质量证据选择 accept、regenerate、edit 或 upscale，并带循环保护。但当前 Headless Runtime 只启用已具备直接 Provider 执行器的安全路径：生成、观察、重做和视频。
@@ -81,7 +94,7 @@ RunProjector → Agent Workspace
 
 ## 下一阶段
 
-1. 持久化项目、run checkpoint 与崩溃恢复。
+1. run checkpoint、安全续跑与供应商已接受任务的恢复。
 2. 成本预算、最大调用次数、token 与 Provider 任务统计。
 3. 无画布图片编辑 / 放大执行器。
 4. 视频内容观察和失败后的受限修正。
