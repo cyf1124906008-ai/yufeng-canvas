@@ -112,7 +112,7 @@
           <strong>{{ provider || '未选择' }}</strong>
         </span>
       </div>
-      <button type="button" class="icon-button" aria-label="模型与 API 设置" @click="emit('open-settings')">
+      <button type="button" class="icon-button" aria-label="打开设置中心" @click="emit('open-settings')">
         <workbench-icon name="settings" :size="15" />
       </button>
     </footer>

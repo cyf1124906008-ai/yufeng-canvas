@@ -17,7 +17,7 @@ export class ToolRegistry {
       throw new TypeError(`Tool "${name}" must provide an execute function`)
     }
 
-    this.tools.set(name, { name, execute, metadata: toolMetadata })
+    this.tools.set(name, { name, execute, metadata: toolMetadata, enabled: true })
     return this
   }
 
@@ -26,11 +26,28 @@ export class ToolRegistry {
   }
 
   has(name) {
-    return this.tools.has(name)
+    return Boolean(this.tools.get(name)?.enabled)
+  }
+
+  isEnabled(name) {
+    return Boolean(this.tools.get(name)?.enabled)
+  }
+
+  setEnabled(name, enabled) {
+    const tool = this.tools.get(name)
+    if (!tool) {
+      const error = new Error(`Unknown tool: ${name}`)
+      error.code = 'TOOL_NOT_FOUND'
+      throw error
+    }
+    tool.enabled = Boolean(enabled)
+    return tool.enabled
   }
 
   list() {
-    return [...this.tools.values()].map(({ name, metadata }) => ({ name, ...metadata }))
+    return [...this.tools.values()]
+      .filter(tool => tool.enabled)
+      .map(({ name, metadata }) => ({ name, ...metadata }))
   }
 
   async execute(name, input = {}, runtime = {}) {
@@ -38,6 +55,11 @@ export class ToolRegistry {
     if (!tool) {
       const error = new Error(`Unknown tool: ${name}`)
       error.code = 'TOOL_NOT_FOUND'
+      throw error
+    }
+    if (!tool.enabled) {
+      const error = new Error(`Tool is disabled: ${name}`)
+      error.code = 'TOOL_DISABLED'
       throw error
     }
     if (runtime.signal?.aborted) throw runtime.signal.reason || new DOMException('Cancelled', 'AbortError')

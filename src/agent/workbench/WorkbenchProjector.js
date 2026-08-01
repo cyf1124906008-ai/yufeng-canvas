@@ -1,4 +1,8 @@
-import { WORKBENCH_SCHEMA_VERSION, sanitizeWorkbenchValue } from './protocol.js'
+import {
+  WORKBENCH_SCHEMA_VERSION,
+  normalizeApprovalMode,
+  sanitizeWorkbenchValue
+} from './protocol.js'
 
 function upsertById(items, next) {
   const index = items.findIndex(item => item.id === next.id)
@@ -25,10 +29,20 @@ function finalMessage(event, result, timestamp) {
   }
 }
 
+function projectedApprovalMode(value) {
+  try {
+    return normalizeApprovalMode(value || 'ask')
+  } catch {
+    return 'ask'
+  }
+}
+
 function initialProjection(sessionId = '') {
   return {
     schemaVersion: WORKBENCH_SCHEMA_VERSION,
     sessionId: String(sessionId || ''),
+    approvalMode: 'ask',
+    recordedApprovalMode: 'ask',
     status: 'idle',
     turnCount: 0,
     messages: [],
@@ -39,6 +53,12 @@ function initialProjection(sessionId = '') {
     approvals: [],
     plan: null,
     pendingApproval: null,
+    guidancePending: false,
+    lastGuidance: null,
+    guidanceCount: 0,
+    turnGuidanceCount: 0,
+    resumeCount: 0,
+    lastResumedAt: null,
     final: null,
     error: null,
     createdAt: null,
@@ -65,17 +85,64 @@ export function projectWorkbenchEvents(events = []) {
 
     if (event.type === 'session_created') {
       state.status = 'idle'
+      state.recordedApprovalMode = projectedApprovalMode(detail.approvalMode)
+    } else if (event.type === 'approval_mode_changed') {
+      state.recordedApprovalMode = projectedApprovalMode(detail.approvalMode)
     } else if (event.type === 'user_message') {
       if (detail.message) state.messages.push(detail.message)
       state.turnCount += 1
+      state.guidancePending = false
+      state.lastGuidance = null
+      state.turnGuidanceCount = 0
       state.status = 'running'
       state.final = null
       state.error = null
       state.completedAt = null
+    } else if (event.type === 'user_guidance') {
+      if (detail.message) {
+        state.messages.push(detail.message)
+        state.lastGuidance = detail.message
+      }
+      state.guidancePending = true
+      state.guidanceCount += 1
+      state.turnGuidanceCount += 1
+      if (state.status !== 'awaiting_approval') state.status = 'running'
     } else if (event.type === 'planning') {
       state.status = 'running'
+      state.guidancePending = false
+    } else if (event.type === 'planning_superseded') {
+      state.status = 'running'
+    } else if (event.type === 'resumed') {
+      state.status = 'running'
+      state.guidancePending = false
+      state.error = null
+      state.pendingApproval = null
+      state.final = null
+      state.completedAt = null
+      state.resumeCount += 1
+      state.lastResumedAt = timestamp
+      state.toolCalls = state.toolCalls.map(call => (
+        ['pending', 'running', 'awaiting_approval'].includes(call.status)
+          ? {
+              ...call,
+              status: 'abandoned',
+              ...(call.approvalStatus === 'pending' ? { approvalStatus: 'rejected' } : {}),
+              abandonedAt: timestamp
+            }
+          : call
+      ))
+      state.approvals = state.approvals.map(approval => approval.status === 'pending'
+        ? {
+            ...approval,
+            status: 'rejected',
+            resolution: 'policy',
+            reason: '任务恢复时废弃旧审批，未执行原工具',
+            resolvedAt: timestamp
+          }
+        : approval)
     } else if (event.type === 'assistant_message') {
       if (detail.message) state.messages.push(detail.message)
+      state.guidancePending = false
       state.status = 'awaiting_user'
     } else if (event.type === 'tool_call') {
       if (detail.toolCall) upsertById(state.toolCalls, detail.toolCall)
@@ -145,6 +212,7 @@ export function projectWorkbenchEvents(events = []) {
       state.status = 'running'
     } else if (event.type === 'finished') {
       state.status = 'completed'
+      state.guidancePending = false
       state.final = detail.result ?? null
       const message = finalMessage(event, state.final, timestamp)
       if (message) upsertById(state.messages, message)
@@ -152,11 +220,13 @@ export function projectWorkbenchEvents(events = []) {
       state.completedAt = timestamp
     } else if (event.type === 'failed') {
       state.status = 'failed'
+      state.guidancePending = false
       state.error = detail.error || null
       state.pendingApproval = null
       state.completedAt = timestamp
     } else if (event.type === 'cancelled') {
       state.status = 'cancelled'
+      state.guidancePending = false
       state.error = detail.error || null
       state.pendingApproval = null
       state.completedAt = timestamp

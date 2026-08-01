@@ -59,13 +59,18 @@ Observation → 继续 / 改道 / 请求批准 / 最终答复
 | Model Intelligence Router | 按能力、质量、速度、成本、可靠性与可用性排序，安全处理临时失败与 fallback。 |
 | Artifact Store | Planner 只接触稳定作品引用；媒体内容、API Key 和完整响应不进入 Agent 上下文。 |
 | Local Task History | 最多保留 30 条本地事件流；截图字节、凭据和裸媒体内容不会写入任务历史。 |
+| Live Task Intervention | 运行中可随时停止、发送引导或修改要求；引导在安全检查点进入下一轮规划，取消完全落定后可在同一会话中继续。 |
+| Permission Modes | 支持只读、每次审批、自动执行与完全访问；完全访问仅在桌面 App 当前会话生效，必须通过独立风险页与系统确认。 |
+| Reasoning Effort | 支持自动、极速、轻量、标准、深度、极致和 Max 七档；不支持时安全回退到模型默认值并记录日志。 |
+| Settings & Automation | Codex 风格设置中心统一管理外观、Agent、工具、Provider、数据与桌面偏好；计划任务持久化并通过真实 Workbench 执行。 |
 | Desktop App | 同一套 Agent Workspace 可运行于 Windows、macOS Electron 应用，也可用于本地 Web 调试。 |
 
 当前使用一个通用 Agent，不做 Multi-Agent。旧 Canvas 源码暂时留作迁移参考，但没有用户入口，也不在 Agent 执行链路中；所有 `/canvas/...` 地址都会回到 Agent Workbench。
 
 ## 安全边界
 
-- `workspace.write`、`workspace.patch`、`workspace.revert_patch`、`terminal.run`、截屏、打开应用、点击、输入文本和 Creative 模型调用都会先暂停，必须由用户在界面中明确批准；桌面副作用还会由 Electron 主进程弹出一次绑定实际参数的原生确认。
+- 默认“每次审批”模式下，`workspace.write`、`workspace.patch`、`workspace.revert_patch`、`terminal.run`、截屏、打开应用、点击、输入文本和 Creative 模型调用都会先暂停，必须由用户在界面中明确批准；桌面副作用还会由 Electron 主进程弹出一次绑定实际参数的原生确认。
+- “完全访问”不会持久化，也不会授予无限制系统权限：它只绑定当前 Electron 窗口、当前工作区身份和当前 App 会话，切换工作区、刷新、崩溃或退出即撤销；工作区 realpath、文件 SHA、工具参数校验和 macOS 系统权限始终有效。
 - 文件访问限制在用户选择的 workspace root 内，并校验 realpath、父目录与符号链接。
 - 结构化补丁以 `workspace.read` 返回的 SHA-256 绑定基线，并精确校验旧行；文件变化或补丁上下文不一致时拒绝写入。回滚是条件能力，不是永久撤销：原始补丁只在当前 App 内存中保留，切换工作区、记录过期或重启后会拒绝。
 - `.env`、私钥、credentials 等敏感文件不会被自动读取或搜索；普通文件内容中的常见 Key、Bearer Token 和私钥片段会在离开主进程前脱敏。
@@ -135,6 +140,7 @@ pnpm desktop:dist:mac
 - [V0.5a Local Run History](docs/plans/agent-v0.5a-run-history.md)
 - [V0.6 Desktop Workbench](docs/plans/agent-v0.6-workbench.md)
 - [V0.7 Command Center](docs/plans/agent-v0.7-command-center.md)
+- [v1.3.0 Release Notes](docs/releases/v1.3.0.md)
 - [v1.2.0 Release Notes](docs/releases/v1.2.0.md)
 - [Local API / MCP](docs/local-api-mcp.md)
 
@@ -147,10 +153,11 @@ pnpm desktop:dist:mac
 - ✅ V0.5a：本地运行历史、安全脱敏、桌面图片引用恢复与中断状态识别。
 - ✅ V0.6：通用多轮 Workbench、文件 / 终端 / macOS 工具、逐项审批和 Creative 工具化。
 - ✅ V0.7：新命令中心、结构化计划、SHA 绑定的行级补丁与 diff 事件、当前 App 会话内的条件回滚、终端实时状态、Provider Console。
-- 下一阶段：真正的 PTY 终端、任务 checkpoint / 安全续跑、成本预算与调用统计。
-- 后续阶段：任务级多并发隔离与 Git worktree、可配置权限模式、浏览器工具，以及更多可安装的 Tool / MCP 扩展。
+- ✅ v1.3：运行中停止 / 引导 / 安全续跑、四档审批模式、完全访问风险确认、七档推理强度、完整设置中心和本地自动化。
+- 下一阶段：真正的 PTY 终端、持久 checkpoint、成本预算与调用统计。
+- 后续阶段：任务级多并发隔离与 Git worktree、浏览器工具，以及更多可安装的 Tool / MCP 扩展。
 
-当前版本仍不包含真正 PTY、任务级多并发隔离 / 自动 Git worktree，或 `read-only` / `ask` / `full-access` 等可配置权限模式。现有终端是非交互式受控子进程，所有任务共享用户明确选择的工作区，危险操作继续逐项审批。
+当前版本仍不包含真正 PTY、任务级多并发隔离 / 自动 Git worktree。现有终端是非交互式受控子进程；“继续”复用当前会话上下文，但不会重放取消前未完成的裸工具输入。
 
 ## 技术栈
 

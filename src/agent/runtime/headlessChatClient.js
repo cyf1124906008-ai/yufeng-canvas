@@ -1,4 +1,9 @@
 import { appendRuntimeLog } from './runtimeLog.js'
+import {
+  isUnsupportedReasoningEffortResponse,
+  normalizeReasoningEffort,
+  reasoningEffortRequestValue
+} from './reasoningEffort.js'
 
 function read(value) {
   return value && typeof value === 'object' && 'value' in value ? value.value : value
@@ -35,10 +40,13 @@ async function parseResponse(response) {
 export function createHeadlessChatClient({
   modelStore,
   fetchImpl = globalThis.fetch,
-  runtimeLogs
+  runtimeLogs,
+  reasoningEffort
 } = {}) {
   if (!modelStore) throw new Error('Headless Chat 需要 modelStore')
   if (typeof fetchImpl !== 'function') throw new Error('Headless Chat 需要 fetch 实现')
+
+  const unsupportedReasoningModels = new Set()
 
   const send = async (content, _stream = false, options = {}) => {
     const model = cleanString(options.model || read(modelStore.selectedChatModel))
@@ -56,16 +64,24 @@ export function createHeadlessChatClient({
           }))
         ]
       : String(content || '')
+    const requestedReasoningEffort = normalizeReasoningEffort(
+      options.reasoningEffort === undefined ? reasoningEffort : options.reasoningEffort
+    )
+    const requestedReasoningValue = reasoningEffortRequestValue(requestedReasoningEffort)
+    const provider = cleanString(read(modelStore.currentProvider))
+    const unsupportedCacheKey = `${provider}\n${endpoint}\n${model}`
+    const cachedUnsupported = requestedReasoningValue && unsupportedReasoningModels.has(unsupportedCacheKey)
     const payload = {
       model,
       messages: [
         ...(options.systemPrompt ? [{ role: 'system', content: options.systemPrompt }] : []),
         { role: 'user', content: userContent }
       ],
-      stream: false
+      stream: false,
+      ...(!cachedUnsupported && requestedReasoningValue
+        ? { reasoning_effort: requestedReasoningValue }
+        : {})
     }
-    const adapted = modelStore.adaptRequest?.('chat', payload) || payload
-    const provider = cleanString(read(modelStore.currentProvider))
     const apiKey = cleanString(
       read(modelStore.currentChatApiKey) ||
       modelStore.getApiKeyByProvider?.(provider, 'chat')
@@ -73,18 +89,42 @@ export function createHeadlessChatClient({
 
     appendRuntimeLog(runtimeLogs, 'info', 'Headless 文本模型请求开始', {
       model,
-      hasImages: images.length > 0
+      hasImages: images.length > 0,
+      reasoningEffort: requestedReasoningEffort,
+      reasoningFallback: Boolean(cachedUnsupported)
     })
-    const response = await fetchImpl(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {})
-      },
-      body: JSON.stringify(adapted),
-      signal: options.signal
-    })
-    const raw = await parseResponse(response)
+
+    const request = async requestPayload => {
+      const adapted = modelStore.adaptRequest?.('chat', requestPayload) || requestPayload
+      const response = await fetchImpl(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {})
+        },
+        body: JSON.stringify(adapted),
+        signal: options.signal
+      })
+      return { response, raw: await parseResponse(response) }
+    }
+
+    let { response, raw } = await request(payload)
+    if (
+      requestedReasoningValue &&
+      !cachedUnsupported &&
+      !response.ok &&
+      isUnsupportedReasoningEffortResponse(response.status, raw)
+    ) {
+      unsupportedReasoningModels.add(unsupportedCacheKey)
+      appendRuntimeLog(runtimeLogs, 'warning', '当前模型不支持所选推理强度，已回退到模型默认值', {
+        model,
+        requestedReasoningEffort,
+        status: response.status
+      })
+      const fallbackPayload = { ...payload }
+      delete fallbackPayload.reasoning_effort
+      ;({ response, raw } = await request(fallbackPayload))
+    }
     if (!response.ok) {
       const error = new Error(raw?.error?.message || raw?.message || `Chat request failed: ${response.status}`)
       error.status = response.status
@@ -98,7 +138,13 @@ export function createHeadlessChatClient({
       error.code = 'EMPTY_CHAT_RESPONSE'
       throw error
     }
-    appendRuntimeLog(runtimeLogs, 'success', 'Headless 文本模型请求完成', { model })
+    appendRuntimeLog(runtimeLogs, 'success', 'Headless 文本模型请求完成', {
+      model,
+      reasoningEffort: requestedReasoningEffort,
+      reasoningFallback: requestedReasoningValue
+        ? unsupportedReasoningModels.has(unsupportedCacheKey)
+        : false
+    })
     return text
   }
 

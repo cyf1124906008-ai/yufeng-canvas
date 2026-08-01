@@ -3,14 +3,18 @@ import assert from 'node:assert/strict'
 
 import { WorkbenchSession } from '../src/agent/workbench/index.js'
 import { WorkbenchSessionRepository } from '../src/agent/memory/WorkbenchSessionRepository.js'
-import { createDesktopWorkbenchToolRegistry, waitForCommand } from '../src/agent/runtime/desktopWorkbenchTools.js'
+import {
+  createDesktopWorkbenchToolRegistry,
+  setWorkbenchToolGroupEnabled,
+  waitForCommand
+} from '../src/agent/runtime/desktopWorkbenchTools.js'
 import {
   compactSession,
   createWorkbenchPlanner,
   parseAction,
   WORKBENCH_MESSAGE_CONTEXT_CHARACTERS
 } from '../src/agent/runtime/workbenchPlanner.js'
-import { useAgentWorkbench } from '../src/agent/runtime/useAgentWorkbench.js'
+import { resolveMaxActionsPerTurn, useAgentWorkbench } from '../src/agent/runtime/useAgentWorkbench.js'
 
 test('Workbench planner accepts strict JSON actions and preserves ordinary replies', async () => {
   assert.deepEqual(parseAction('```json\n{"type":"tool_call","name":"workspace.read","input":{"path":"README.md"}}\n```'), {
@@ -39,7 +43,39 @@ test('Workbench planner accepts strict JSON actions and preserves ordinary repli
   assert.equal(action.result.content, '完成')
   assert.match(captured, /workspace\.read/)
   assert.match(captured, /检查项目/)
+  assert.match(captured, /审批保护模式：ask/)
   assert.doesNotMatch(captured, /function|execute/)
+})
+
+test('Workbench planner exposes approval mode and read_only retry guidance', async () => {
+  let captured = ''
+  const planner = createWorkbenchPlanner({
+    modelStore: { selectedChatModel: 'test-model' },
+    sendChat: async prompt => {
+      captured = prompt
+      return '{"type":"finish","result":{"content":"只读检查完成"}}'
+    }
+  })
+
+  await planner.nextAction({
+    session: {
+      status: 'running',
+      approvalMode: 'read_only',
+      observations: [{
+        toolCallId: 'call-1',
+        toolName: 'terminal.run',
+        status: 'rejected',
+        error: { code: 'TOOL_BLOCKED_BY_APPROVAL_MODE' }
+      }]
+    },
+    tools: [{ name: 'terminal.run', riskLevel: 'dangerous', approvalPolicy: 'always' }]
+  })
+
+  assert.match(captured, /审批保护模式：read_only/)
+  assert.match(captured, /riskLevel=safe/)
+  assert.match(captured, /不要原样重试/)
+  assert.match(captured, /TOOL_BLOCKED_BY_APPROVAL_MODE/)
+  assert.equal(compactSession({ approvalMode: 'auto' }).approvalMode, 'auto')
 })
 
 test('Workbench planner compacts large tool observations before the next model call', () => {
@@ -100,6 +136,39 @@ test('terminal tool cannot execute before approval and receives an exact approva
   assert.equal(completed.toolCalls[0].latestProgress.exitCode, 0)
   assert.equal('stdoutDelta' in completed.toolCalls[0].latestProgress, false)
   assert.doesNotMatch(JSON.stringify(session.events()), /hunter2/)
+})
+
+test('auto mode still sends the native terminal approval payload', async () => {
+  const calls = []
+  const registry = createDesktopWorkbenchToolRegistry({
+    desktopAgentTools: {
+      startCommand: async input => {
+        calls.push(input)
+        return { ok: true, jobId: 'job-auto', status: 'running' }
+      },
+      getCommand: async () => ({
+        ok: true,
+        jobId: 'job-auto',
+        status: 'completed',
+        stdout: 'clean\n',
+        stderr: '',
+        exitCode: 0
+      })
+    }
+  })
+  const session = new WorkbenchSession({
+    approvalMode: 'auto',
+    toolRegistry: registry,
+    planner: ({ session: state }) => state.observations.length
+      ? { type: 'finish', result: { content: '完成' } }
+      : { type: 'tool_call', name: 'terminal.run', input: { command: 'git', args: ['status'] } }
+  })
+
+  const completed = await session.submitUserMessage('自动检查 Git')
+
+  assert.equal(completed.status, 'completed')
+  assert.deepEqual(calls[0].approval, { granted: true, action: 'terminal.run' })
+  assert.equal(completed.approvals[0].resolution, 'auto')
 })
 
 test('terminal progress never persists raw text that can be split across polling deltas', async () => {
@@ -428,5 +497,196 @@ test('deleting a pending current Workbench task cannot resurrect its history rec
   assert.ok(repository.get(sessionId))
   assert.equal(workbench.deleteSession(sessionId), true)
   assert.equal(repository.get(sessionId), null)
+  workbench.dispose()
+})
+
+test('useAgentWorkbench changes approval mode dynamically and new tasks inherit it', async () => {
+  const repository = new WorkbenchSessionRepository({ storage: new Map() })
+  const creativeAgent = { runtimeLogs: { value: [] }, dispose: () => {}, artifacts: { value: [] } }
+  const workbench = useAgentWorkbench({
+    modelStore: { selectedChatModel: '' },
+    creativeAgent,
+    desktopAgentTools: null,
+    historyRepository: repository,
+    sendChat: async () => '{"type":"finish","result":{"content":"完成"}}'
+  })
+
+  await workbench.setApprovalMode('read_only')
+  assert.equal(workbench.approvalMode.value, 'read_only')
+  const firstSessionId = workbench.session.value.sessionId
+  workbench.newTask()
+  assert.notEqual(workbench.session.value.sessionId, firstSessionId)
+  assert.equal(workbench.session.value.snapshot().approvalMode, 'read_only')
+
+  await workbench.submit('只读检查项目')
+  const record = repository.list()[0]
+  assert.equal(record.approvalMode, 'ask')
+  assert.equal(record.recordedApprovalMode, 'read_only')
+
+  workbench.newTask()
+  assert.equal(workbench.approvalMode.value, 'read_only')
+  assert.equal(workbench.projection.value.approvalMode, 'read_only')
+
+  workbench.selectSession(record.sessionId)
+  assert.equal(workbench.isHistorySelection.value, true)
+  assert.equal(workbench.approvalMode.value, 'ask')
+  assert.equal(workbench.projection.value.recordedApprovalMode, 'read_only')
+  await assert.rejects(
+    workbench.setApprovalMode('auto'),
+    error => error.code === 'APPROVAL_MODE_HISTORY_READ_ONLY'
+  )
+  assert.equal(workbench.approvalMode.value, 'ask')
+
+  workbench.newTask()
+  assert.equal(workbench.approvalMode.value, 'ask')
+  workbench.dispose()
+})
+
+test('useAgentWorkbench exposes live guidance and replans after an in-flight model response', async () => {
+  let releasePlanner
+  let markPlannerStarted
+  const plannerStarted = new Promise(resolve => { markPlannerStarted = resolve })
+  const plannerGate = new Promise(resolve => { releasePlanner = resolve })
+  let plannerCalls = 0
+  const creativeAgent = { runtimeLogs: { value: [] }, dispose: () => {}, artifacts: { value: [] } }
+  const workbench = useAgentWorkbench({
+    modelStore: { selectedChatModel: '' },
+    creativeAgent,
+    desktopAgentTools: null,
+    historyRepository: null,
+    sendChat: async prompt => {
+      plannerCalls += 1
+      if (plannerCalls === 1) {
+        markPlannerStarted()
+        await plannerGate
+        return '{"type":"finish","result":{"content":"旧计划"}}'
+      }
+      assert.match(prompt, /最新引导/)
+      return '{"type":"finish","result":{"content":"新计划"}}'
+    }
+  })
+
+  const running = workbench.submit('开始任务')
+  await plannerStarted
+  const guided = await workbench.guide('最新引导')
+  assert.equal(guided.guidancePending, true)
+  assert.equal(workbench.guidancePending.value, true)
+  assert.equal(workbench.lastGuidance.value.content, '最新引导')
+  releasePlanner()
+  const completed = await running
+
+  assert.equal(completed.status, 'completed')
+  assert.equal(completed.final.content, '新计划')
+  assert.equal(workbench.guidancePending.value, false)
+  assert.equal(plannerCalls, 2)
+  workbench.dispose()
+})
+
+test('useAgentWorkbench resumes a failed task in the same session', async () => {
+  let plannerCalls = 0
+  const creativeAgent = { runtimeLogs: { value: [] }, dispose: () => {}, artifacts: { value: [] } }
+  const workbench = useAgentWorkbench({
+    modelStore: { selectedChatModel: '' },
+    creativeAgent,
+    desktopAgentTools: null,
+    historyRepository: null,
+    sendChat: async () => {
+      plannerCalls += 1
+      if (plannerCalls === 1) {
+        const error = new Error('planner offline')
+        error.code = 'PLANNER_OFFLINE'
+        throw error
+      }
+      return '{"type":"finish","result":{"content":"恢复完成"}}'
+    }
+  })
+  const sessionId = workbench.session.value.sessionId
+
+  await assert.rejects(
+    workbench.submit('执行任务'),
+    error => error.code === 'PLANNER_OFFLINE'
+  )
+  assert.equal(workbench.status.value, 'failed')
+  assert.equal(workbench.canResume.value, true)
+  const completed = await workbench.resume()
+
+  assert.equal(completed.sessionId, sessionId)
+  assert.equal(workbench.session.value.sessionId, sessionId)
+  assert.equal(completed.status, 'completed')
+  assert.equal(completed.resumeCount, 1)
+  assert.equal(completed.final.content, '恢复完成')
+  assert.equal(workbench.canResume.value, false)
+  workbench.dispose()
+})
+
+test('tool groups hide capabilities and execute rechecks a mid-plan disable', async () => {
+  let reads = 0
+  const registry = createDesktopWorkbenchToolRegistry({
+    desktopAgentTools: {
+      readFile: async () => {
+        reads += 1
+        return { ok: true, content: 'unsafe stale plan' }
+      }
+    }
+  })
+  let releasePlanner
+  let markPlannerStarted
+  const plannerStarted = new Promise(resolve => { markPlannerStarted = resolve })
+  const plannerGate = new Promise(resolve => { releasePlanner = resolve })
+  const session = new WorkbenchSession({
+    toolRegistry: registry,
+    planner: async ({ session: state }) => {
+      if (state.observations.length) return { type: 'finish', result: { content: '已阻止' } }
+      markPlannerStarted()
+      await plannerGate
+      return { type: 'tool_call', name: 'workspace.read', input: { path: 'README.md' } }
+    }
+  })
+
+  const running = session.submitUserMessage('读取项目')
+  await plannerStarted
+  setWorkbenchToolGroupEnabled(registry, 'workspaceRead', false)
+  assert.equal(registry.list().some(tool => tool.name === 'workspace.read'), false)
+  assert.equal(registry.list().some(tool => tool.name === 'task.update_plan'), true)
+  releasePlanner()
+  const completed = await running
+
+  assert.equal(reads, 0)
+  assert.equal(completed.status, 'completed')
+  assert.equal(completed.observations[0].status, 'failed')
+  assert.equal(completed.observations[0].error.code, 'TOOL_DISABLED')
+  assert.throws(
+    () => setWorkbenchToolGroupEnabled(registry, 'unknown', false),
+    error => error.code === 'WORKBENCH_TOOL_GROUP_NOT_FOUND'
+  )
+})
+
+test('useAgentWorkbench exposes tool group state and reads bounded action limits per new session', () => {
+  const maxActions = { value: 2 }
+  const creativeAgent = { runtimeLogs: { value: [] }, dispose: () => {}, artifacts: { value: [] } }
+  const workbench = useAgentWorkbench({
+    modelStore: { selectedChatModel: '' },
+    creativeAgent,
+    desktopAgentTools: null,
+    historyRepository: null,
+    maxActionsPerTurn: maxActions,
+    toolGroups: { computer: false },
+    sendChat: async () => '{"type":"finish","result":{"content":"完成"}}'
+  })
+
+  assert.equal(workbench.session.value.maxActionsPerTurn, 4)
+  assert.equal(workbench.toolGroups.value.computer, false)
+  assert.equal(workbench.toolRegistry.list().some(tool => tool.name.startsWith('computer.')), false)
+  assert.equal(workbench.toolRegistry.list().some(tool => tool.name === 'task.update_plan'), true)
+
+  assert.equal(workbench.setToolGroupEnabled('terminal', false), false)
+  assert.equal(workbench.toolGroups.value.terminal, false)
+  assert.equal(workbench.toolRegistry.list().some(tool => tool.name === 'terminal.run'), false)
+
+  maxActions.value = 100
+  workbench.newTask()
+  assert.equal(workbench.session.value.maxActionsPerTurn, 64)
+  assert.equal(resolveMaxActionsPerTurn(() => 12), 12)
+  assert.equal(resolveMaxActionsPerTurn(() => { throw new Error('bad setting') }), 24)
   workbench.dispose()
 })

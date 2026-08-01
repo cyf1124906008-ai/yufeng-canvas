@@ -1,14 +1,50 @@
 import { computed, getCurrentScope, onScopeDispose, ref, shallowRef } from 'vue'
-import { WorkbenchSession, projectWorkbenchEvents } from '../workbench/index.js'
+import {
+  WorkbenchSession,
+  normalizeApprovalMode,
+  projectWorkbenchEvents
+} from '../workbench/index.js'
 import { WorkbenchSessionRepository } from '../memory/index.js'
 import { createHeadlessChatClient } from './headlessChatClient.js'
-import { createDesktopWorkbenchToolRegistry, desktopApi } from './desktopWorkbenchTools.js'
+import {
+  WORKBENCH_TOOL_GROUPS,
+  createDesktopWorkbenchToolRegistry,
+  desktopApi,
+  setWorkbenchToolGroupEnabled
+} from './desktopWorkbenchTools.js'
 import { createWorkbenchPlanner } from './workbenchPlanner.js'
 import { useHeadlessCreativeAgent } from './useHeadlessCreativeAgent.js'
 import { appendRuntimeLog } from './runtimeLog.js'
 
 const ACTIVE_STATUSES = new Set(['running', 'awaiting_approval'])
 const RESTART_STATUSES = new Set(['failed', 'cancelled'])
+const DEFAULT_MAX_ACTIONS_PER_TURN = 24
+const MIN_MAX_ACTIONS_PER_TURN = 4
+const MAX_MAX_ACTIONS_PER_TURN = 64
+
+function readSettingSource(source) {
+  try {
+    const value = typeof source === 'function' ? source() : source
+    return value && typeof value === 'object' && 'value' in value ? value.value : value
+  } catch {
+    return undefined
+  }
+}
+
+export function resolveMaxActionsPerTurn(source) {
+  const parsed = Number.parseInt(readSettingSource(source), 10)
+  if (!Number.isFinite(parsed)) return DEFAULT_MAX_ACTIONS_PER_TURN
+  return Math.min(MAX_MAX_ACTIONS_PER_TURN, Math.max(MIN_MAX_ACTIONS_PER_TURN, parsed))
+}
+
+function initialToolGroupState(source) {
+  const value = readSettingSource(source)
+  const configured = value && typeof value === 'object' ? value : {}
+  return Object.fromEntries(Object.keys(WORKBENCH_TOOL_GROUPS).map(group => [
+    group,
+    typeof configured[group] === 'boolean' ? configured[group] : true
+  ]))
+}
 
 function defaultStorage() {
   try {
@@ -62,13 +98,20 @@ export function useAgentWorkbench({
   creativeAgent: injectedCreativeAgent,
   historyRepository: injectedHistoryRepository,
   historyStorage,
-  maxActionsPerTurn = 24
+  approvalMode: initialApprovalMode = 'ask',
+  toolGroups: initialToolGroups = null,
+  maxActionsPerTurn = 24,
+  reasoningEffort = 'auto'
 } = {}) {
   if (!modelStore) throw new TypeError('useAgentWorkbench 需要 modelStore')
 
   const creativeAgent = injectedCreativeAgent || useHeadlessCreativeAgent({ modelStore })
   const runtimeLogs = creativeAgent.runtimeLogs || ref([])
-  const chatClient = injectedChatClient || createHeadlessChatClient({ modelStore, runtimeLogs })
+  const chatClient = injectedChatClient || createHeadlessChatClient({
+    modelStore,
+    runtimeLogs,
+    reasoningEffort
+  })
   const sendChat = injectedSendChat || chatClient.send
   const agentTools = desktopApi(injectedDesktopAgentTools)
   const screenshots = ref([])
@@ -84,14 +127,24 @@ export function useAgentWorkbench({
       creativeArtifacts.value = artifacts
     }
   })
+  const toolGroupState = ref(initialToolGroupState(initialToolGroups))
+  for (const [group, enabled] of Object.entries(toolGroupState.value)) {
+    setWorkbenchToolGroupEnabled(toolRegistry, group, enabled)
+  }
   const planner = createWorkbenchPlanner({ sendChat, modelStore })
   const repository = injectedHistoryRepository === undefined
     ? createHistoryRepository(historyStorage === undefined ? defaultStorage() : historyStorage)
     : injectedHistoryRepository
 
   const session = shallowRef(null)
+  const selectedApprovalMode = ref(normalizeApprovalMode(
+    initialApprovalMode && typeof initialApprovalMode === 'object' && 'value' in initialApprovalMode
+      ? initialApprovalMode.value
+      : initialApprovalMode
+  ))
   const projection = ref({
     status: 'idle',
+    approvalMode: selectedApprovalMode.value,
     messages: [],
     toolCalls: [],
     observations: [],
@@ -100,6 +153,8 @@ export function useAgentWorkbench({
     approvals: [],
     plan: null,
     pendingApproval: null,
+    guidancePending: false,
+    lastGuidance: null,
     final: null
   })
   const historyRecords = ref([])
@@ -110,7 +165,17 @@ export function useAgentWorkbench({
   const desktopReady = ref(false)
   const workspaceLoading = ref(false)
   const error = ref(null)
+  const activeOperationCount = ref(0)
   let unsubscribe = null
+
+  const trackOperation = async operation => {
+    activeOperationCount.value += 1
+    try {
+      return await operation()
+    } finally {
+      activeOperationCount.value = Math.max(0, activeOperationCount.value - 1)
+    }
+  }
 
   const refreshHistory = () => {
     try {
@@ -148,11 +213,13 @@ export function useAgentWorkbench({
     selectedSessionId.value = nextSession.sessionId
     isHistorySelection.value = history
     projection.value = nextSession.snapshot()
+    selectedApprovalMode.value = normalizeApprovalMode(projection.value.approvalMode || 'ask')
     error.value = null
     screenshots.value = []
     creativeArtifacts.value = []
     unsubscribe = nextSession.subscribe(() => {
       projection.value = nextSession.snapshot()
+      selectedApprovalMode.value = normalizeApprovalMode(projection.value.approvalMode || 'ask')
       persistCurrent()
     })
     if (persist) persistCurrent()
@@ -164,7 +231,8 @@ export function useAgentWorkbench({
     events,
     planner,
     toolRegistry,
-    maxActionsPerTurn
+    approvalMode: selectedApprovalMode.value,
+    maxActionsPerTurn: resolveMaxActionsPerTurn(maxActionsPerTurn)
   }), { history: false })
 
   const newTask = () => {
@@ -180,10 +248,10 @@ export function useAgentWorkbench({
     if (!session.value || RESTART_STATUSES.has(projection.value.status)) newTask()
     error.value = null
     try {
-      return await session.value.submitUserMessage(text, {
+      return await trackOperation(() => session.value.submitUserMessage(text, {
         ...(options.signal ? { signal: options.signal } : {}),
         ...(options.displayContent != null ? { displayContent: options.displayContent } : {})
-      })
+      }))
     } catch (submitError) {
       error.value = submitError
       throw submitError
@@ -195,7 +263,7 @@ export function useAgentWorkbench({
     if (!pending || !session.value) return null
     error.value = null
     try {
-      return await session.value.resolveApproval(pending.id, { status: decision, reason })
+      return await trackOperation(() => session.value.resolveApproval(pending.id, { status: decision, reason }))
     } catch (approvalError) {
       error.value = approvalError
       throw approvalError
@@ -205,6 +273,65 @@ export function useAgentWorkbench({
   const approve = () => resolveApproval('approved')
   const reject = reason => resolveApproval('rejected', reason || '用户拒绝了这项操作')
   const cancel = () => session.value?.cancel('用户停止了任务') || false
+
+  const guide = async (content, options = {}) => {
+    if (!session.value) return null
+    error.value = null
+    try {
+      return await trackOperation(() => session.value.submitGuidance(content, options))
+    } catch (guidanceError) {
+      error.value = guidanceError
+      throw guidanceError
+    }
+  }
+
+  const resume = async (options = {}) => {
+    if (!session.value) return null
+    error.value = null
+    const wasHistory = isHistorySelection.value
+    const previousResumeCount = Number(projection.value.resumeCount || 0)
+    try {
+      const running = trackOperation(() => session.value.resume(options))
+      isHistorySelection.value = false
+      return await running
+    } catch (resumeError) {
+      if (wasHistory && Number(projection.value.resumeCount || 0) === previousResumeCount) {
+        isHistorySelection.value = true
+      }
+      error.value = resumeError
+      throw resumeError
+    }
+  }
+
+  const setApprovalMode = async (value) => {
+    const nextMode = normalizeApprovalMode(value)
+    if (isHistorySelection.value) {
+      const historyModeError = new Error('历史任务中的审批模式仅供审计展示；请创建新任务后再切换')
+      historyModeError.code = 'APPROVAL_MODE_HISTORY_READ_ONLY'
+      error.value = historyModeError
+      throw historyModeError
+    }
+    if (!session.value) {
+      selectedApprovalMode.value = nextMode
+      return null
+    }
+    error.value = null
+    try {
+      const result = await session.value.setApprovalMode(nextMode)
+      selectedApprovalMode.value = nextMode
+      return result
+    } catch (modeError) {
+      error.value = modeError
+      throw modeError
+    }
+  }
+
+  const setToolGroupEnabled = (group, enabled) => {
+    const normalizedGroup = String(group || '')
+    const nextEnabled = setWorkbenchToolGroupEnabled(toolRegistry, normalizedGroup, enabled)
+    toolGroupState.value = { ...toolGroupState.value, [normalizedGroup]: nextEnabled }
+    return nextEnabled
+  }
 
   const selectSession = (sessionId) => {
     if (session.value && ACTIVE_STATUSES.has(projection.value.status)) return null
@@ -216,7 +343,7 @@ export function useAgentWorkbench({
         events: interruptedEvents(record),
         planner,
         toolRegistry,
-        maxActionsPerTurn
+        maxActionsPerTurn: resolveMaxActionsPerTurn(maxActionsPerTurn)
       }), { persist: true, history: true })
     } catch (historyError) {
       appendRuntimeLog(runtimeLogs, 'warning', 'Workbench 历史任务恢复失败', {
@@ -332,11 +459,23 @@ export function useAgentWorkbench({
     status: computed(() => projection.value.status || 'idle'),
     isRunning: computed(() => projection.value.status === 'running'),
     isAwaitingApproval: computed(() => projection.value.status === 'awaiting_approval'),
+    guidancePending: computed(() => Boolean(projection.value.guidancePending)),
+    lastGuidance: computed(() => projection.value.lastGuidance || null),
+    isStopping: computed(() => projection.value.status === 'cancelled' && activeOperationCount.value > 0),
+    canResume: computed(() => (
+      ['failed', 'cancelled'].includes(projection.value.status) && activeOperationCount.value === 0
+    )),
+    approvalMode: computed(() => selectedApprovalMode.value),
+    setApprovalMode,
+    toolGroups: computed(() => ({ ...toolGroupState.value })),
+    setToolGroupEnabled,
     error,
     submit,
     approve,
     reject,
     cancel,
+    guide,
+    resume,
     newTask,
     selectSession,
     deleteSession,

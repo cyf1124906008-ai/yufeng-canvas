@@ -1,0 +1,146 @@
+/*
+ * Workbench-wide appearance preferences. Component styles stay self-contained;
+ * these higher-specificity rules provide the alternate light palette and the
+ * compact density without duplicating component structure.
+ */
+
+.agent-workbench.theme-light {
+  --wb-bg: #f4f6f5;
+  --wb-panel: #ffffff;
+  --wb-border: #dfe4e1;
+  --wb-text: #252a27;
+  --wb-muted: #747b77;
+  color-scheme: light;
+}
+
+.agent-workbench.theme-light,
+.agent-workbench.theme-light .workbench-center,
+.agent-workbench.theme-light .thread-shell {
+  background: #f4f6f5 !important;
+}
+
+.agent-workbench.theme-light .wb-sidebar,
+.agent-workbench.theme-light .inspector {
+  background: #fafbfa !important;
+}
+
+.agent-workbench.theme-light .thread-header {
+  background: rgba(250,251,250,.96) !important;
+}
+
+.agent-workbench.theme-light .composer-shell {
+  background: linear-gradient(180deg,rgba(244,246,245,0),#f4f6f5 25%) !important;
+}
+
+.agent-workbench.theme-light .composer,
+.agent-workbench.theme-light .command-menu,
+.agent-workbench.theme-light .approval-menu {
+  border-color: #d7ddda !important;
+  background: #ffffff !important;
+  box-shadow: 0 16px 44px rgba(35,48,40,.1) !important;
+}
+
+.agent-workbench.theme-light :is(
+  .brand-copy strong,
+  .new-task,
+  .project-list > button.is-active,
+  .thread-heading strong,
+  .welcome-intro h1,
+  .message-card strong,
+  .inspector-header strong,
+  .composer textarea,
+  .command-menu header span,
+  .approval-menu header > span,
+  .approval-menu > button.is-selected
+) {
+  color: #242a27 !important;
+}
+
+.agent-workbench.theme-light :is(
+  .brand-copy small,
+  .section-heading,
+  .history-copy small,
+  .thread-heading small,
+  .welcome-intro p,
+  .composer-hint,
+  .inspector-header small,
+  .plan-explanation
+) {
+  color: #737b77 !important;
+}
+
+.agent-workbench.theme-light :is(
+  .task-search,
+  .project-icon,
+  .history-list article:hover,
+  .history-list article.is-selected,
+  .project-list > button:hover,
+  .project-list > button.is-active,
+  .suggestion-list button,
+  .message-card,
+  .tool-card,
+  .waiting-card,
+  .terminal-output,
+  .computer-output,
+  .inspector-tabs button.is-active,
+  .run-section dl > div:nth-child(odd),
+  .usage-grid > div,
+  .file-list details,
+  .terminal-list details,
+  .artifact-list button,
+  .panel-empty > span
+) {
+  border-color: #dce2de !important;
+  background: #f7f9f8 !important;
+}
+
+.agent-workbench.theme-light :is(
+  .suggestion-list button,
+  .message-card,
+  .tool-card,
+  .terminal-output code,
+  .computer-output,
+  .inspector-tabs button.is-active,
+  .run-section dd,
+  .artifact-list button
+) {
+  color: #4d5651 !important;
+}
+
+.agent-workbench.theme-light .approval-card {
+  border-color: #dac9aa !important;
+  color: #5e513c !important;
+  background: #fffaf0 !important;
+}
+
+.agent-workbench.theme-light .approval-card :is(strong,p,pre) {
+  color: #66583f !important;
+}
+
+.agent-workbench.theme-light .approval-card pre {
+  border-color: #e2d5bd !important;
+  background: #fffdf8 !important;
+}
+
+.agent-workbench.theme-light .composer textarea::placeholder,
+.agent-workbench.theme-light .task-search input::placeholder {
+  color: #989f9b !important;
+}
+
+.agent-workbench.theme-light .task-search input {
+  color: #303632 !important;
+}
+
+.agent-workbench.density-compact .sidebar-brand { min-height: 47px; padding-block: 7px; }
+.agent-workbench.density-compact .primary-actions { gap: 5px; padding-bottom: 8px; }
+.agent-workbench.density-compact .new-task { min-height: 33px; }
+.agent-workbench.density-compact .task-search { height: 31px; }
+.agent-workbench.density-compact .project-list > button { min-height: 39px; }
+.agent-workbench.density-compact .history-main { padding-block: 6px; }
+.agent-workbench.density-compact .thread-header,
+.agent-workbench.density-compact .inspector-header { min-height: 45px; }
+.agent-workbench.density-compact .thread-content { padding-top: 18px; }
+.agent-workbench.density-compact .composer-shell { padding-top: 5px; padding-bottom: 7px; }
+.agent-workbench.density-compact .composer textarea { min-height: 45px; padding-top: 10px; }
+.agent-workbench.density-compact .inspector-tabs button { height: 31px; }
+.agent-workbench.density-compact .inspector-section { padding-block: 8px; }

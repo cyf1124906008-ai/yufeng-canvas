@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import { createHeadlessChatClient } from '../src/agent/runtime/headlessChatClient.js'
+import { PROVIDERS } from '../src/config/providers.js'
 
 function response(body, status = 200) {
   return {
@@ -73,4 +74,89 @@ test('headless chat preserves HTTP status for fallback classification', async ()
     client.send('hello'),
     error => error.status === 429 && /rate limited/.test(error.message)
   )
+})
+
+test('headless chat sends the selected reasoning effort through the provider adapter', async () => {
+  let body
+  const client = createHeadlessChatClient({
+    modelStore: {
+      selectedChatModel: 'reasoning-model',
+      currentProvider: 'dataeyes',
+      getChatEndpoint: () => 'https://api.example/v1/chat/completions',
+      adaptRequest: (_type, payload) => ({ ...payload })
+    },
+    reasoningEffort: { value: 'xhigh' },
+    fetchImpl: async (_url, options) => {
+      body = JSON.parse(options.body)
+      return response({ choices: [{ message: { content: 'done' } }] })
+    }
+  })
+
+  await client.send('solve')
+  assert.equal(body.reasoning_effort, 'xhigh')
+})
+
+test('headless chat retries once without reasoning effort only for an unsupported parameter response', async () => {
+  const bodies = []
+  const client = createHeadlessChatClient({
+    modelStore: {
+      selectedChatModel: 'legacy-model',
+      currentProvider: 'legacy',
+      getChatEndpoint: () => 'https://api.example/v1/chat/completions'
+    },
+    reasoningEffort: () => 'max',
+    fetchImpl: async (_url, options) => {
+      const body = JSON.parse(options.body)
+      bodies.push(body)
+      if (bodies.length === 1) {
+        return response({ error: { message: "Unknown parameter: 'reasoning_effort' is not supported" } }, 400)
+      }
+      return response({ choices: [{ message: { content: 'fallback result' } }] })
+    }
+  })
+
+  assert.equal(await client.send('solve'), 'fallback result')
+  assert.equal(bodies.length, 2)
+  assert.equal(bodies[0].reasoning_effort, 'max')
+  assert.equal('reasoning_effort' in bodies[1], false)
+
+  await client.send('solve again')
+  assert.equal(bodies.length, 3)
+  assert.equal('reasoning_effort' in bodies[2], false)
+})
+
+test('headless chat does not retry authentication, rate limit, or unrelated validation errors', async () => {
+  for (const [status, message] of [
+    [401, 'invalid API key'],
+    [429, 'rate limited'],
+    [400, 'messages is required']
+  ]) {
+    let calls = 0
+    const client = createHeadlessChatClient({
+      modelStore: {
+        selectedChatModel: 'reasoning-model',
+        getChatEndpoint: () => 'https://api.example/v1/chat/completions'
+      },
+      reasoningEffort: 'high',
+      fetchImpl: async () => {
+        calls += 1
+        return response({ error: { message } }, status)
+      }
+    })
+    await assert.rejects(client.send('solve'), error => error.status === status)
+    assert.equal(calls, 1)
+  }
+})
+
+test('every configured OpenAI-compatible provider adapter preserves reasoning_effort', () => {
+  for (const providerId of ['yufeng', 'openai', 'dataeyes', 'custom']) {
+    const adapted = PROVIDERS[providerId].requestAdapter.chat({
+      model: 'reasoning-model',
+      messages: [{ role: 'user', content: 'solve' }],
+      reasoning_effort: 'high',
+      stream: false
+    })
+    assert.equal(adapted.reasoning_effort, 'high', providerId)
+  }
+  assert.equal(PROVIDERS.default.requestAdapter, undefined)
 })

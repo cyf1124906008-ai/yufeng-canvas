@@ -1,5 +1,12 @@
 <template>
-  <main class="agent-workbench" :class="{ 'inspector-open': inspectorOpen }">
+  <main
+    class="agent-workbench"
+    :class="{
+      'inspector-open': inspectorOpen,
+      'theme-light': !settings.isDark.value,
+      'density-compact': settings.density.value === 'compact'
+    }"
+  >
     <workbench-sidebar
       :records="historyRecords"
       :selected-id="workbench.selectedSessionId.value"
@@ -15,7 +22,7 @@
       @delete-history="confirmDeleteHistory"
       @clear-history="confirmClearHistory"
       @select-workspace="selectWorkspace"
-      @open-settings="showSettings = true"
+      @open-settings="openSettings('general')"
       @close="navigationOpen = false"
     />
 
@@ -36,24 +43,44 @@
         @approval="handleApproval"
       />
 
+      <div v-if="settings.reasoningEffort.value === 'max' && workbench.isRunning.value" class="reasoning-status-wrap">
+        <reasoning-status-panel
+          :effort="settings.reasoningEffort.value"
+          :running="workbench.isRunning.value"
+          :status="workbench.status.value"
+          :plan="workbench.plan.value"
+          :tool-calls="workbench.toolCalls.value"
+          :observations="workbench.observations.value"
+        />
+      </div>
+
       <workbench-composer
         v-model="goal"
         :running="workbench.isRunning.value"
-        :disabled="workbench.isAwaitingApproval.value || workbench.isHistorySelection.value"
+        :stopping="workbench.isStopping.value"
+        :disabled="workbench.isHistorySelection.value || workbench.isStopping.value"
         :history="workbench.isHistorySelection.value"
         :awaiting-approval="workbench.isAwaitingApproval.value"
         :placeholder="composerPlaceholder"
         :tools="toolShortcuts"
         :selected-tool="selectedTool"
         :model-label="selectedModelLabel"
+        :approval-mode="workbench.approvalMode.value"
+        :reasoning-effort="settings.reasoningEffort.value"
+        :guidance-pending="workbench.guidancePending.value"
+        :can-resume="workbench.canResume.value"
         :attachments="attachments"
         :autofocus-token="composerFocusToken"
         @submit="submit"
+        @guide="guide"
+        @resume="resumeTask"
         @stop="cancel"
         @select-tool="selectTool"
         @files-selected="addAttachments"
         @remove-attachment="removeAttachment"
-        @open-settings="showSettings = true"
+        @open-settings="openSettings('api')"
+        @update-approval-mode="setApprovalMode"
+        @update-reasoning-effort="settings.setReasoningEffort"
       />
     </section>
 
@@ -78,7 +105,40 @@
       @click="closeMobilePanels"
     ></button>
 
-    <api-settings v-model:show="showSettings" />
+    <settings-center
+      v-model:show="showSettingsCenter"
+      :initial-section="settingsSection"
+      :desktop-ready="workbench.desktopReady.value"
+      :runtime-locked="workbench.isRunning.value || workbench.isAwaitingApproval.value || workbench.isHistorySelection.value"
+      :tool-changes-locked="workbench.isRunning.value || workbench.isAwaitingApproval.value"
+      :approval-mode="workbench.approvalMode.value"
+      :provider-label="providerLabel"
+      :provider-configured="providerConfigured"
+      @open-api-settings="showApiSettings = true"
+      @update-approval-mode="setApprovalMode"
+    >
+      <template #automations>
+        <automation-panel
+          :automations="automations.automations.value"
+          :workspace-root="workbench.workspaceRoot.value"
+          :busy="automationBusy"
+          :desktop-ready="workbench.desktopReady.value"
+          @create="createAutomation"
+          @update="updateAutomation"
+          @delete="deleteAutomation"
+          @toggle="toggleAutomation"
+          @run-now="runAutomationNow"
+        />
+      </template>
+    </settings-center>
+    <api-settings v-model:show="showApiSettings" />
+    <full-access-confirmation
+      v-model:show="showFullAccessConfirmation"
+      :busy="fullAccessBusy"
+      :workspace-root="workbench.workspaceRoot.value"
+      @confirm="confirmFullAccess"
+      @cancel="cancelFullAccess"
+    />
 
     <div v-if="selectedArtifact" class="artifact-lightbox" role="dialog" aria-modal="true" aria-label="产物预览" @click.self="selectedArtifact = null">
       <button type="button" aria-label="关闭预览" @click="selectedArtifact = null">
@@ -91,8 +151,12 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import ApiSettings from '../components/ApiSettings.vue'
+import AutomationPanel from '../components/settings/AutomationPanel.vue'
+import FullAccessConfirmation from '../components/settings/FullAccessConfirmation.vue'
+import ReasoningStatusPanel from '../components/settings/ReasoningStatusPanel.vue'
+import SettingsCenter from '../components/settings/SettingsCenter.vue'
 import WorkbenchActivityFeed from '../components/workbench/WorkbenchActivityFeed.vue'
 import WorkbenchComposer from '../components/workbench/WorkbenchComposer.vue'
 import WorkbenchIcon from '../components/workbench/WorkbenchIcon.vue'
@@ -101,12 +165,21 @@ import WorkbenchSidebar from '../components/workbench/WorkbenchSidebar.vue'
 import { WORKBENCH_TOOL_SHORTCUTS } from '../components/workbench/workbenchView.js'
 import { useAgentWorkbench } from '../agent/runtime/useAgentWorkbench.js'
 import { WORKBENCH_MESSAGE_CONTEXT_CHARACTERS } from '../agent/runtime/workbenchPlanner.js'
+import { useAgentAutomations } from '../agent/automation/index.js'
 import { useModelStore } from '../stores/pinia/index.js'
+import { useAgentSettings } from '../stores/settings.js'
 
 defineOptions({ name: 'AgentWorkspace' })
 
 const modelStore = useModelStore()
-const workbench = useAgentWorkbench({ modelStore })
+const settings = useAgentSettings()
+const workbench = useAgentWorkbench({
+  modelStore,
+  approvalMode: settings.approvalMode,
+  toolGroups: settings.tools,
+  maxActionsPerTurn: settings.maxActionsPerTurn,
+  reasoningEffort: settings.reasoningEffort
+})
 
 const workspace = computed(() => ({
   id: 'local-workspace',
@@ -119,11 +192,20 @@ const goal = ref('')
 const selectedTool = ref('auto')
 const selectedArtifact = ref(null)
 const attachments = ref([])
-const showSettings = ref(false)
+const showSettingsCenter = ref(false)
+const showApiSettings = ref(false)
+const settingsSection = ref('general')
 const navigationOpen = ref(false)
-const inspectorOpen = ref(typeof window !== 'undefined' && window.innerWidth > 1160)
+const inspectorOpen = ref(Boolean(settings.defaultInspector.value) && typeof window !== 'undefined' && window.innerWidth > 1160)
 const inspectorTab = ref('plan')
 const composerFocusToken = ref(0)
+const showFullAccessConfirmation = ref(false)
+const fullAccessBusy = ref(false)
+const automationBusy = ref(false)
+const automationRunBindings = new Map()
+const automations = useAgentAutomations({
+  onRun: (automation, context) => executeAutomation(automation, context)
+})
 
 const MAX_ATTACHMENTS = 3
 const MAX_ATTACHMENT_BYTES = 8 * 1024
@@ -242,9 +324,10 @@ const approvalMessage = computed(() => {
 })
 const composerPlaceholder = computed(() => {
   if (workbench.isHistorySelection.value) return '只读历史；点击上方“复用目标”开始新任务。'
-  if (workbench.isAwaitingApproval.value) return '请先批准或拒绝上方操作…'
-  if (workbench.isRunning.value) return 'Agent 正在规划或执行工具…'
-  if (['failed', 'cancelled'].includes(workbench.status.value)) return '此任务已结束；发送后将开始一个新任务…'
+  if (workbench.isStopping.value) return '正在等待旧工具确认停止；完成后才能安全继续…'
+  if (workbench.isAwaitingApproval.value) return '可批准/拒绝，也可输入新引导以废弃这一步…'
+  if (workbench.isRunning.value) return '输入修改或引导；将在当前工具结束后的安全检查点生效…'
+  if (['failed', 'cancelled'].includes(workbench.status.value)) return '输入修改要求后继续，或直接点击“继续”…'
   return workbench.messages.value.length ? '继续补充要求…' : '描述任务，或输入 / 选择快捷命令…'
 })
 const sessionContext = computed(() => ({
@@ -290,6 +373,136 @@ const historyRecords = computed(() => workbench.historyRecords.value.map(record 
 
 const focusComposer = () => { composerFocusToken.value += 1 }
 
+const automationError = error => ({
+  name: String(error?.name || 'AutomationError'),
+  code: String(error?.code || 'AUTOMATION_RUN_FAILED'),
+  message: String(error?.message || error || '自动化运行失败')
+})
+
+const restoreManualApprovalMode = async (mode, sessionId) => {
+  if (workbench.selectedSessionId.value !== sessionId || workbench.isHistorySelection.value) return false
+  if (workbench.isRunning.value || workbench.isAwaitingApproval.value) return false
+  const restored = mode === 'full_access' ? 'ask' : mode
+  try {
+    await workbench.setApprovalMode(restored)
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function executeAutomation(automation, { runId } = {}) {
+  if (!workbench.desktopReady.value) return { deferred: true }
+  if (
+    workbench.isRunning.value ||
+    workbench.isAwaitingApproval.value ||
+    workbench.isHistorySelection.value ||
+    workbench.status.value === 'awaiting_user' ||
+    goal.value.trim() ||
+    attachments.value.length
+  ) return { deferred: true }
+
+  const boundWorkspace = String(automation?.workspaceRoot || '').trim()
+  const activeWorkspace = String(workbench.workspaceRoot.value || '').trim()
+  if (boundWorkspace && boundWorkspace !== activeWorkspace) {
+    const mismatch = new Error(`自动化绑定的工作区与当前目录不一致：${boundWorkspace}`)
+    mismatch.code = 'AUTOMATION_WORKSPACE_MISMATCH'
+    throw mismatch
+  }
+
+  const previousApprovalMode = workbench.approvalMode.value
+  const automationMode = ['read_only', 'ask', 'auto'].includes(automation?.approvalMode)
+    ? automation.approvalMode
+    : 'ask'
+  if (previousApprovalMode === 'full_access') await revokeFullAccess()
+  workbench.newTask()
+  const sessionId = workbench.selectedSessionId.value
+  try {
+    await workbench.setApprovalMode(automationMode)
+    automations.markRunning(automation.id, { runId, sessionId })
+    showSettingsCenter.value = false
+    selectedArtifact.value = null
+    closeMobilePanels()
+    const snapshot = await workbench.submit(String(automation.prompt || ''), {
+      displayContent: `自动化：${automation.name}`
+    })
+    const status = String(snapshot?.status || workbench.status.value)
+    if (status === 'awaiting_approval') {
+      automationRunBindings.set(sessionId, {
+        automationId: automation.id,
+        runId,
+        previousApprovalMode
+      })
+      return { status: 'waiting_approval', sessionId }
+    }
+    if (status === 'completed') {
+      await restoreManualApprovalMode(previousApprovalMode, sessionId)
+      return { status: 'succeeded', sessionId }
+    }
+    if (status === 'cancelled') {
+      await restoreManualApprovalMode(previousApprovalMode, sessionId)
+      return { status: 'cancelled', sessionId }
+    }
+    const requiresInput = new Error(status === 'awaiting_user'
+      ? '自动化需要用户补充信息，已停止本次无人值守运行'
+      : `自动化以未完成状态结束：${status || 'unknown'}`)
+    requiresInput.code = status === 'awaiting_user'
+      ? 'AUTOMATION_INPUT_REQUIRED'
+      : 'AUTOMATION_INCOMPLETE'
+    await restoreManualApprovalMode(previousApprovalMode, sessionId)
+    return { status: 'failed', sessionId, error: automationError(requiresInput) }
+  } catch (error) {
+    const status = workbench.status.value === 'cancelled' ? 'cancelled' : 'failed'
+    await restoreManualApprovalMode(previousApprovalMode, sessionId)
+    return { status, sessionId, error: automationError(error) }
+  }
+}
+
+const withAutomationMutation = async operation => {
+  if (automationBusy.value) return null
+  automationBusy.value = true
+  try {
+    return await operation()
+  } catch (error) {
+    window.$message?.error(error?.message || '自动化操作失败')
+    return null
+  } finally {
+    automationBusy.value = false
+  }
+}
+
+const createAutomation = payload => withAutomationMutation(() => {
+  const created = automations.create(payload)
+  window.$message?.success('自动化已创建')
+  return created
+})
+
+const updateAutomation = (id, payload) => withAutomationMutation(() => {
+  const updated = automations.update(id, payload)
+  window.$message?.success('自动化已更新')
+  return updated
+})
+
+const deleteAutomation = id => withAutomationMutation(() => {
+  const removed = automations.delete(id)
+  if (removed) window.$message?.success('自动化已删除')
+  return removed
+})
+
+const toggleAutomation = (id, enabled) => withAutomationMutation(() => automations.toggle(id, enabled))
+
+const runAutomationNow = id => {
+  if (automationBusy.value) return
+  automationBusy.value = true
+  showSettingsCenter.value = false
+  window.$message?.info('自动化已加入本机运行队列')
+  void automations.runNow(id).catch(error => {
+    window.$message?.error(error?.message || '自动化启动失败')
+  }).finally(() => {
+    automationBusy.value = false
+  })
+}
+
 const newTask = () => {
   if (workbench.isRunning.value || workbench.isAwaitingApproval.value) return
   workbench.newTask()
@@ -321,13 +534,51 @@ const submit = async (input = goal.value) => {
   }
   selectedArtifact.value = null
   closeMobilePanels()
+  let resumedPromise = null
   try {
     goal.value = ''
     attachments.value = []
+    if (workbench.canResume.value) {
+      resumedPromise = workbench.resume()
+      void resumedPromise.catch(() => null)
+      await workbench.guide(submitted)
+      await resumedPromise
+      return
+    }
     await workbench.submit(submitted, { displayContent: normalized })
   } catch (error) {
+    if (resumedPromise && workbench.isRunning.value) workbench.cancel()
     if (['AbortError'].includes(error?.name) || ['WORKBENCH_CANCELLED', 'ABORT_ERR'].includes(error?.code)) return
     window.$message?.error(error?.message || 'Agent 执行失败')
+  }
+}
+
+const guide = async (input = goal.value) => {
+  const normalized = String(input || '').trim()
+  if (!normalized || (!workbench.isRunning.value && !workbench.isAwaitingApproval.value) || workbench.isHistorySelection.value) return
+  if (utf8Bytes(normalized) > MAX_SUBMISSION_CONTEXT_BYTES) {
+    window.$message?.warning('单条执行引导不能超过 24 KB')
+    return
+  }
+  try {
+    goal.value = ''
+    await workbench.guide(normalized)
+    window.$message?.success('执行引导已加入当前任务')
+  } catch (error) {
+    window.$message?.error(error?.message || '无法追加执行引导')
+  }
+}
+
+const resumeTask = async () => {
+  if (!workbench.canResume.value) return
+  try {
+    await workbench.resume()
+  } catch (error) {
+    if (error?.code === 'WORKBENCH_RESUME_BUSY') {
+      window.$message?.warning('旧工具仍在安全停止中，请稍后再继续')
+      return
+    }
+    window.$message?.error(error?.message || '无法继续任务')
   }
 }
 
@@ -378,6 +629,81 @@ const removeAttachment = id => {
 }
 
 const cancel = () => workbench.cancel()
+
+const revokeFullAccess = async () => {
+  const tools = desktopBridge()?.agentTools
+  if (typeof tools?.revokeFullAccess !== 'function') return false
+  try {
+    await tools.revokeFullAccess()
+    return true
+  } catch (error) {
+    console.warn('[permissions] revokeFullAccess failed', error)
+    return false
+  }
+}
+
+const cancelFullAccess = () => {
+  if (fullAccessBusy.value) return
+  showFullAccessConfirmation.value = false
+}
+
+const confirmFullAccess = async () => {
+  if (fullAccessBusy.value) return false
+  const tools = desktopBridge()?.agentTools
+  if (typeof tools?.requestFullAccess !== 'function') {
+    window.$message?.warning('完全访问权限只在 YUFENG Desktop App 中可用')
+    return false
+  }
+  fullAccessBusy.value = true
+  try {
+    const grant = await tools.requestFullAccess()
+    if (!grant?.granted) {
+      window.$message?.warning('系统确认已取消，未开启完全访问权限')
+      return false
+    }
+    await workbench.setApprovalMode('full_access')
+    settings.setApprovalMode('full_access')
+    showFullAccessConfirmation.value = false
+    showSettingsCenter.value = false
+    window.$message?.success('完全访问已开启；关闭 App、重载或切换工作区后自动撤销')
+    return true
+  } catch (error) {
+    await revokeFullAccess()
+    window.$message?.error(error?.message || '无法开启完全访问权限')
+    return false
+  } finally {
+    fullAccessBusy.value = false
+  }
+}
+
+const setApprovalMode = async mode => {
+  if (workbench.isRunning.value || workbench.isAwaitingApproval.value || workbench.isHistorySelection.value) return false
+  if (mode === 'full_access') {
+    if (workbench.approvalMode.value === 'full_access') return true
+    if (!workbench.desktopReady.value || typeof desktopBridge()?.agentTools?.requestFullAccess !== 'function') {
+      window.$message?.warning('完全访问权限只在 YUFENG Desktop App 中可用')
+      return false
+    }
+    showSettingsCenter.value = false
+    showFullAccessConfirmation.value = true
+    return true
+  }
+  try {
+    if (workbench.approvalMode.value === 'full_access') await revokeFullAccess()
+    await workbench.setApprovalMode(mode)
+    settings.setApprovalMode(mode)
+    return true
+  } catch (error) {
+    window.$message?.error(error?.message || '无法切换审批模式')
+    return false
+  }
+}
+
+const openSettings = section => {
+  settingsSection.value = String(section || 'general')
+  showSettingsCenter.value = true
+  navigationOpen.value = false
+}
 
 const retry = async () => {
   const lastUser = [...workbench.messages.value].reverse().find(message => message.role === 'user')
@@ -451,7 +777,13 @@ const selectWorkspace = async workspaceId => {
   navigationOpen.value = false
   if (workspaceId !== 'local-workspace') return
   try {
-    await workbench.chooseWorkspace()
+    const result = await workbench.chooseWorkspace()
+    if (result?.ok && workbench.approvalMode.value === 'full_access') {
+      await revokeFullAccess()
+      await workbench.setApprovalMode('ask')
+      settings.setApprovalMode('ask')
+      window.$message?.warning('工作区已变化，完全访问权限已撤销')
+    }
   } catch (error) {
     window.$message?.warning(error?.message || '无法选择工作区')
   }
@@ -492,6 +824,7 @@ const closeMobilePanels = () => {
 }
 
 const onGlobalKeydown = event => {
+  if (showSettingsCenter.value || showApiSettings.value || showFullAccessConfirmation.value) return
   if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'n') {
     event.preventDefault()
     newTask()
@@ -502,8 +835,81 @@ const onGlobalKeydown = event => {
   }
 }
 
-onMounted(() => window.addEventListener('keydown', onGlobalKeydown))
-onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKeydown))
+const desktopBridge = () => {
+  try {
+    return globalThis.window?.desktopApp || null
+  } catch {
+    return null
+  }
+}
+
+const applyDesktopPreference = async (method, value) => {
+  const bridge = desktopBridge()
+  if (typeof bridge?.[method] !== 'function') return null
+  try {
+    return await bridge[method](Boolean(value))
+  } catch (preferenceError) {
+    console.warn(`[settings] ${method} failed`, preferenceError)
+    return null
+  }
+}
+
+watch(settings.backgroundMode, enabled => {
+  void applyDesktopPreference('setBackgroundMode', enabled)
+}, { immediate: true })
+
+watch(settings.launchAtLogin, enabled => {
+  void applyDesktopPreference('setLaunchAtLogin', enabled)
+}, { immediate: true })
+
+watch([settings.preventSleepDuringRuns, workbench.isRunning], ([enabled, running]) => {
+  const agentTools = desktopBridge()?.agentTools
+  if (typeof agentTools?.setKeepAwake !== 'function') return
+  void agentTools.setKeepAwake(Boolean(enabled && running)).catch(preferenceError => {
+    console.warn('[settings] setKeepAwake failed', preferenceError)
+  })
+}, { immediate: true })
+
+watch(settings.tools, groups => {
+  for (const [group, enabled] of Object.entries(groups || {})) {
+    workbench.setToolGroupEnabled(group, enabled)
+  }
+}, { deep: true })
+
+watch(workbench.approvalMode, (nextMode, previousMode) => {
+  if (previousMode === 'full_access' && nextMode !== 'full_access') void revokeFullAccess()
+})
+
+watch(
+  () => [workbench.selectedSessionId.value, workbench.status.value],
+  async ([sessionId, status]) => {
+    const binding = automationRunBindings.get(sessionId)
+    if (!binding || !['completed', 'failed', 'cancelled'].includes(status)) return
+    automationRunBindings.delete(sessionId)
+    try {
+      automations.finishSession(binding.automationId, {
+        runId: binding.runId,
+        session: workbench.projection.value,
+        status
+      })
+    } catch (error) {
+      console.warn('[automation] finishSession failed', error)
+    }
+    await restoreManualApprovalMode(binding.previousApprovalMode, sessionId)
+  }
+)
+
+onMounted(() => {
+  window.addEventListener('keydown', onGlobalKeydown)
+  automations.start()
+})
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onGlobalKeydown)
+  automations.dispose()
+  if (workbench.approvalMode.value === 'full_access') void revokeFullAccess()
+  const agentTools = desktopBridge()?.agentTools
+  if (typeof agentTools?.setKeepAwake === 'function') void agentTools.setKeepAwake(false).catch(() => null)
+})
 
 defineExpose({
   workspace,
@@ -514,6 +920,7 @@ defineExpose({
   retry,
   approve,
   reject,
+  setApprovalMode,
   cancel,
   newTask,
   selectHistory,
@@ -541,7 +948,8 @@ defineExpose({
 }
 
 .agent-workbench.inspector-open { grid-template-columns: 278px minmax(0,1fr) 340px; }
-.workbench-center { display: grid; grid-template-rows: minmax(0,1fr) auto; min-width: 0; min-height: 0; background: #151719; }
+.workbench-center { display: grid; grid-template-rows: minmax(0,1fr) auto auto; min-width: 0; min-height: 0; background: #151719; }
+.reasoning-status-wrap { width: min(850px,calc(100% - 28px)); margin: 0 auto; padding: 7px 0 0; }
 .mobile-backdrop { display: none; }
 .artifact-lightbox { position: fixed; z-index: 100; inset: 0; display: grid; place-items: center; padding: 42px; background: rgba(6,7,8,.9); backdrop-filter: blur(12px); }
 .artifact-lightbox img,

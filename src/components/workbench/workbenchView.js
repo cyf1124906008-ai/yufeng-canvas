@@ -54,6 +54,42 @@ const TOOL_META = {
 
 const ACTIVE_STATUSES = new Set(['queued', 'planning', 'running', 'waiting', 'retrying', 'awaiting_user', 'awaiting_approval'])
 
+export const WORKBENCH_APPROVAL_MODES = Object.freeze([
+  Object.freeze({
+    id: 'read_only',
+    label: '只读',
+    summary: '只开放安全读取工具',
+    description: '任务规划仍会调用当前聊天模型（可能计费），但不会执行写入、终端、电脑控制或创作生成等非安全工具。',
+    tone: 'readonly'
+  }),
+  Object.freeze({
+    id: 'ask',
+    label: '每次审批',
+    summary: '敏感操作前先询问',
+    description: '高风险工具及创作模型调用会在执行前请求批准；任务规划所用聊天模型不在此开关范围。',
+    tone: 'ask'
+  }),
+  Object.freeze({
+    id: 'auto',
+    label: '自动执行',
+    summary: '减少打断，连续完成任务',
+    description: '创作模型调用可直接执行，可能产生模型费用；本机高风险仍会原生确认。',
+    tone: 'auto'
+  }),
+  Object.freeze({
+    id: 'full_access',
+    label: '完全访问',
+    summary: '本次 App 会话内减少确认',
+    description: '经过风险页和系统确认后，明确的全权限工具可跳过逐次原生确认；工作区边界、文件校验和操作系统权限仍然有效。',
+    tone: 'full'
+  })
+])
+
+export function workbenchApprovalMode(mode) {
+  return WORKBENCH_APPROVAL_MODES.find(item => item.id === mode)
+    || WORKBENCH_APPROVAL_MODES.find(item => item.id === 'ask')
+}
+
 function text(value) {
   if (typeof value === 'string') return value.trim()
   if (typeof value === 'number' || typeof value === 'boolean') return String(value)
@@ -207,6 +243,7 @@ function normalizeActivity(raw, index) {
     approvalId: text(raw?.approvalId || raw?.requestId || raw?.id),
     toolCallId: text(raw?.toolCallId || raw?.id),
     role: text(raw?.role),
+    guidance: raw?.guidance === true,
     raw
   }
 }

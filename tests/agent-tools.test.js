@@ -717,7 +717,7 @@ test('preload exposes one typed agentTools bridge and every main IPC checks trus
   const main = await readFile(new URL('../electron/main.cjs', import.meta.url), 'utf8')
   const approval = await readFile(new URL('../electron/agent-tools/approval.cjs', import.meta.url), 'utf8')
   const channels = [
-    'get-capabilities', 'get-workspace-root', 'choose-workspace-root', 'set-workspace-root',
+    'get-capabilities', 'get-keep-awake', 'set-keep-awake', 'get-workspace-root', 'choose-workspace-root', 'set-workspace-root',
     'list-files', 'read-file', 'write-file', 'apply-patch', 'revert-patch', 'search-files', 'start-command', 'get-command', 'cancel-command',
     'get-permissions', 'capture-screen', 'open-application', 'click', 'type-text'
   ]
@@ -728,10 +728,46 @@ test('preload exposes one typed agentTools bridge and every main IPC checks trus
   assert.match(main, /currentWorkspaceIdentity/)
   assert.match(main, /expectedWorkspaceIdentity/)
   assert.match(main, /prepareRevertPatch\(input\)/)
+  assert.match(main, /powerSaveBlocker\.start\('prevent-app-suspension'\)/)
+  assert.match(main, /powerSaveBlocker\.stop\(keepAwakeBlockerId\)/)
+  assert.match(main, /app\.on\('before-quit',[\s\S]*?stopKeepAwake\(\)/)
+  assert.match(preload, /getKeepAwake:/)
+  assert.match(preload, /setKeepAwake:/)
   assert.match(approval, /nativeConfirmed: true/)
   for (const channel of channels) {
     assert.match(preload, new RegExp(`app:agent-tools:${channel}`))
     const start = main.indexOf(`ipcMain.handle('app:agent-tools:${channel}'`)
+    const next = main.indexOf('ipcMain.handle(', start + 1)
+    const handler = start >= 0 ? main.slice(start, next >= 0 ? next : start + 1_000) : ''
+    assert.match(handler, /requireTrustedRenderer\(event\)/)
+  }
+})
+
+test('desktop preferences use trusted IPC and preserve macOS background execution safely', async () => {
+  const preload = await readFile(new URL('../electron/preload.cjs', import.meta.url), 'utf8')
+  const main = await readFile(new URL('../electron/main.cjs', import.meta.url), 'utf8')
+  const channels = [
+    'get-background-mode',
+    'set-background-mode',
+    'get-launch-at-login',
+    'set-launch-at-login'
+  ]
+
+  assert.match(preload, /getBackgroundMode:/)
+  assert.match(preload, /setBackgroundMode:/)
+  assert.match(preload, /getLaunchAtLogin:/)
+  assert.match(preload, /setLaunchAtLogin:/)
+  assert.match(main, /let backgroundModeEnabled = true/)
+  assert.match(main, /process\.platform === 'darwin'/)
+  assert.match(main, /mainWindow\.on\('close',[\s\S]*?event\.preventDefault\(\)[\s\S]*?mainWindow\.hide\(\)/)
+  assert.match(main, /appIsQuitting/)
+  assert.match(main, /app\.setLoginItemSettings\(\{ openAtLogin: input\.enabled \}\)/)
+  assert.match(main, /LAUNCH_AT_LOGIN_UNSUPPORTED/)
+  assert.match(main, /windows\[0\]\.show\(\)/)
+
+  for (const channel of channels) {
+    assert.match(preload, new RegExp(`app:${channel}`))
+    const start = main.indexOf(`ipcMain.handle('app:${channel}'`)
     const next = main.indexOf('ipcMain.handle(', start + 1)
     const handler = start >= 0 ? main.slice(start, next >= 0 ? next : start + 1_000) : ''
     assert.match(handler, /requireTrustedRenderer\(event\)/)

@@ -44,6 +44,8 @@ function summaryFor(record) {
     sessionId: record.sessionId,
     title: String(record.title || firstUser?.content || '新任务').slice(0, 160),
     status: projection.status,
+    approvalMode: 'ask',
+    recordedApprovalMode: projection.recordedApprovalMode,
     turnCount: projection.turnCount,
     toolCallCount: projection.toolCalls.length,
     createdAt: projection.createdAt || record.createdAt,

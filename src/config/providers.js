@@ -54,6 +54,7 @@ const createOpenAICompatibleProvider = (label, defaultBaseUrl) => ({
       if (params.temperature !== undefined) adapted.temperature = params.temperature
       if (params.max_tokens !== undefined) adapted.max_tokens = params.max_tokens
       if (params.stream !== undefined) adapted.stream = params.stream
+      if (params.reasoning_effort !== undefined) adapted.reasoning_effort = params.reasoning_effort
       return adapted
     },
     image: (params) => {
@@ -124,6 +125,7 @@ export const PROVIDERS = {
         if (params.temperature !== undefined) adapted.temperature = params.temperature
         if (params.max_tokens !== undefined) adapted.max_tokens = params.max_tokens
         if (params.stream !== undefined) adapted.stream = params.stream
+        if (params.reasoning_effort !== undefined) adapted.reasoning_effort = params.reasoning_effort
         return adapted
       },
       image: (params) => {

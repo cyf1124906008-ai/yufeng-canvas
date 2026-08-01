@@ -88,7 +88,7 @@
             <article v-if="activity.kind === 'message'" class="chat-message" :class="activity.role === 'user' ? 'is-user' : 'is-agent'">
               <span class="message-avatar">{{ activity.role === 'user' ? '你' : 'Y' }}</span>
               <div>
-                <header><strong>{{ activity.role === 'user' ? '你' : 'Agent' }}</strong><time v-if="activity.timeLabel">{{ activity.timeLabel }}</time></header>
+                <header><strong>{{ activity.role === 'user' ? '你' : 'Agent' }}</strong><span v-if="activity.guidance" class="guidance-chip">执行引导</span><time v-if="activity.timeLabel">{{ activity.timeLabel }}</time></header>
                 <p>{{ activity.message }}</p>
               </div>
             </article>
@@ -299,6 +299,7 @@ watch(() => [displayActivities.value.length, normalizedArtifacts.value.length], 
 .chat-message header { display: flex; min-height: 23px; align-items: center; gap: 8px; }
 .chat-message header strong { color: #c9cdcb; font-size: 12px; }
 .chat-message time { color: #606667; font-size: 11px; }
+.guidance-chip { border: 1px solid #594466; border-radius: 999px; padding: 2px 6px; color: #cba8df; background: #2b2231; font-size: 8.5px; font-weight: 700; }
 .chat-message p { margin: 3px 0 0; color: #dfe2e0; font-size: 14px; line-height: 1.72; white-space: pre-wrap; }
 .chat-message.is-agent p { color: #c9cdcb; }
 .plan-summary { margin: 0 0 18px 37px; overflow: hidden; border: 1px solid #303436; border-radius: 8px; background: #1a1d1f; }

@@ -4,6 +4,31 @@ import { defineTool } from '../workbench/index.js'
 const TERMINAL_DONE = new Set(['completed', 'failed', 'cancelled', 'timed_out', 'termination_unconfirmed'])
 const MAX_WORKBENCH_TERMINAL_OUTPUT_BYTES = 128 * 1024
 
+export const WORKBENCH_TOOL_GROUPS = Object.freeze({
+  workspaceRead: Object.freeze(['workspace.get', 'workspace.list', 'workspace.read', 'workspace.search']),
+  workspaceWrite: Object.freeze(['workspace.write', 'workspace.patch', 'workspace.revert_patch']),
+  terminal: Object.freeze(['terminal.run']),
+  computer: Object.freeze([
+    'computer.permissions',
+    'computer.inspect_screen',
+    'computer.open_application',
+    'computer.click',
+    'computer.type_text'
+  ]),
+  creative: Object.freeze(['creative.generate'])
+})
+
+export function setWorkbenchToolGroupEnabled(registry, group, enabled) {
+  const names = WORKBENCH_TOOL_GROUPS[group]
+  if (!names) {
+    const error = new Error(`未知 Workbench 工具组: ${group}`)
+    error.code = 'WORKBENCH_TOOL_GROUP_NOT_FOUND'
+    throw error
+  }
+  for (const name of names) registry.setEnabled(name, enabled)
+  return Boolean(enabled)
+}
+
 function desktopUnavailable(capability) {
   const error = new Error(`${capability} 只在 YUFENG Desktop App 中可用`)
   error.code = 'DESKTOP_TOOL_UNAVAILABLE'
@@ -30,7 +55,13 @@ function approvalFor(runtime, action) {
     error.code = 'WORKBENCH_TOOL_NOT_APPROVED'
     throw error
   }
-  return { granted: true, action }
+  const fullAccess = runtime?.session?.approvalMode === 'full_access' &&
+    runtime?.toolCall?.approvalResolution === 'full_access'
+  return {
+    granted: true,
+    action,
+    ...(fullAccess ? { fullAccess: true } : {})
+  }
 }
 
 function delay(ms, signal) {

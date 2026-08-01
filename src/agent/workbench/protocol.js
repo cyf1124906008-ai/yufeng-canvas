@@ -1,6 +1,7 @@
 /**
  * @typedef {'safe'|'caution'|'dangerous'} ToolRiskLevel
  * @typedef {'never'|'on_danger'|'always'} ToolApprovalPolicy
+ * @typedef {'read_only'|'ask'|'auto'|'full_access'} ApprovalMode
  * @typedef {'pending'|'approved'|'rejected'} ApprovalStatus
  * @typedef {'succeeded'|'failed'|'rejected'} ObservationStatus
  *
@@ -45,13 +46,17 @@
 export const WORKBENCH_SCHEMA_VERSION = 1
 export const TOOL_RISK_LEVELS = Object.freeze(['safe', 'caution', 'dangerous'])
 export const TOOL_APPROVAL_POLICIES = Object.freeze(['never', 'on_danger', 'always'])
+export const APPROVAL_MODES = Object.freeze(['read_only', 'ask', 'auto', 'full_access'])
 export const APPROVAL_STATUSES = Object.freeze(['pending', 'approved', 'rejected'])
 export const OBSERVATION_STATUSES = Object.freeze(['succeeded', 'failed', 'rejected'])
 export const NEXT_ACTION_TYPES = Object.freeze(['message', 'tool_call', 'finish'])
 export const TASK_PLAN_STATUSES = Object.freeze(['pending', 'in_progress', 'completed'])
+export const WORKBENCH_GUIDANCE_MAX_CHARACTERS = 4_000
+export const WORKBENCH_GUIDANCE_MAX_PER_TURN = 12
 
 const TOOL_RISK_LEVEL_SET = new Set(TOOL_RISK_LEVELS)
 const TOOL_APPROVAL_POLICY_SET = new Set(TOOL_APPROVAL_POLICIES)
+const APPROVAL_MODE_SET = new Set(APPROVAL_MODES)
 const APPROVAL_STATUS_SET = new Set(APPROVAL_STATUSES)
 const TASK_PLAN_STATUS_SET = new Set(TASK_PLAN_STATUSES)
 const TOOL_NAME_PATTERN = /^[a-zA-Z][a-zA-Z0-9_.-]{0,127}$/
@@ -149,6 +154,29 @@ export function serializeWorkbenchError(error, fallbackCode = 'WORKBENCH_ERROR')
     message: error?.message || String(error || 'Unknown Workbench error'),
     code: error?.code || fallbackCode
   })
+}
+
+export function normalizeApprovalMode(value = 'ask') {
+  const mode = String(value || 'ask').trim()
+  if (!APPROVAL_MODE_SET.has(mode)) {
+    throw new TypeError(`Unknown approval mode: ${mode || '(empty)'}`)
+  }
+  return mode
+}
+
+export function normalizeUserGuidance(value) {
+  const content = String(value || '').trim()
+  if (!content) {
+    const error = new TypeError('User guidance is required')
+    error.code = 'WORKBENCH_GUIDANCE_REQUIRED'
+    throw error
+  }
+  if (content.length > WORKBENCH_GUIDANCE_MAX_CHARACTERS) {
+    const error = new TypeError(`User guidance exceeds ${WORKBENCH_GUIDANCE_MAX_CHARACTERS} characters`)
+    error.code = 'WORKBENCH_GUIDANCE_TOO_LONG'
+    throw error
+  }
+  return content
 }
 
 export function normalizeToolDefinition(value = {}) {

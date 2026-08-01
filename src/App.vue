@@ -5,11 +5,11 @@
  */
 import { computed } from 'vue'
 import { NConfigProvider, NDialogProvider, NMessageProvider, darkTheme } from 'naive-ui'
-import { isDark } from './stores/theme'
+import { agentSettings } from './stores/settings'
 import AppFeedbackProvider from './components/AppFeedbackProvider.vue'
 
 // Naive UI theme based on dark mode | 基于深色模式的 Naive UI 主题
-const theme = computed(() => isDark.value ? darkTheme : null)
+const theme = computed(() => agentSettings.isDark.value ? darkTheme : null)
 
 // Global theme overrides | 全局主题覆盖
 const themeOverrides = {

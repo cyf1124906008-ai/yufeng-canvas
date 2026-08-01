@@ -1,4 +1,4 @@
-const { app, BrowserWindow, shell, ipcMain, dialog, systemPreferences } = require('electron')
+const { app, BrowserWindow, shell, ipcMain, dialog, systemPreferences, powerSaveBlocker } = require('electron')
 let autoUpdater
 try {
   autoUpdater = require('electron-updater').autoUpdater
@@ -23,6 +23,10 @@ const {
   bindWorkspaceApprovalPayload,
   canonicalizeAgentToolPayload
 } = require('./agent-tools/approval.cjs')
+const {
+  FullAccessGrantManager,
+  sameWorkspaceIdentity
+} = require('./agent-tools/full-access.cjs')
 const imageGeneration = require('./imageGeneration.cjs')
 
 const rendererUrl = process.env.ELECTRON_RENDERER_URL
@@ -69,6 +73,10 @@ let updateCheckMode = 'auto'
 let updateSourceIndex = 0
 let localApiServer = null
 let desktopAgentTools = null
+const fullAccessGrants = new FullAccessGrantManager()
+let keepAwakeBlockerId = null
+let backgroundModeEnabled = true
+let appIsQuitting = false
 const localApiPort = Number.parseInt(process.env.YUFENG_LOCAL_API_PORT || '43112', 10) || 43112
 let localApiState = {
   enabled: process.env.YUFENG_LOCAL_API !== '0',
@@ -76,6 +84,81 @@ let localApiState = {
   port: localApiPort,
   origin: `http://127.0.0.1:${localApiPort}`,
   error: ''
+}
+
+const isKeepAwakeEnabled = () => (
+  Number.isInteger(keepAwakeBlockerId) && powerSaveBlocker.isStarted(keepAwakeBlockerId)
+)
+
+const getKeepAwakeState = () => ({ enabled: isKeepAwakeEnabled() })
+
+const stopKeepAwake = () => {
+  if (isKeepAwakeEnabled()) powerSaveBlocker.stop(keepAwakeBlockerId)
+  keepAwakeBlockerId = null
+  return getKeepAwakeState()
+}
+
+const setKeepAwake = (input = {}) => {
+  if (typeof input?.enabled !== 'boolean') {
+    const error = new TypeError('keep-awake.enabled 必须是布尔值')
+    error.code = 'INVALID_KEEP_AWAKE_INPUT'
+    throw error
+  }
+  if (!input.enabled) return stopKeepAwake()
+  if (!isKeepAwakeEnabled()) {
+    keepAwakeBlockerId = powerSaveBlocker.start('prevent-app-suspension')
+  }
+  return getKeepAwakeState()
+}
+
+const getBackgroundModeState = () => {
+  const supported = process.platform === 'darwin'
+  return {
+    supported,
+    enabled: supported && backgroundModeEnabled,
+    configured: backgroundModeEnabled,
+    platform: process.platform,
+    ...(supported ? {} : { reason: 'BACKGROUND_MODE_MACOS_ONLY' })
+  }
+}
+
+const setBackgroundMode = (input = {}) => {
+  if (typeof input?.enabled !== 'boolean') {
+    const error = new TypeError('background-mode.enabled 必须是布尔值')
+    error.code = 'INVALID_BACKGROUND_MODE_INPUT'
+    throw error
+  }
+  backgroundModeEnabled = input.enabled
+  return getBackgroundModeState()
+}
+
+const getLaunchAtLoginState = () => {
+  const supported = process.platform === 'darwin' || process.platform === 'win32'
+  if (!supported) {
+    return {
+      supported: false,
+      enabled: false,
+      platform: process.platform,
+      reason: 'LAUNCH_AT_LOGIN_UNSUPPORTED'
+    }
+  }
+  const settings = app.getLoginItemSettings()
+  return {
+    supported: true,
+    enabled: Boolean(settings?.openAtLogin),
+    platform: process.platform
+  }
+}
+
+const setLaunchAtLogin = (input = {}) => {
+  if (typeof input?.enabled !== 'boolean') {
+    const error = new TypeError('launch-at-login.enabled 必须是布尔值')
+    error.code = 'INVALID_LAUNCH_AT_LOGIN_INPUT'
+    throw error
+  }
+  if (process.platform !== 'darwin' && process.platform !== 'win32') return getLaunchAtLoginState()
+  app.setLoginItemSettings({ openAtLogin: input.enabled })
+  return getLaunchAtLoginState()
 }
 
 const isPackagedRuntime = () => app.isPackaged && !rendererUrl
@@ -140,9 +223,93 @@ const currentWorkspaceIdentity = async (expected = null) => {
   return normalized
 }
 
+const optionalCurrentWorkspaceIdentity = async () => {
+  const identity = await desktopAgentTools?.getWorkspaceIdentity?.()
+  if (!identity?.workspaceRoot || !Number.isSafeInteger(Number(identity.workspaceGeneration))) {
+    return null
+  }
+  return {
+    workspaceRoot: identity.workspaceRoot,
+    workspaceGeneration: Number(identity.workspaceGeneration)
+  }
+}
+
+const revokeFullAccessGrant = (webContents) => {
+  try {
+    return fullAccessGrants.revoke(webContents)
+  } catch {
+    return { granted: false, scope: 'app_renderer_lifecycle', workspaceBound: false }
+  }
+}
+
+const requestFullAccessGrant = async (event) => {
+  requireTrustedRenderer(event)
+  const requestingFrame = event.senderFrame || null
+  const requestedWorkspaceIdentity = await optionalCurrentWorkspaceIdentity()
+  const parent = BrowserWindow.fromWebContents(event.sender) || undefined
+  const options = {
+    type: 'warning',
+    title: 'YUFENG Agent 高风险授权',
+    message: '允许 Agent 在本次应用与页面生命周期内使用全权限？',
+    detail: [
+      '启用后，只有明确标记为全权限的 Agent 工具调用才能跳过逐次原生确认。',
+      requestedWorkspaceIdentity
+        ? `文件与终端操作仍限制在当前 Workspace：${requestedWorkspaceIdentity.workspaceRoot}`
+        : '当前未选择 Workspace；文件与终端操作仍不可用。',
+      '控制电脑仍受 macOS/Windows 系统权限限制。关闭、重载、崩溃或切换 Workspace 会撤销授权。'
+    ].join('\n'),
+    buttons: ['取消', '启用全权限'],
+    defaultId: 0,
+    cancelId: 0,
+    noLink: true
+  }
+  const result = parent
+    ? await dialog.showMessageBox(parent, options)
+    : await dialog.showMessageBox(options)
+  if (result.response !== 1) {
+    return fullAccessGrants.get(event.sender, {
+      workspaceIdentity: requestedWorkspaceIdentity,
+      validateWorkspace: true
+    })
+  }
+
+  const rendererChanged = event.sender?.isDestroyed?.() ||
+    requestingFrame?.isDestroyed?.() ||
+    (requestingFrame && event.sender?.mainFrame && event.sender.mainFrame !== requestingFrame)
+  if (rendererChanged) {
+    const error = new Error('发起全权限请求的页面已关闭或重载，请重新确认')
+    error.code = 'FULL_ACCESS_RENDERER_CHANGED'
+    throw error
+  }
+  requireTrustedRenderer(event)
+
+  const confirmedWorkspaceIdentity = await optionalCurrentWorkspaceIdentity()
+  if (!sameWorkspaceIdentity(requestedWorkspaceIdentity, confirmedWorkspaceIdentity)) {
+    const error = new Error('Workspace 在全权限确认期间发生变化，请重新确认')
+    error.code = 'FULL_ACCESS_WORKSPACE_CHANGED'
+    throw error
+  }
+  return fullAccessGrants.grant(event.sender, confirmedWorkspaceIdentity)
+}
+
+const getFullAccessGrant = async (event) => {
+  requireTrustedRenderer(event)
+  return fullAccessGrants.get(event.sender, {
+    workspaceIdentity: await optionalCurrentWorkspaceIdentity(),
+    validateWorkspace: true
+  })
+}
+
+const revokeFullAccessGrantForEvent = (event) => {
+  requireTrustedRenderer(event)
+  return revokeFullAccessGrant(event.sender)
+}
+
 const confirmAgentToolAction = async (event, action, input = {}, { expectedWorkspaceIdentity = null } = {}) => {
   requireTrustedRenderer(event)
+  const fullAccessIntent = input?.approval?.fullAccess === true
   let payload = canonicalizeAgentToolPayload(action, input)
+  let workspaceIdentity = null
   if (action === 'workspace.set') {
     const realPath = await fs.promises.realpath(payload.path)
     const stat = await fs.promises.stat(realPath)
@@ -153,29 +320,42 @@ const confirmAgentToolAction = async (event, action, input = {}, { expectedWorks
     }
     payload = Object.freeze({ path: realPath })
   } else if (WORKSPACE_BOUND_APPROVAL_ACTIONS.has(action)) {
+    workspaceIdentity = await currentWorkspaceIdentity(expectedWorkspaceIdentity)
     payload = bindWorkspaceApprovalPayload(
       payload,
-      await currentWorkspaceIdentity(expectedWorkspaceIdentity)
+      workspaceIdentity
     )
+  } else {
+    workspaceIdentity = await optionalCurrentWorkspaceIdentity()
   }
-  const parent = BrowserWindow.fromWebContents(event.sender) || undefined
-  const options = {
-    type: 'warning',
-    title: 'YUFENG Agent 安全确认',
-    message: `允许执行一次 ${action}？`,
-    detail: agentToolApprovalDetail(action, payload),
-    buttons: ['取消', '允许一次'],
-    defaultId: 0,
-    cancelId: 0,
-    noLink: true
-  }
-  const result = parent
-    ? await dialog.showMessageBox(parent, options)
-    : await dialog.showMessageBox(options)
-  if (result.response !== 1) {
-    const error = new Error(`用户取消了操作: ${action}`)
-    error.code = 'NATIVE_APPROVAL_REJECTED'
-    throw error
+
+  // `approval.fullAccess` is renderer intent, not a capability. Only the
+  // Main-process grant bound to this exact trusted webContents may bypass the
+  // one-shot dialog. `approval.granted` is deliberately ignored here.
+  const bypassNativeConfirmation = action !== 'workspace.set' && fullAccessGrants.canBypass(
+    event.sender,
+    { action, fullAccess: fullAccessIntent, workspaceIdentity }
+  )
+  if (!bypassNativeConfirmation) {
+    const parent = BrowserWindow.fromWebContents(event.sender) || undefined
+    const options = {
+      type: 'warning',
+      title: 'YUFENG Agent 安全确认',
+      message: `允许执行一次 ${action}？`,
+      detail: agentToolApprovalDetail(action, payload),
+      buttons: ['取消', '允许一次'],
+      defaultId: 0,
+      cancelId: 0,
+      noLink: true
+    }
+    const result = parent
+      ? await dialog.showMessageBox(parent, options)
+      : await dialog.showMessageBox(options)
+    if (result.response !== 1) {
+      const error = new Error(`用户取消了操作: ${action}`)
+      error.code = 'NATIVE_APPROVAL_REJECTED'
+      throw error
+    }
   }
   if (WORKSPACE_BOUND_APPROVAL_ACTIONS.has(action)) {
     await currentWorkspaceIdentity({
@@ -944,7 +1124,11 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
-      webSecurity: false
+      webSecurity: false,
+      // Scheduled Agent work remains in the renderer while the macOS window
+      // is hidden in background mode. Do not let Chromium stretch timers by
+      // several minutes, otherwise due automations become unreliable.
+      backgroundThrottling: false
     }
   })
 
@@ -965,7 +1149,23 @@ function createWindow() {
 
   mainWindow.webContents.on('render-process-gone', (_event, details) => {
     console.error('[electron] render-process-gone', details)
+    revokeFullAccessGrant(mainWindow.webContents)
+    stopKeepAwake()
     desktopAgentTools?.shutdown?.()
+  })
+
+  mainWindow.webContents.on('did-start-navigation', (_event, _url, isInPlace, isMainFrame) => {
+    if (isMainFrame && !isInPlace) revokeFullAccessGrant(mainWindow.webContents)
+  })
+
+  mainWindow.webContents.once('destroyed', () => {
+    revokeFullAccessGrant(mainWindow.webContents)
+  })
+
+  mainWindow.on('close', (event) => {
+    if (process.platform !== 'darwin' || !backgroundModeEnabled || appIsQuitting) return
+    event.preventDefault()
+    mainWindow.hide()
   })
 
   if (rendererUrl) {
@@ -991,6 +1191,22 @@ app.whenReady().then(async () => {
   ipcMain.handle('app:get-version', () => packageJson.version)
   ipcMain.handle('app:get-update-status', () => updateState)
   ipcMain.handle('app:get-local-api-status', () => localApiState)
+  ipcMain.handle('app:get-background-mode', (event) => {
+    requireTrustedRenderer(event)
+    return getBackgroundModeState()
+  })
+  ipcMain.handle('app:set-background-mode', (event, input) => {
+    requireTrustedRenderer(event)
+    return setBackgroundMode(input)
+  })
+  ipcMain.handle('app:get-launch-at-login', (event) => {
+    requireTrustedRenderer(event)
+    return getLaunchAtLoginState()
+  })
+  ipcMain.handle('app:set-launch-at-login', (event, input) => {
+    requireTrustedRenderer(event)
+    return setLaunchAtLogin(input)
+  })
   ipcMain.handle('app:fetch-url-text', (_event, url) => fetchUrlText(url))
   ipcMain.handle('app:get-user-data-path', () => app.getPath('userData'))
 
@@ -1152,6 +1368,26 @@ app.whenReady().then(async () => {
     requireTrustedRenderer(event)
     return agentTools.getCapabilities()
   })
+  ipcMain.handle('app:agent-tools:request-full-access', (event) => {
+    requireTrustedRenderer(event)
+    return requestFullAccessGrant(event)
+  })
+  ipcMain.handle('app:agent-tools:get-full-access', (event) => {
+    requireTrustedRenderer(event)
+    return getFullAccessGrant(event)
+  })
+  ipcMain.handle('app:agent-tools:revoke-full-access', (event) => {
+    requireTrustedRenderer(event)
+    return revokeFullAccessGrantForEvent(event)
+  })
+  ipcMain.handle('app:agent-tools:get-keep-awake', (event) => {
+    requireTrustedRenderer(event)
+    return getKeepAwakeState()
+  })
+  ipcMain.handle('app:agent-tools:set-keep-awake', (event, input) => {
+    requireTrustedRenderer(event)
+    return setKeepAwake(input)
+  })
   ipcMain.handle('app:agent-tools:get-workspace-root', (event) => {
     requireTrustedRenderer(event)
     return agentTools.getWorkspaceRoot()
@@ -1163,11 +1399,14 @@ app.whenReady().then(async () => {
       properties: ['openDirectory']
     })
     if (result.canceled || !result.filePaths?.[0]) return { ok: false, canceled: true }
+    fullAccessGrants.clear()
     return agentTools.setChosenWorkspaceRoot(result.filePaths[0])
   })
   ipcMain.handle('app:agent-tools:set-workspace-root', async (event, input) => {
     requireTrustedRenderer(event)
-    return agentTools.setWorkspaceRoot(await confirmAgentToolAction(event, 'workspace.set', input))
+    const confirmed = await confirmAgentToolAction(event, 'workspace.set', input)
+    fullAccessGrants.clear()
+    return agentTools.setWorkspaceRoot(confirmed)
   })
   ipcMain.handle('app:agent-tools:list-files', (event, input) => {
     requireTrustedRenderer(event)
@@ -1245,8 +1484,11 @@ app.whenReady().then(async () => {
   setTimeout(checkForUpdatesInBackground, 8000)
 
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow()
+    const windows = BrowserWindow.getAllWindows()
+    if (windows.length === 0) createWindow()
+    else {
+      windows[0].show()
+      windows[0].focus()
     }
   })
 })
@@ -1259,5 +1501,8 @@ app.on('window-all-closed', () => {
 })
 
 app.on('before-quit', () => {
+  appIsQuitting = true
+  fullAccessGrants.clear()
+  stopKeepAwake()
   desktopAgentTools?.shutdown?.()
 })

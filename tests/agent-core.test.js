@@ -10,6 +10,29 @@ import {
   inferTargetType
 } from '../src/agent/core/index.js'
 
+test('ToolRegistry hides disabled tools and fails closed at execution time', async () => {
+  let executions = 0
+  const tools = new ToolRegistry({
+    inspect: async () => {
+      executions += 1
+      return { ok: true }
+    }
+  })
+
+  assert.deepEqual(tools.list().map(tool => tool.name), ['inspect'])
+  assert.equal(tools.setEnabled('inspect', false), false)
+  assert.equal(tools.has('inspect'), false)
+  assert.equal(tools.isEnabled('inspect'), false)
+  assert.deepEqual(tools.list(), [])
+  await assert.rejects(tools.execute('inspect'), error => error.code === 'TOOL_DISABLED')
+  assert.equal(executions, 0)
+
+  assert.equal(tools.setEnabled('inspect', true), true)
+  assert.equal((await tools.execute('inspect')).ok, true)
+  assert.equal(executions, 1)
+  assert.throws(() => tools.setEnabled('missing', false), error => error.code === 'TOOL_NOT_FOUND')
+})
+
 test('image goal completes through generate_image then finish', async () => {
   const calls = []
   const events = []

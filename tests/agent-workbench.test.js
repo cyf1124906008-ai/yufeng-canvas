@@ -4,6 +4,8 @@ import assert from 'node:assert/strict'
 import { ToolRegistry } from '../src/agent/core/index.js'
 import {
   WorkbenchSession,
+  WORKBENCH_GUIDANCE_MAX_CHARACTERS,
+  WORKBENCH_GUIDANCE_MAX_PER_TURN,
   defineTool,
   projectWorkbenchEvents,
   sanitizeWorkbenchValue
@@ -172,6 +174,210 @@ test('dangerous tools pause for approval and execute only after approval', async
   assert.equal(completed.observations[0].status, 'succeeded')
 })
 
+test('read_only mode executes only safe tools that never require approval', async () => {
+  const registry = new ToolRegistry()
+  const executions = []
+  registry.register('read_file', defineTool({
+    name: 'read_file',
+    riskLevel: 'safe',
+    approvalPolicy: 'never'
+  }, async () => {
+    executions.push('read_file')
+    return { content: 'ok' }
+  }))
+  registry.register('network_probe', defineTool({
+    name: 'network_probe',
+    riskLevel: 'caution',
+    approvalPolicy: 'never'
+  }, async () => {
+    executions.push('network_probe')
+    return { ok: true }
+  }))
+  registry.register('write_file', defineTool({
+    name: 'write_file',
+    riskLevel: 'dangerous',
+    approvalPolicy: 'always'
+  }, async () => {
+    executions.push('write_file')
+    return { ok: true }
+  }))
+  const actions = ['read_file', 'network_probe', 'write_file']
+  const plannerModes = []
+  const session = new WorkbenchSession({
+    ...deterministicRuntime(),
+    approvalMode: 'read_only',
+    toolRegistry: registry,
+    planner: ({ session: state }) => {
+      plannerModes.push(state.approvalMode)
+      const name = actions[state.toolCalls.length]
+      return name ? { type: 'tool_call', name } : { type: 'finish', result: { ok: true } }
+    }
+  })
+
+  const completed = await session.submitUserMessage('只读检查')
+
+  assert.equal(completed.status, 'completed')
+  assert.equal(completed.approvalMode, 'read_only')
+  assert.deepEqual(executions, ['read_file'])
+  assert.deepEqual(completed.observations.map(item => item.status), ['succeeded', 'rejected', 'rejected'])
+  assert.deepEqual(completed.observations.slice(1).map(item => item.error.code), [
+    'TOOL_BLOCKED_BY_APPROVAL_MODE',
+    'TOOL_BLOCKED_BY_APPROVAL_MODE'
+  ])
+  assert.deepEqual(completed.toolCalls.map(item => item.approvalStatus), [
+    'not_required',
+    'rejected',
+    'rejected'
+  ])
+  assert.equal(completed.pendingApproval, null)
+  assert.equal(plannerModes.every(mode => mode === 'read_only'), true)
+})
+
+test('auto mode approves the Workbench gate without bypassing the tool runtime', async () => {
+  const registry = new ToolRegistry()
+  const runtimeApprovals = []
+  registry.register('write_file', defineTool({
+    name: 'write_file',
+    riskLevel: 'dangerous',
+    approvalPolicy: 'always'
+  }, async (_input, runtime) => {
+    runtimeApprovals.push(runtime.toolCall.approvalStatus)
+    return { ok: true }
+  }))
+  const session = new WorkbenchSession({
+    ...deterministicRuntime(),
+    approvalMode: 'auto',
+    toolRegistry: registry,
+    planner: ({ session: state }) => state.observations.length
+      ? { type: 'finish', result: { ok: true } }
+      : { type: 'tool_call', name: 'write_file', input: { path: 'notes.txt' } }
+  })
+
+  const completed = await session.submitUserMessage('自动更新文件')
+
+  assert.equal(completed.status, 'completed')
+  assert.deepEqual(runtimeApprovals, ['approved'])
+  assert.equal(completed.approvals[0].status, 'approved')
+  assert.equal(completed.approvals[0].resolution, 'auto')
+  assert.equal(completed.pendingApproval, null)
+  assert.equal(session.events().some(event => event.type === 'approval_requested'), true)
+})
+
+test('restoring auto-mode history resets effective authority to ask', async () => {
+  const runtime = deterministicRuntime()
+  const registry = new ToolRegistry()
+  let executions = 0
+  registry.register('write_file', defineTool({
+    name: 'write_file',
+    riskLevel: 'dangerous',
+    approvalPolicy: 'always'
+  }, async () => {
+    executions += 1
+    return { ok: true }
+  }))
+  const planner = ({ session: state }) => state.turnCount > state.toolCalls.length
+    ? { type: 'tool_call', name: 'write_file', input: { path: `turn-${state.turnCount}.txt` } }
+    : { type: 'finish', result: { ok: true } }
+  const original = new WorkbenchSession({
+    ...runtime,
+    approvalMode: 'auto',
+    toolRegistry: registry,
+    planner
+  })
+  await original.submitUserMessage('第一轮')
+  assert.equal(executions, 1)
+
+  const restored = new WorkbenchSession({
+    ...runtime,
+    sessionId: original.sessionId,
+    events: JSON.parse(JSON.stringify(original.events())),
+    approvalMode: 'auto',
+    toolRegistry: registry,
+    planner
+  })
+
+  assert.equal(restored.snapshot().approvalMode, 'ask')
+  assert.equal(restored.snapshot().recordedApprovalMode, 'auto')
+  assert.equal(projectWorkbenchEvents(restored.events()).approvalMode, 'ask')
+  assert.equal(projectWorkbenchEvents(restored.events()).recordedApprovalMode, 'auto')
+
+  const pending = await restored.submitUserMessage('第二轮')
+  assert.equal(pending.status, 'awaiting_approval')
+  assert.equal(pending.approvalMode, 'ask')
+  assert.equal(executions, 1)
+})
+
+test('approval mode cannot change while an approval is pending', async () => {
+  const registry = new ToolRegistry()
+  let executions = 0
+  registry.register('publish', defineTool({
+    name: 'publish',
+    riskLevel: 'dangerous',
+    approvalPolicy: 'always'
+  }, async () => {
+    executions += 1
+    return { ok: true }
+  }))
+  const session = new WorkbenchSession({
+    ...deterministicRuntime(),
+    toolRegistry: registry,
+    planner: ({ session: state }) => state.observations.length
+      ? { type: 'finish', result: { content: '只读模式未发布' } }
+      : { type: 'tool_call', name: 'publish' }
+  })
+
+  const pending = await session.submitUserMessage('发布')
+  assert.equal(pending.status, 'awaiting_approval')
+  await assert.rejects(
+    session.setApprovalMode('read_only'),
+    error => error.code === 'APPROVAL_MODE_CHANGE_UNSAFE'
+  )
+
+  assert.equal(executions, 0)
+  assert.equal(session.snapshot().status, 'awaiting_approval')
+  assert.equal(session.snapshot().approvalMode, 'ask')
+  assert.equal(session.snapshot().observations.length, 0)
+})
+
+test('approval mode cannot race a planner that is already running', async () => {
+  const registry = new ToolRegistry()
+  let executions = 0
+  registry.register('publish', defineTool({
+    name: 'publish',
+    riskLevel: 'dangerous',
+    approvalPolicy: 'always'
+  }, async () => {
+    executions += 1
+    return { ok: true }
+  }))
+  let releasePlanner
+  let markPlannerStarted
+  const plannerStarted = new Promise(resolve => { markPlannerStarted = resolve })
+  const plannerGate = new Promise(resolve => { releasePlanner = resolve })
+  const session = new WorkbenchSession({
+    ...deterministicRuntime(),
+    toolRegistry: registry,
+    planner: async () => {
+      markPlannerStarted()
+      await plannerGate
+      return { type: 'tool_call', name: 'publish' }
+    }
+  })
+
+  const running = session.submitUserMessage('发布')
+  await plannerStarted
+  await assert.rejects(
+    session.setApprovalMode('auto'),
+    error => error.code === 'APPROVAL_MODE_CHANGE_UNSAFE'
+  )
+  releasePlanner()
+  const pending = await running
+
+  assert.equal(pending.status, 'awaiting_approval')
+  assert.equal(pending.approvalMode, 'ask')
+  assert.equal(executions, 0)
+})
+
 test('rejected approval becomes an observation and lets the planner explain or reroute', async () => {
   const runtime = deterministicRuntime()
   let executions = 0
@@ -241,8 +447,13 @@ test('a serialized pending approval cannot replay a side effect without raw in-m
     restored.resolveApproval(waiting.pendingApproval.id, 'approved'),
     error => error.code === 'WORKBENCH_RAW_TOOL_INPUT_UNAVAILABLE'
   )
+  await assert.rejects(
+    restored.setApprovalMode('auto'),
+    error => error.code === 'APPROVAL_MODE_CHANGE_UNSAFE'
+  )
   assert.equal(executions, 0)
   assert.equal(restored.snapshot().status, 'awaiting_approval')
+  assert.equal(restored.snapshot().approvalMode, 'ask')
 
   const result = await restored.resolveApproval(waiting.pendingApproval.id, 'rejected')
 
@@ -250,6 +461,359 @@ test('a serialized pending approval cannot replay a side effect without raw in-m
   assert.equal(result.status, 'completed')
   assert.equal(result.eventCount, persisted.length + 4)
   assert.deepEqual(projectWorkbenchEvents(restored.events()), result)
+})
+
+test('guidance supersedes an in-flight planner action before a stale tool can execute', async () => {
+  const registry = new ToolRegistry()
+  let executions = 0
+  registry.register('stale_write', defineTool({
+    name: 'stale_write',
+    riskLevel: 'safe',
+    approvalPolicy: 'never'
+  }, async () => {
+    executions += 1
+    return { ok: true }
+  }))
+  let releasePlanner
+  let markPlannerStarted
+  const plannerStarted = new Promise(resolve => { markPlannerStarted = resolve })
+  const plannerGate = new Promise(resolve => { releasePlanner = resolve })
+  let plannerCalls = 0
+  const session = new WorkbenchSession({
+    ...deterministicRuntime(),
+    toolRegistry: registry,
+    planner: async ({ session: state }) => {
+      plannerCalls += 1
+      if (plannerCalls === 1) {
+        markPlannerStarted()
+        await plannerGate
+        return { type: 'tool_call', name: 'stale_write', input: { value: '旧计划' } }
+      }
+      assert.equal(state.lastGuidance.content, '不要执行旧写入，直接结束')
+      assert.equal(state.messages.at(-1).guidance, true)
+      return { type: 'finish', result: { content: '已按最新引导结束' } }
+    }
+  })
+
+  const running = session.submitUserMessage('开始处理')
+  await plannerStarted
+  const guided = await session.submitGuidance('不要执行旧写入，直接结束')
+  assert.equal(guided.guidancePending, true)
+  assert.equal(guided.turnCount, 1)
+  releasePlanner()
+  const completed = await running
+
+  assert.equal(completed.status, 'completed')
+  assert.equal(completed.turnCount, 1)
+  assert.equal(completed.guidancePending, false)
+  assert.equal(completed.guidanceCount, 1)
+  assert.equal(executions, 0)
+  assert.equal(completed.toolCalls.length, 0)
+  assert.equal(plannerCalls, 2)
+  assert.equal(session.events().filter(event => event.type === 'planning_superseded').length, 1)
+})
+
+test('guidance received during a tool run is checkpointed for the next planner step', async () => {
+  const registry = new ToolRegistry()
+  let executions = 0
+  let releaseTool
+  let markToolStarted
+  const toolStarted = new Promise(resolve => { markToolStarted = resolve })
+  const toolGate = new Promise(resolve => { releaseTool = resolve })
+  registry.register('long_read', defineTool({
+    name: 'long_read',
+    riskLevel: 'safe',
+    approvalPolicy: 'never'
+  }, async () => {
+    executions += 1
+    markToolStarted()
+    await toolGate
+    return { content: '读取完成' }
+  }))
+  const plannerSnapshots = []
+  const session = new WorkbenchSession({
+    ...deterministicRuntime(),
+    toolRegistry: registry,
+    planner: ({ session: state }) => {
+      plannerSnapshots.push(state)
+      return state.observations.length === 0
+        ? { type: 'tool_call', name: 'long_read' }
+        : { type: 'finish', result: { content: '已结合新引导完成' } }
+    }
+  })
+
+  const running = session.submitUserMessage('读取项目')
+  await toolStarted
+  const guided = await session.submitGuidance('读取完成后只总结，不要再调用工具')
+  assert.equal(guided.guidancePending, true)
+  assert.equal(executions, 1)
+  releaseTool()
+  const completed = await running
+
+  assert.equal(completed.status, 'completed')
+  assert.equal(executions, 1)
+  assert.equal(plannerSnapshots.length, 2)
+  assert.equal(plannerSnapshots[1].lastGuidance.content, '读取完成后只总结，不要再调用工具')
+  assert.equal(plannerSnapshots[1].observations[0].status, 'succeeded')
+  const guidanceEvent = session.events().find(event => event.type === 'user_guidance')
+  const observationEvent = session.events().find(event => event.type === 'observation')
+  assert.ok(guidanceEvent.seq < observationEvent.seq)
+})
+
+test('guidance rejects a pending approval and never executes or replays its raw input', async () => {
+  const registry = new ToolRegistry()
+  let executions = 0
+  const rawSecret = 'Bearer secret-token-value-1234567890'
+  registry.register('publish_secret', defineTool({
+    name: 'publish_secret',
+    riskLevel: 'dangerous',
+    approvalPolicy: 'always'
+  }, async () => {
+    executions += 1
+    return { published: true }
+  }))
+  const session = new WorkbenchSession({
+    ...deterministicRuntime(),
+    toolRegistry: registry,
+    planner: ({ session: state }) => state.observations.length === 0
+      ? {
+          type: 'tool_call',
+          name: 'publish_secret',
+          input: { authorization: rawSecret, destination: 'production' }
+        }
+      : { type: 'finish', result: { content: '已废弃旧发布，改用只读方案' } }
+  })
+
+  const waiting = await session.submitUserMessage('发布到生产环境')
+  assert.equal(waiting.status, 'awaiting_approval')
+  const completed = await session.submitGuidance('不要发布，改用只读检查')
+
+  assert.equal(completed.status, 'completed')
+  assert.equal(executions, 0)
+  assert.equal(completed.pendingApproval, null)
+  assert.equal(completed.approvals[0].status, 'rejected')
+  assert.equal(completed.approvals[0].resolution, 'policy')
+  assert.equal(completed.toolCalls[0].status, 'rejected')
+  assert.equal(completed.toolCalls[0].approvalStatus, 'rejected')
+  assert.equal(completed.observations[0].status, 'rejected')
+  assert.equal(completed.observations[0].error.name, 'UserGuidanceRejected')
+  assert.equal(completed.observations[0].error.code, 'TOOL_SUPERSEDED_BY_GUIDANCE')
+  assert.equal(completed.lastGuidance.content, '不要发布，改用只读检查')
+  assert.doesNotMatch(JSON.stringify(session.events()), /secret-token-value/)
+})
+
+test('cancel must settle before resume and an unfinished tool is abandoned without replay', async () => {
+  const registry = new ToolRegistry()
+  let executions = 0
+  let releaseTool
+  let markToolStarted
+  const toolStarted = new Promise(resolve => { markToolStarted = resolve })
+  const toolGate = new Promise(resolve => { releaseTool = resolve })
+  let plannerCalls = 0
+  registry.register('slow_tool', defineTool({
+    name: 'slow_tool',
+    riskLevel: 'safe',
+    approvalPolicy: 'never'
+  }, async () => {
+    executions += 1
+    markToolStarted()
+    await toolGate
+    return { ok: true }
+  }))
+  const session = new WorkbenchSession({
+    ...deterministicRuntime(),
+    toolRegistry: registry,
+    planner: ({ session: state }) => {
+      plannerCalls += 1
+      return state.resumeCount > 0
+        ? { type: 'finish', result: { content: '恢复后重新规划完成' } }
+        : { type: 'tool_call', name: 'slow_tool' }
+    }
+  })
+  const sessionId = session.sessionId
+
+  const running = session.submitUserMessage('执行慢任务')
+  await toolStarted
+  assert.equal(session.cancel('用户停止'), true)
+  let runningSettled = false
+  void running.then(
+    () => { runningSettled = true },
+    () => { runningSettled = true }
+  )
+  const cancelledRun = assert.rejects(
+    running,
+    error => error.code === 'WORKBENCH_CANCELLED'
+  )
+  await new Promise(resolve => setImmediate(resolve))
+
+  assert.equal(session.snapshot().status, 'cancelled')
+  assert.equal(runningSettled, false)
+  await assert.rejects(
+    session.resume(),
+    error => error.code === 'WORKBENCH_RESUME_BUSY'
+  )
+  assert.equal(plannerCalls, 1)
+  assert.equal(session.events().filter(event => event.type === 'resumed').length, 0)
+
+  releaseTool()
+  await cancelledRun
+  assert.equal(runningSettled, true)
+  const completed = await session.resume()
+
+  assert.equal(completed.sessionId, sessionId)
+  assert.equal(completed.status, 'completed')
+  assert.equal(completed.resumeCount, 1)
+  assert.equal(completed.error, null)
+  assert.equal(executions, 1)
+  assert.equal(completed.toolCalls.length, 1)
+  assert.equal(completed.toolCalls[0].status, 'abandoned')
+  assert.equal(plannerCalls, 2)
+  assert.equal(session.events().filter(event => event.type === 'tool_call').length, 1)
+  assert.equal(session.events().filter(event => event.type === 'resumed').length, 1)
+})
+
+test('a new user turn clears prior live guidance while preserving its audit message', async () => {
+  let releasePlanner
+  let markPlannerStarted
+  const plannerStarted = new Promise(resolve => { markPlannerStarted = resolve })
+  const plannerGate = new Promise(resolve => { releasePlanner = resolve })
+  const plannerSnapshots = []
+  let plannerCalls = 0
+  const session = new WorkbenchSession({
+    ...deterministicRuntime(),
+    planner: async ({ session: state }) => {
+      plannerCalls += 1
+      plannerSnapshots.push(state)
+      if (plannerCalls === 1) {
+        markPlannerStarted()
+        await plannerGate
+        return { type: 'message', content: '过期回复' }
+      }
+      if (plannerCalls === 2) {
+        assert.equal(state.lastGuidance.content, '第一轮只做总结')
+        return { type: 'message', content: '第一轮完成' }
+      }
+      assert.equal(state.lastGuidance, null)
+      assert.equal(state.turnGuidanceCount, 0)
+      return { type: 'finish', result: { content: '第二轮完成' } }
+    }
+  })
+
+  const firstRunning = session.submitUserMessage('开始第一轮')
+  await plannerStarted
+  await session.submitGuidance('第一轮只做总结')
+  releasePlanner()
+  const first = await firstRunning
+  assert.equal(first.status, 'awaiting_user')
+  assert.equal(first.lastGuidance.content, '第一轮只做总结')
+
+  const second = await session.submitUserMessage('开始新的第二轮，不沿用旧引导')
+
+  assert.equal(second.status, 'completed')
+  assert.equal(second.lastGuidance, null)
+  assert.equal(plannerSnapshots[2].lastGuidance, null)
+  assert.equal(second.messages.some(message => message.guidance && message.content === '第一轮只做总结'), true)
+})
+
+test('restored cancelled history resumes in ask mode and abandons raw pending tools', async () => {
+  const registry = new ToolRegistry()
+  let executions = 0
+  const rawSecret = 'sk-history-secret-value-1234567890'
+  registry.register('dangerous_write', defineTool({
+    name: 'dangerous_write',
+    riskLevel: 'dangerous',
+    approvalPolicy: 'always'
+  }, async () => {
+    executions += 1
+    return { ok: true }
+  }))
+  const runtime = deterministicRuntime()
+  const original = new WorkbenchSession({
+    ...runtime,
+    approvalMode: 'ask',
+    toolRegistry: registry,
+    planner: () => ({
+      type: 'tool_call',
+      name: 'dangerous_write',
+      input: { path: 'old.txt', apiKey: rawSecret }
+    })
+  })
+  const waiting = await original.submitUserMessage('写入旧内容')
+  assert.equal(waiting.status, 'awaiting_approval')
+  assert.equal(original.cancel('稍后继续'), true)
+  const persisted = JSON.parse(JSON.stringify(original.events()))
+  assert.doesNotMatch(JSON.stringify(persisted), /history-secret-value/)
+
+  const restored = new WorkbenchSession({
+    ...runtime,
+    sessionId: original.sessionId,
+    events: persisted,
+    approvalMode: 'full_access',
+    toolRegistry: registry,
+    planner: ({ session: state }) => state.resumeCount > 0 && state.toolCalls.length === 1
+      ? { type: 'tool_call', name: 'dangerous_write', input: { path: 'new.txt' } }
+      : { type: 'finish', result: { content: '完成' } }
+  })
+
+  assert.equal(restored.snapshot().status, 'cancelled')
+  assert.equal(restored.snapshot().approvalMode, 'ask')
+  const resumed = await restored.resume()
+
+  assert.equal(resumed.status, 'awaiting_approval')
+  assert.equal(resumed.approvalMode, 'ask')
+  assert.equal(resumed.resumeCount, 1)
+  assert.equal(executions, 0)
+  assert.equal(resumed.toolCalls.length, 2)
+  assert.equal(resumed.toolCalls[0].status, 'abandoned')
+  assert.equal(resumed.toolCalls[0].approvalStatus, 'rejected')
+  assert.equal(resumed.approvals[0].status, 'rejected')
+  assert.equal(resumed.approvals[0].resolution, 'policy')
+  assert.equal(resumed.toolCalls[1].status, 'awaiting_approval')
+  assert.equal(resumed.toolCalls[1].approvalStatus, 'pending')
+  assert.equal(restored.cancel('测试结束'), true)
+})
+
+test('guidance is bounded per turn and serialized with credential redaction', async () => {
+  let releasePlanner
+  let markPlannerStarted
+  const plannerStarted = new Promise(resolve => { markPlannerStarted = resolve })
+  const plannerGate = new Promise(resolve => { releasePlanner = resolve })
+  let plannerCalls = 0
+  const session = new WorkbenchSession({
+    ...deterministicRuntime(),
+    planner: async () => {
+      plannerCalls += 1
+      if (plannerCalls === 1) {
+        markPlannerStarted()
+        await plannerGate
+      }
+      return { type: 'finish', result: { content: '完成' } }
+    }
+  })
+
+  const running = session.submitUserMessage('开始')
+  await plannerStarted
+  await assert.rejects(
+    session.submitGuidance('x'.repeat(WORKBENCH_GUIDANCE_MAX_CHARACTERS + 1)),
+    error => error.code === 'WORKBENCH_GUIDANCE_TOO_LONG'
+  )
+  const guidanceSecret = 'API_KEY=sk-guidance-secret-value-1234567890'
+  await session.submitGuidance(guidanceSecret)
+  for (let index = 1; index < WORKBENCH_GUIDANCE_MAX_PER_TURN; index += 1) {
+    await session.submitGuidance(`补充引导 ${index}`)
+  }
+  await assert.rejects(
+    session.submitGuidance('超过本轮频率限制'),
+    error => error.code === 'WORKBENCH_GUIDANCE_RATE_LIMITED'
+  )
+  assert.equal(session.snapshot().turnGuidanceCount, WORKBENCH_GUIDANCE_MAX_PER_TURN)
+  assert.doesNotMatch(JSON.stringify(session.events()), /guidance-secret-value/)
+  releasePlanner()
+  const completed = await running
+
+  assert.equal(completed.status, 'completed')
+  assert.equal(completed.guidanceCount, WORKBENCH_GUIDANCE_MAX_PER_TURN)
+  assert.equal(plannerCalls, 2)
 })
 
 test('tool failures are observations so the planner can recover within the same turn', async () => {

@@ -43,6 +43,12 @@
     <template v-else-if="name === 'key'"><circle cx="8" cy="15" r="4" /><path d="m11 12 8-8M16 7l2 2M14 9l2 2" /></template>
     <template v-else-if="name === 'eye'"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" /><circle cx="12" cy="12" r="2.5" /></template>
     <template v-else-if="name === 'eye-off'"><path d="m3 3 18 18M10.6 6.2A10.7 10.7 0 0 1 12 6c6 0 9.5 6 9.5 6a13 13 0 0 1-2.1 2.8M6.6 6.6C4 8.4 2.5 12 2.5 12s3.5 6 9.5 6a9.8 9.8 0 0 0 3.1-.5M9.9 9.9a3 3 0 0 0 4.2 4.2" /></template>
+    <template v-else-if="name === 'sun'"><circle cx="12" cy="12" r="3.5" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></template>
+    <template v-else-if="name === 'moon'"><path d="M20 15.2A8.2 8.2 0 0 1 8.8 4 8.6 8.6 0 1 0 20 15.2Z" /></template>
+    <template v-else-if="name === 'layout'"><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M3 9h18M9 9v11" /></template>
+    <template v-else-if="name === 'automation'"><path d="M5 7h10a4 4 0 0 1 4 4v1M19 17H9a4 4 0 0 1-4-4v-1" /><path d="m16 4 3 3-3 3M8 14l-3 3 3 3" /></template>
+    <template v-else-if="name === 'database'"><ellipse cx="12" cy="5.5" rx="7" ry="3" /><path d="M5 5.5v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6M5 11.5v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6" /></template>
+    <template v-else-if="name === 'info'"><circle cx="12" cy="12" r="9" /><path d="M12 11v6M12 7h.01" /></template>
     <template v-else><circle cx="12" cy="12" r="8" /><path d="M12 8v4l2 2" /></template>
   </svg>
 </template>
