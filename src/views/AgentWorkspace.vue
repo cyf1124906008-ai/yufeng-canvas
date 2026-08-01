@@ -1,121 +1,78 @@
 <template>
-  <main class="agent-workspace">
-    <header class="agent-topbar">
-      <router-link to="/" class="agent-brand" aria-label="YUFENG Agent 首页">
-        <img src="../assets/logo.png" alt="" />
-        <span>
-          <strong>YUFENG AGENT</strong>
-          <small>Autonomous Creative Harness</small>
-        </span>
-      </router-link>
+  <main class="agent-workbench" :class="{ 'inspector-open': inspectorOpen }">
+    <workbench-sidebar
+      :records="historyRecords"
+      :selected-id="workbench.selectedSessionId.value"
+      :loading="false"
+      :provider="providerLabel"
+      :workspaces="workspaces"
+      :active-workspace-id="workspace.id"
+      :new-task-disabled="workbench.isRunning.value || workbench.isAwaitingApproval.value"
+      :open="navigationOpen"
+      @new-task="newTask"
+      @select-history="selectHistory"
+      @delete-history="confirmDeleteHistory"
+      @clear-history="confirmClearHistory"
+      @select-workspace="selectWorkspace"
+      @open-settings="showSettings = true"
+      @close="navigationOpen = false"
+    />
 
-      <div class="topbar-actions">
-        <span class="runtime-pill">{{ desktopMode ? 'DESKTOP APP' : 'LOCAL PREVIEW' }}</span>
-        <span class="provider-pill">{{ modelStore.providerLabel || modelStore.currentProvider }}</span>
-        <button type="button" class="ghost-button" @click="showSettings = true">模型与 API</button>
-      </div>
-    </header>
+    <section class="workbench-center">
+      <workbench-activity-feed
+        :snapshot="displaySnapshot"
+        :artifacts="displayArtifacts"
+        :injected-activities="workbenchActivities"
+        :mode="sessionMode"
+        :loading="false"
+        :read-only="workbench.isHistorySelection.value"
+        :suggestions="suggestions"
+        @open-navigation="navigationOpen = true"
+        @toggle-inspector="inspectorOpen = !inspectorOpen"
+        @apply-suggestion="applySuggestion"
+        @reuse-goal="reuseHistoricalGoal"
+        @artifact-select="selectArtifact"
+        @approval="handleApproval"
+      />
 
-    <section class="agent-hero">
-      <p class="hero-kicker">GOAL IN · WORK OUT</p>
-      <h1>告诉我最终要什么，<br />剩下的由 Agent 完成。</h1>
-      <p class="hero-copy">
-        Agent 自主理解目标、选择模型、执行、观察结果并决定下一步。你不需要创建节点，也不需要手动连接工作流。
-      </p>
-
-      <form class="goal-composer" @submit.prevent="startRun">
-        <textarea
-          v-model="goal"
-          rows="4"
-          :disabled="agent.isRunning.value"
-          placeholder="例如：帮我做一张高端新能源汽车广告海报，黑银配色，科技感，9:16，适合抖音。"
-          @keydown.meta.enter.prevent="startRun"
-          @keydown.ctrl.enter.prevent="startRun"
-        ></textarea>
-        <div class="composer-footer">
-          <div class="composer-hints">
-            <span>Agent 自动路由模型</span>
-            <span>执行后自动质检</span>
-            <span>⌘ / Ctrl + Enter</span>
-          </div>
-          <button type="submit" class="run-button" :disabled="!goal.trim() || agent.isRunning.value">
-            <span v-if="agent.isRunning.value" class="run-spinner"></span>
-            {{ agent.isRunning.value ? 'Agent 执行中' : '开始执行' }}
-          </button>
-        </div>
-      </form>
-
-      <div class="goal-examples" aria-label="目标示例">
-        <button v-for="example in examples" :key="example" type="button" @click="goal = example">
-          {{ example }}
-        </button>
-      </div>
+      <workbench-composer
+        v-model="goal"
+        :running="workbench.isRunning.value"
+        :disabled="workbench.isAwaitingApproval.value || workbench.isHistorySelection.value"
+        :placeholder="composerPlaceholder"
+        :tools="toolShortcuts"
+        :selected-tool="selectedTool"
+        :model-label="selectedModelLabel"
+        :autofocus-token="composerFocusToken"
+        @submit="submit"
+        @stop="cancel"
+        @select-tool="selectTool"
+        @open-settings="showSettings = true"
+      />
     </section>
 
-    <section class="workspace-stage">
-      <aside class="history-column">
-        <button
-          v-if="viewingHistory"
-          type="button"
-          class="live-run-button"
-          @click="agent.showLiveRun()"
-        >
-          ← 返回当前任务
-        </button>
-        <agent-run-history-panel
-          :records="agent.historyRecords.value"
-          :selected-id="agent.selectedHistoryId.value"
-          :loading="agent.historyLoading.value"
-          @select="agent.selectHistory"
-          @delete="confirmDeleteHistory"
-          @clear="confirmClearHistory"
-        />
-        <p class="history-note">
-          历史只用于本地回看，不会被送给 Planner。删除时会同步清理 App 内的图片副本；远程链接过期后可能无法预览。
-        </p>
-      </aside>
+    <workbench-inspector
+      :snapshot="displaySnapshot"
+      :artifacts="displayArtifacts"
+      :context="sessionContext"
+      :file-changes="fileChanges"
+      :usage="usage"
+      :open="inspectorOpen"
+      @close="inspectorOpen = false"
+      @artifact-select="selectArtifact"
+    />
 
-      <div class="workspace-content">
-        <div v-if="viewingHistory" class="history-view-banner">
-          <div>
-            <span>READ-ONLY HISTORY</span>
-            <strong>正在回看已保存的 Agent 运行</strong>
-          </div>
-          <button type="button" @click="reuseHistoricalGoal">使用此目标新建任务</button>
-        </div>
-        <agent-run-panel
-          v-if="showRunPanel"
-          :snapshot="displaySnapshot"
-          :artifacts="displayArtifacts"
-          :read-only="viewingHistory"
-          @stop="stopRun"
-          @retry="retryRun"
-          @artifact-select="selectArtifact"
-        />
-
-        <section v-else class="agent-capabilities">
-          <article>
-            <span>01</span>
-            <h2>理解目标</h2>
-            <p>把一句自然语言目标拆成当前最值得执行的一步，而不是预先写死整条工作流。</p>
-          </article>
-          <article>
-            <span>02</span>
-            <h2>自主调度</h2>
-            <p>只声明所需能力，由 Model Router 按质量、速度、成本与可用性选择模型。</p>
-          </article>
-          <article>
-            <span>03</span>
-            <h2>观察再行动</h2>
-            <p>每次真实执行后观察作品，再决定采用、重做或进入下一项创作任务。</p>
-          </article>
-        </section>
-      </div>
-    </section>
+    <button
+      v-if="navigationOpen || inspectorOpen"
+      type="button"
+      class="mobile-backdrop"
+      aria-label="关闭面板"
+      @click="closeMobilePanels"
+    ></button>
 
     <api-settings v-model:show="showSettings" />
 
-    <div v-if="selectedArtifact" class="artifact-lightbox" role="dialog" aria-modal="true" @click.self="selectedArtifact = null">
+    <div v-if="selectedArtifact" class="artifact-lightbox" role="dialog" aria-modal="true" aria-label="产物预览" @click.self="selectedArtifact = null">
       <button type="button" aria-label="关闭预览" @click="selectedArtifact = null">×</button>
       <img v-if="selectedArtifact.kind === 'image'" :src="selectedArtifact.url" :alt="selectedArtifact.label" />
       <video v-else-if="selectedArtifact.kind === 'video'" :src="selectedArtifact.url" controls autoplay></video>
@@ -124,421 +81,361 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import ApiSettings from '../components/ApiSettings.vue'
-import AgentRunHistoryPanel from '../components/agent/AgentRunHistoryPanel.vue'
-import AgentRunPanel from '../components/agent/AgentRunPanel.vue'
-import { useHeadlessCreativeAgent } from '../agent/runtime/useHeadlessCreativeAgent.js'
+import WorkbenchActivityFeed from '../components/workbench/WorkbenchActivityFeed.vue'
+import WorkbenchComposer from '../components/workbench/WorkbenchComposer.vue'
+import WorkbenchInspector from '../components/workbench/WorkbenchInspector.vue'
+import WorkbenchSidebar from '../components/workbench/WorkbenchSidebar.vue'
+import { WORKBENCH_TOOL_SHORTCUTS } from '../components/workbench/workbenchView.js'
+import { useAgentWorkbench } from '../agent/runtime/useAgentWorkbench.js'
 import { useModelStore } from '../stores/pinia/index.js'
 
-const modelStore = useModelStore()
-const agent = useHeadlessCreativeAgent({ modelStore })
-const goal = ref('')
-const showSettings = ref(false)
-const selectedArtifact = ref(null)
-const desktopMode = import.meta.env.APP_TARGET === 'desktop'
-const examples = [
-  '做一张黑银科技感新能源汽车海报，9:16',
-  '生成一张高端咖啡品牌主视觉，暖金色电影光影',
-  '制作一个 10 秒咖啡广告，先生成首图再转成竖屏视频'
-]
-const viewingHistory = computed(() => !!agent.selectedHistoryId.value && !!agent.historySnapshot.value)
-const displaySnapshot = computed(() => viewingHistory.value ? agent.historySnapshot.value : agent.snapshot.value)
-const displayArtifacts = computed(() => viewingHistory.value ? agent.historyArtifacts.value : agent.artifacts.value)
-const showRunPanel = computed(() => viewingHistory.value || displaySnapshot.value.status !== 'idle' || !!displaySnapshot.value.goal)
+defineOptions({ name: 'AgentWorkspace' })
 
-const startRun = async () => {
-  const input = goal.value.trim()
-  if (!input || agent.isRunning.value) return
+const modelStore = useModelStore()
+const workbench = useAgentWorkbench({ modelStore })
+
+const workspace = computed(() => ({
+  id: 'local-workspace',
+  label: workbench.workspaceRoot.value
+    ? workbench.workspaceRoot.value.split(/[\\/]/).filter(Boolean).at(-1) || '本地工作区'
+    : '选择本地工作区'
+}))
+const usage = ref({})
+
+const goal = ref('')
+const selectedTool = ref('auto')
+const selectedArtifact = ref(null)
+const showSettings = ref(false)
+const navigationOpen = ref(false)
+const inspectorOpen = ref(typeof window !== 'undefined' && window.innerWidth > 1180)
+const composerFocusToken = ref(0)
+
+const workspaces = computed(() => [
+  {
+    id: 'local-workspace',
+    label: workspace.value.label,
+    description: workbench.workspaceRoot.value || (workbench.desktopReady.value ? '点击选择目录' : 'Mac App 中启用'),
+    icon: '⌂',
+    badge: workbench.desktopReady.value ? 'LOCAL' : 'WEB'
+  },
+  { id: 'tools', label: '工具与权限', description: '终端、文件、电脑控制', icon: '>_', badge: 'V0.6' },
+  { id: 'artifacts', label: '产物', description: '截图、图片和视频', icon: '□' }
+])
+const suggestions = [
+  '检查当前项目，告诉我它的架构和最需要修复的问题',
+  '读取 README 和 package.json，然后运行测试并总结结果',
+  '截取当前屏幕，告诉我正在打开什么，并建议下一步操作',
+  '调用 Creative 工具制作一张黑银科技感新能源汽车海报'
+]
+const toolShortcuts = WORKBENCH_TOOL_SHORTCUTS
+
+const sessionMode = computed(() => workbench.isHistorySelection.value
+  ? 'history'
+  : (workbench.messages.value.length ? 'live' : 'draft'))
+const firstUserMessage = computed(() => workbench.messages.value.find(message => message.role === 'user'))
+const activeToolCall = computed(() => [...workbench.toolCalls.value].reverse().find(call =>
+  ['pending', 'running', 'awaiting_approval'].includes(call.status)
+))
+const displaySnapshot = computed(() => ({
+  ...workbench.projection.value,
+  runId: workbench.projection.value.sessionId,
+  goal: firstUserMessage.value?.content || '',
+  stepCount: workbench.toolCalls.value.length,
+  currentAction: activeToolCall.value || null,
+  timeline: []
+}))
+const screenshotArtifacts = computed(() => workbench.screenshots.value.map(screenshot => ({
+  id: screenshot.id,
+  kind: 'image',
+  type: 'image',
+  url: screenshot.dataUrl,
+  label: '桌面截图',
+  status: 'completed',
+  createdAt: screenshot.createdAt
+})))
+const displayArtifacts = computed(() => [
+  ...screenshotArtifacts.value,
+  ...workbench.creativeArtifacts.value
+])
+const workbenchActivities = computed(() => [
+  ...workbench.messages.value.filter(message => message.id !== firstUserMessage.value?.id),
+  ...workbench.toolCalls.value,
+  ...workbench.observations.value,
+  ...(workbench.pendingApproval.value && workbench.pendingToolCall.value
+    ? [{
+        type: 'approval_requested',
+        id: workbench.pendingApproval.value.id,
+        approvalId: workbench.pendingApproval.value.id,
+        toolCallId: workbench.pendingApproval.value.toolCallId,
+        toolName: workbench.pendingToolCall.value.name,
+        input: workbench.pendingToolCall.value.input,
+        status: 'pending_approval',
+        message: approvalMessage.value,
+        createdAt: workbench.pendingApproval.value.requestedAt
+      }]
+    : [])
+])
+const providerLabel = computed(() => String(modelStore.providerLabel || modelStore.currentProvider || 'DataEyes'))
+const selectedModelLabel = computed(() => String(modelStore.selectedChatModel || '自动路由'))
+const approvalMessage = computed(() => {
+  const call = workbench.pendingToolCall.value
+  if (!call) return ''
+  if (call.name === 'terminal.run') {
+    return `允许执行命令：${JSON.stringify(call.input?.command || '')}，参数：${JSON.stringify(call.input?.args || [])}，目录：${JSON.stringify(call.input?.cwd || '.')}`
+  }
+  if (call.name === 'workspace.write') {
+    const bytes = new TextEncoder().encode(String(call.input?.content || '')).length
+    return `允许${call.input?.create ? '新建' : '覆盖'}文件：${call.input?.path || '未指定路径'}（${bytes} 字节）`
+  }
+  if (call.name === 'computer.click') return `允许在 ${call.input?.application || '未指定应用'} 的屏幕坐标 (${call.input?.x}, ${call.input?.y}) 点击一次`
+  if (call.name === 'computer.type_text') return `允许向 ${call.input?.application || '未指定应用'} 输入：${JSON.stringify(call.input?.text || '')}`
+  if (call.name === 'computer.open_application') return `允许打开应用：${JSON.stringify(call.input?.application || '')}`
+  if (call.name === 'computer.inspect_screen') return `允许截取并分析${call.input?.application ? ` ${call.input.application} 的` : '当前'}屏幕`
+  if (call.name.startsWith('computer.')) return `允许电脑操作：${call.name}`
+  if (call.name === 'creative.generate') return '允许调用图片/视频模型；此操作可能产生费用。'
+  return `允许 Agent 执行工具：${call.name}`
+})
+const composerPlaceholder = computed(() => {
+  if (workbench.isHistorySelection.value) return '这是一条只读历史；可点击“使用此目标新建任务”。'
+  if (workbench.isAwaitingApproval.value) return '请先批准或拒绝上方操作…'
+  if (workbench.isRunning.value) return 'Agent 正在规划或执行工具…'
+  return workbench.messages.value.length ? '继续补充要求或提出下一步…' : '描述你希望 Agent 在电脑上完成的任务…'
+})
+const sessionContext = computed(() => {
+  return {
+    工作区: workspace.value.label,
+    根目录: workbench.workspaceRoot.value || '未选择',
+    模式: workbench.desktopReady.value ? '桌面 App' : 'Web 预览',
+    Provider: providerLabel.value,
+    模型: selectedModelLabel.value,
+    工具数量: workbench.toolRegistry.list().length,
+    电脑权限: workbench.capabilities.value?.computer ? JSON.stringify(workbench.capabilities.value.computer) : '不可用'
+  }
+})
+const fileChanges = computed(() => workbench.observations.value
+  .filter(observation => observation.toolName === 'workspace.write' && observation.status === 'succeeded')
+  .map(observation => ({
+    id: observation.id,
+    path: observation.output?.path || '未知文件',
+    status: observation.output?.created ? 'created' : 'modified'
+  })))
+const historyRecords = computed(() => workbench.historyRecords.value.map(record => ({
+  id: record.sessionId,
+  runId: record.sessionId,
+  goal: record.title,
+  status: record.status,
+  stepCount: record.toolCallCount,
+  artifactCount: 0,
+  createdAt: record.createdAt,
+  historyUpdatedAt: record.updatedAt
+})))
+
+const focusComposer = () => {
+  composerFocusToken.value += 1
+}
+
+const newTask = () => {
+  if (workbench.isRunning.value || workbench.isAwaitingApproval.value) return
+  workbench.newTask()
+  goal.value = ''
+  selectedTool.value = 'auto'
+  selectedArtifact.value = null
+  closeMobilePanels()
+  focusComposer()
+}
+
+const submit = async (input = goal.value) => {
+  const normalized = String(input || '').trim()
+  if (!normalized || workbench.isRunning.value || workbench.isAwaitingApproval.value) return
+  selectedArtifact.value = null
+  closeMobilePanels()
   try {
-    await agent.run(input)
+    goal.value = ''
+    await workbench.submit(normalized)
   } catch (error) {
-    if (error?.name === 'AbortError' || error?.code === 'AGENT_CANCELLED' || error?.code === 'ABORT_ERR') return
+    if (['AbortError'].includes(error?.name) || ['WORKBENCH_CANCELLED', 'ABORT_ERR'].includes(error?.code)) return
     window.$message?.error(error?.message || 'Agent 执行失败')
   }
 }
 
-const retryRun = async () => {
+const cancel = () => {
+  workbench.cancel()
+}
+
+const retry = async () => {
+  const lastUser = [...workbench.messages.value].reverse().find(message => message.role === 'user')
+  if (lastUser?.content) await submit(lastUser.content)
+}
+
+const approve = async (payload) => {
+  if (!workbench.pendingApproval.value || payload?.id !== workbench.pendingApproval.value.id) return false
+  await workbench.approve()
+  return true
+}
+
+const reject = async (payload) => {
+  if (!workbench.pendingApproval.value || payload?.id !== workbench.pendingApproval.value.id) return false
+  await workbench.reject('用户在工作台中拒绝了操作')
+  return true
+}
+
+const handleApproval = async (payload) => {
   try {
-    await agent.retry()
+    return payload?.decision === 'approve' ? await approve(payload) : await reject(payload)
   } catch (error) {
-    if (error?.name === 'AbortError' || error?.code === 'AGENT_CANCELLED' || error?.code === 'ABORT_ERR') return
-    window.$message?.error(error?.message || 'Agent 重试失败')
+    window.$message?.error(error?.message || '处理审批失败')
+    return false
   }
 }
 
-const stopRun = ({ runId } = {}) => {
-  if (viewingHistory.value) return
-  const liveRunId = String(agent.snapshot.value.runId || '')
-  if (runId && liveRunId && String(runId) !== liveRunId) return
-  agent.cancel()
+const selectHistory = (sessionId) => {
+  navigationOpen.value = false
+  const selected = workbench.selectSession(sessionId)
+  if (!selected) {
+    window.$message?.warning(workbench.isRunning.value || workbench.isAwaitingApproval.value
+      ? '当前任务仍在执行，请先停止后再切换历史'
+      : '没有找到或无法恢复这条任务记录')
+  }
 }
 
 const reuseHistoricalGoal = () => {
-  const historicalGoal = String(displaySnapshot.value?.goal || '').trim()
-  if (!historicalGoal) {
-    window.$message?.warning('这条历史没有可复用的目标')
+  const historicalGoal = String(firstUserMessage.value?.content || '').trim()
+  workbench.newTask()
+  goal.value = historicalGoal
+  focusComposer()
+}
+
+const applySuggestion = (value) => {
+  if (workbench.isRunning.value) return
+  goal.value = String(value || '')
+  focusComposer()
+}
+
+const selectTool = (tool) => {
+  if (!tool?.id || workbench.isRunning.value) return
+  selectedTool.value = tool.id
+  if (!goal.value.trim() && tool.hint) goal.value = tool.hint
+  focusComposer()
+}
+
+const selectWorkspace = async (workspaceId) => {
+  navigationOpen.value = false
+  if (workspaceId === 'local-workspace') {
+    try {
+      await workbench.chooseWorkspace()
+    } catch (error) {
+      window.$message?.warning(error?.message || '无法选择工作区')
+    }
     return
   }
-  goal.value = historicalGoal
-  agent.showLiveRun()
+  if (['tools', 'artifacts'].includes(workspaceId)) inspectorOpen.value = true
+}
+
+const selectArtifact = (artifact) => {
+  const normalized = artifact?.normalizedArtifact || artifact
+  if (normalized?.url) selectedArtifact.value = normalized
 }
 
 const confirmAction = ({ title, content, positiveText }, action) => {
   if (window.$dialog?.warning) {
-    window.$dialog.warning({
-      title,
-      content,
-      positiveText,
-      negativeText: '取消',
-      onPositiveClick: action
-    })
+    window.$dialog.warning({ title, content, positiveText, negativeText: '取消', onPositiveClick: action })
     return
   }
   if (window.confirm(content)) action()
 }
 
 const confirmDeleteHistory = (runId) => {
-  const record = agent.historyRecords.value.find(item => String(item?.runId || item?.id || '') === String(runId))
+  const record = historyRecords.value.find(item => String(item?.runId || item?.id || '') === String(runId))
   const label = String(record?.goal || '').trim()
   confirmAction({
-    title: '删除这条历史？',
-    content: `${label ? `“${label}”` : '这条运行记录'}将被删除，App 内对应的图片副本也会清理。此操作无法撤销。`,
-    positiveText: '确认删除'
-  }, () => agent.deleteHistory(runId))
+    title: '删除这条任务？',
+    content: `${label ? `“${label}”` : '这条任务'}的本地事件记录将被删除，此操作无法撤销。`,
+    positiveText: '删除'
+  }, () => {
+    workbench.deleteSession(runId)
+  })
 }
 
-const confirmClearHistory = () => {
-  confirmAction({
-    title: '清空全部历史？',
-    content: '所有运行记录和 App 内对应的图片副本都会删除。此操作无法撤销。',
-    positiveText: '确认清空'
-  }, () => agent.clearHistory())
+const confirmClearHistory = () => confirmAction({
+  title: '清空全部任务历史？',
+  content: '所有 Workbench 本地任务事件都会被删除，此操作无法撤销。',
+  positiveText: '全部清空'
+}, () => {
+  workbench.clearHistory()
+})
+
+const closeMobilePanels = () => {
+  navigationOpen.value = false
+  inspectorOpen.value = false
 }
 
-const selectArtifact = ({ normalizedArtifact }) => {
-  if (normalizedArtifact?.url) selectedArtifact.value = normalizedArtifact
+const onGlobalKeydown = (event) => {
+  if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'n') {
+    event.preventDefault()
+    newTask()
+  }
+  if (event.key === 'Escape') {
+    if (selectedArtifact.value) selectedArtifact.value = null
+    else closeMobilePanels()
+  }
 }
+
+onMounted(() => window.addEventListener('keydown', onGlobalKeydown))
+onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKeydown))
+
+defineExpose({
+  workspace,
+  messages: workbench.messages,
+  toolCalls: workbench.toolCalls,
+  pendingApproval: workbench.pendingApproval,
+  submit,
+  retry,
+  approve,
+  reject,
+  cancel,
+  newTask,
+  selectHistory,
+  workbench
+})
 </script>
 
 <style scoped>
-.agent-workspace {
-  height: 100vh;
-  min-height: 100vh;
-  overflow-x: hidden;
-  overflow-y: auto;
-  color: var(--text-primary, #e6fff8);
-  background:
-    radial-gradient(circle at 15% 0%, rgba(34, 255, 181, 0.12), transparent 31%),
-    radial-gradient(circle at 92% 12%, rgba(56, 189, 248, 0.1), transparent 28%),
-    linear-gradient(155deg, #031017 0%, #061c22 52%, #07131f 100%);
-}
-
-.agent-topbar {
-  position: sticky;
-  z-index: 20;
-  top: 0;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  min-height: 76px;
-  border-bottom: 1px solid rgba(203, 255, 239, 0.1);
-  padding: 0 clamp(18px, 4vw, 64px);
-  background: rgba(3, 16, 23, 0.78);
-  backdrop-filter: blur(22px);
-}
-
-.agent-brand {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  color: #ecfff9;
-  text-decoration: none;
-}
-
-.agent-brand img {
-  width: 42px;
-  height: 42px;
-  border-radius: 13px;
-  box-shadow: 0 12px 34px rgba(45, 212, 191, 0.22);
-}
-
-.agent-brand span { display: flex; flex-direction: column; }
-.agent-brand strong { font-size: 14px; letter-spacing: 0.12em; }
-.agent-brand small { margin-top: 2px; color: rgba(214, 255, 244, 0.48); font-size: 10px; }
-
-.topbar-actions { display: flex; align-items: center; gap: 9px; }
-.runtime-pill,
-.provider-pill {
-  border: 1px solid rgba(125, 249, 231, 0.16);
-  border-radius: 999px;
-  padding: 7px 10px;
-  color: rgba(214, 255, 244, 0.68);
-  background: rgba(255, 255, 255, 0.04);
-  font-size: 9px;
-  font-weight: 900;
-  letter-spacing: 0.1em;
-}
-
-.provider-pill { color: #68f5d6; }
-.ghost-button,
-.goal-examples button {
-  border: 1px solid rgba(125, 249, 231, 0.16);
-  color: rgba(230, 255, 248, 0.8);
-  background: rgba(255, 255, 255, 0.05);
-}
-
-.ghost-button {
-  border-radius: 12px;
-  padding: 9px 13px;
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.ghost-button:hover,
-.goal-examples button:hover { border-color: rgba(95, 246, 210, 0.55); color: #6ff8d8; }
-
-.agent-hero {
-  width: min(1040px, calc(100% - 36px));
-  margin: 0 auto;
-  padding: clamp(68px, 9vw, 120px) 0 44px;
-}
-
-.hero-kicker {
-  margin: 0 0 18px;
-  color: #5ff6d2;
-  font-size: 11px;
-  font-weight: 950;
-  letter-spacing: 0.24em;
-}
-
-.agent-hero h1 {
-  margin: 0;
-  color: #f2fff9;
-  font-size: clamp(44px, 7.5vw, 86px);
-  font-weight: 950;
-  letter-spacing: -0.07em;
-  line-height: 0.98;
-}
-
-.hero-copy {
-  max-width: 720px;
-  margin: 24px 0 32px;
-  color: rgba(220, 255, 247, 0.56);
-  font-size: clamp(14px, 1.7vw, 17px);
-  line-height: 1.85;
-}
-
-.goal-composer {
+.agent-workbench {
+  --wb-bg: #151619;
+  --wb-panel: #111215;
+  --wb-border: #292b30;
+  --wb-text: #d9dade;
+  --wb-muted: #74777e;
+  display: grid;
+  grid-template-columns: 252px minmax(0, 1fr);
+  width: 100%;
+  height: 100dvh;
+  min-height: 0;
   overflow: hidden;
-  border: 1px solid rgba(125, 249, 231, 0.22);
-  border-radius: 28px;
-  background:
-    radial-gradient(circle at 8% 0%, rgba(45, 212, 191, 0.1), transparent 36%),
-    rgba(4, 23, 29, 0.82);
-  box-shadow: 0 34px 100px rgba(0, 0, 0, 0.34), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  color: var(--wb-text);
+  background: var(--wb-bg);
+  font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif;
 }
 
-.goal-composer textarea {
-  width: 100%;
-  resize: vertical;
-  border: 0;
-  outline: 0;
-  padding: 25px 27px 18px;
-  color: #effff9;
-  background: transparent;
-  font: inherit;
-  font-size: 17px;
-  line-height: 1.7;
-}
+.agent-workbench.inspector-open { grid-template-columns: 252px minmax(0, 1fr) 286px; }
 
-.goal-composer textarea::placeholder { color: rgba(214, 255, 244, 0.28); }
-.composer-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  border-top: 1px solid rgba(203, 255, 239, 0.08);
-  padding: 14px 16px 14px 26px;
-}
-
-.composer-hints { display: flex; flex-wrap: wrap; gap: 12px; }
-.composer-hints span { color: rgba(214, 255, 244, 0.35); font-size: 10px; }
-.run-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 9px;
-  min-width: 132px;
-  border-radius: 16px;
-  padding: 13px 20px;
-  color: #02211b;
-  background: linear-gradient(135deg, #7df9e7, #2dd4bf);
-  box-shadow: 0 16px 38px rgba(45, 212, 191, 0.22);
-  font-size: 13px;
-  font-weight: 950;
-}
-
-.run-button:disabled { cursor: not-allowed; opacity: 0.42; box-shadow: none; }
-.run-spinner {
-  width: 13px;
-  height: 13px;
-  border: 2px solid rgba(2, 33, 27, 0.28);
-  border-top-color: #02211b;
-  border-radius: 999px;
-  animation: spin 0.8s linear infinite;
-}
-
-.goal-examples { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 16px; }
-.goal-examples button { border-radius: 999px; padding: 8px 12px; font-size: 11px; }
-.workspace-stage {
-  width: min(1180px, calc(100% - 36px));
-  margin: 0 auto;
-  padding: 0 0 72px;
-}
-
-.workspace-stage {
-  display: grid;
-  grid-template-columns: minmax(250px, 300px) minmax(0, 1fr);
-  align-items: start;
-  gap: 16px;
-}
-
-.history-column {
-  position: sticky;
-  top: 92px;
-  display: grid;
-  gap: 9px;
-  min-width: 0;
-}
-
-.history-column :deep(.history-list) {
-  max-height: 440px;
-  overflow-y: auto;
-}
-
-.history-column :deep(.agent-run-history) {
-  color: #eafff8;
-  background: rgba(4, 23, 29, 0.88);
-  --text-primary: #effff9;
-  --text-secondary: rgba(214, 255, 244, 0.55);
-  --bg-secondary: #061b21;
-  --bg-tertiary: #0a2a31;
-}
-
-.history-note {
-  margin: 0;
-  padding: 0 8px;
-  color: rgba(214, 255, 244, 0.32);
-  font-size: 9px;
-  line-height: 1.65;
-}
-
-.live-run-button {
-  width: 100%;
-  border: 1px solid rgba(95, 246, 210, 0.3);
-  border-radius: 13px;
-  padding: 10px 12px;
-  color: #68f5d6;
-  background: rgba(45, 212, 191, 0.08);
-  font-size: 11px;
-  font-weight: 850;
-  text-align: left;
-}
-
-.workspace-content {
-  display: grid;
-  gap: 10px;
-  min-width: 0;
-}
-
-.history-view-banner {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  border: 1px solid rgba(95, 246, 210, 0.18);
-  border-radius: 14px;
-  padding: 10px 14px;
-  color: rgba(230, 255, 248, 0.68);
-  background: rgba(45, 212, 191, 0.06);
-  font-size: 10px;
-}
-
-.history-view-banner span { color: #5ff6d2; font-size: 9px; font-weight: 950; letter-spacing: 0.12em; }
-.history-view-banner > div { display: flex; flex-direction: column; gap: 2px; }
-.history-view-banner strong { font-size: 10px; }
-.history-view-banner button {
-  flex-shrink: 0;
-  border: 1px solid rgba(95, 246, 210, 0.26);
-  border-radius: 999px;
-  padding: 7px 10px;
-  color: #68f5d6;
-  background: rgba(45, 212, 191, 0.08);
-  font-size: 9px;
-  font-weight: 850;
-}
-
-.workspace-content :deep(.agent-run-panel) {
-  color: #eafff8;
-  background: rgba(4, 23, 29, 0.88);
-  --text-primary: #effff9;
-  --text-secondary: rgba(214, 255, 244, 0.55);
-  --bg-secondary: #061b21;
-  --bg-tertiary: #0a2a31;
-}
-
-.agent-capabilities { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
-.agent-capabilities article {
-  min-height: 190px;
-  border: 1px solid rgba(203, 255, 239, 0.1);
-  border-radius: 22px;
-  padding: 22px;
-  background: rgba(255, 255, 255, 0.035);
-}
-
-.agent-capabilities span { color: #5ff6d2; font-size: 10px; font-weight: 950; letter-spacing: 0.16em; }
-.agent-capabilities h2 { margin: 34px 0 10px; color: #edfff9; font-size: 18px; }
-.agent-capabilities p { margin: 0; color: rgba(214, 255, 244, 0.48); font-size: 12px; line-height: 1.8; }
-
-.artifact-lightbox {
-  position: fixed;
-  z-index: 100;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  padding: 48px;
-  background: rgba(0, 8, 12, 0.86);
-  backdrop-filter: blur(20px);
-}
-
+.workbench-center { display: grid; grid-template-rows: minmax(0, 1fr) auto; min-width: 0; min-height: 0; background: #151619; }
+.mobile-backdrop { display: none; }
+.artifact-lightbox { position: fixed; z-index: 100; inset: 0; display: grid; place-items: center; padding: 42px; background: rgba(4, 5, 6, 0.9); backdrop-filter: blur(12px); }
 .artifact-lightbox img,
-.artifact-lightbox video { max-width: 92vw; max-height: 86vh; border-radius: 20px; box-shadow: 0 30px 120px #000; }
-.artifact-lightbox > button {
-  position: fixed;
-  top: 24px;
-  right: 28px;
-  width: 42px;
-  height: 42px;
-  border-radius: 999px;
-  color: #eafff8;
-  background: rgba(255, 255, 255, 0.1);
-  font-size: 26px;
+.artifact-lightbox video { max-width: min(92vw, 1280px); max-height: 86vh; border: 1px solid #3a3d43; border-radius: 10px; box-shadow: 0 24px 90px #000; }
+.artifact-lightbox > button { position: fixed; top: 18px; right: 20px; display: grid; width: 34px; height: 34px; place-items: center; border: 1px solid #41444a; border-radius: 8px; color: #d9dade; background: #202226; font-size: 21px; }
+
+@media (max-width: 1180px) {
+  .agent-workbench,
+  .agent-workbench.inspector-open { grid-template-columns: 240px minmax(0, 1fr); }
+  .mobile-backdrop { position: fixed; z-index: 50; inset: 0; display: block; background: rgba(5, 6, 7, 0.5); }
 }
 
-@keyframes spin { to { transform: rotate(360deg); } }
-
-@media (max-width: 760px) {
-  .runtime-pill,
-  .provider-pill { display: none; }
-  .agent-brand small { display: none; }
-  .agent-hero { padding-top: 60px; }
-  .composer-footer { align-items: stretch; flex-direction: column; padding-left: 16px; }
-  .run-button { width: 100%; }
-  .agent-capabilities { grid-template-columns: 1fr; }
-  .workspace-stage { grid-template-columns: 1fr; }
-  .history-column { position: static; }
-  .history-column :deep(.history-list) { max-height: 280px; }
-  .artifact-lightbox { padding: 20px; }
+@media (max-width: 880px) {
+  .agent-workbench,
+  .agent-workbench.inspector-open { grid-template-columns: minmax(0, 1fr); }
 }
 </style>

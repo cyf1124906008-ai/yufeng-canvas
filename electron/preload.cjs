@@ -52,6 +52,24 @@ contextBridge.exposeInMainWorld('desktopApp', {
       'app:agent-assets:delete-refs', runId, assetRefs, retainedRefs
     )
   },
+  agentTools: {
+    getCapabilities: () => ipcRenderer.invoke('app:agent-tools:get-capabilities'),
+    getWorkspaceRoot: () => ipcRenderer.invoke('app:agent-tools:get-workspace-root'),
+    chooseWorkspaceRoot: (input) => ipcRenderer.invoke('app:agent-tools:choose-workspace-root', input),
+    setWorkspaceRoot: (input) => ipcRenderer.invoke('app:agent-tools:set-workspace-root', input),
+    listFiles: (input) => ipcRenderer.invoke('app:agent-tools:list-files', input),
+    readFile: (input) => ipcRenderer.invoke('app:agent-tools:read-file', input),
+    writeFile: (input) => ipcRenderer.invoke('app:agent-tools:write-file', input),
+    searchFiles: (input) => ipcRenderer.invoke('app:agent-tools:search-files', input),
+    startCommand: (input) => ipcRenderer.invoke('app:agent-tools:start-command', input),
+    getCommand: (input) => ipcRenderer.invoke('app:agent-tools:get-command', input),
+    cancelCommand: (input) => ipcRenderer.invoke('app:agent-tools:cancel-command', input),
+    getPermissions: () => ipcRenderer.invoke('app:agent-tools:get-permissions'),
+    captureScreen: (input) => ipcRenderer.invoke('app:agent-tools:capture-screen', input),
+    openApplication: (input) => ipcRenderer.invoke('app:agent-tools:open-application', input),
+    click: (input) => ipcRenderer.invoke('app:agent-tools:click', input),
+    typeText: (input) => ipcRenderer.invoke('app:agent-tools:type-text', input)
+  },
   imageGen: {
     generate: (config) => ipcRenderer.invoke('app:image:generate', config),
     getPendingResult: (taskId) => ipcRenderer.invoke('app:image:get-pending-result', taskId)

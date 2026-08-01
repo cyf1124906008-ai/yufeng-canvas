@@ -16,3 +16,6 @@ export {
   waitForMediaOutput,
   waitForGeneratedMedia
 } from './waitForCanvasOutput.js'
+export { createWorkbenchPlanner } from './workbenchPlanner.js'
+export { createDesktopWorkbenchToolRegistry } from './desktopWorkbenchTools.js'
+export { useAgentWorkbench } from './useAgentWorkbench.js'

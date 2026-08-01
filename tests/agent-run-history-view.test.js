@@ -95,15 +95,19 @@ test('history panel remains display-only and Canvas-free', async () => {
   assert.match(source, /emit\('clear'/)
 })
 
-test('history playback is explicitly read-only and destructive actions require Workspace confirmation', async () => {
+test('legacy playback stays read-only while Workbench history deletion requires confirmation', async () => {
   const runPanel = await readFile(new URL('../src/components/agent/AgentRunPanel.vue', import.meta.url), 'utf8')
+  const activityFeed = await readFile(new URL('../src/components/workbench/WorkbenchActivityFeed.vue', import.meta.url), 'utf8')
   const workspace = await readFile(new URL('../src/views/AgentWorkspace.vue', import.meta.url), 'utf8')
 
   assert.match(runPanel, /readOnly/)
   assert.match(runPanel, /!props\.readOnly/)
   assert.match(runPanel, /!props\.readOnly && Array\.isArray\(props\.snapshot\?\.artifacts\)/)
   assert.match(runPanel, /if \(props\.readOnly\) return null/)
-  assert.match(workspace, /:read-only="viewingHistory"/)
+  assert.match(activityFeed, /readOnly/)
+  assert.match(activityFeed, /:disabled="readOnly"/)
+  assert.match(workspace, /@select-history="selectHistory"/)
+  assert.match(workspace, /useAgentWorkbench/)
   assert.match(workspace, /confirmDeleteHistory/)
   assert.match(workspace, /confirmClearHistory/)
   assert.match(workspace, /\$dialog\?\.warning/)

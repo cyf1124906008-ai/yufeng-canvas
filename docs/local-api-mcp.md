@@ -1,6 +1,6 @@
-# YUFENG Canvas Local API / MCP
+# YUFENG Agent Local API / MCP
 
-YUFENG Canvas starts a localhost-only helper server in the desktop app. It is designed as the foundation for future workflow import, agent orchestration, and MCP integrations.
+YUFENG Agent 在桌面 App 中启动一个仅监听 localhost 的辅助服务，用于健康检查、发布信息和后续 MCP 工具扩展。
 
 ## Default Endpoint
 
@@ -31,8 +31,8 @@ Response:
 ```json
 {
   "ok": true,
-  "app": "YUFENG Canvas",
-  "version": "0.1.30",
+  "app": "YUFENG Agent",
+  "version": "1.1.0",
   "mcp": "http://127.0.0.1:43112/mcp"
 }
 ```
@@ -53,6 +53,8 @@ Built-in tools:
 
 - `yufeng.health`: returns app version and local API status.
 - `yufeng.release`: returns the latest GitHub release page.
+- `yufeng.support`: returns project and support links.
+- `yufeng.prompt_suggestions`: returns starter task ideas.
 
 Example:
 
@@ -66,4 +68,4 @@ curl -X POST http://127.0.0.1:43112/mcp ^
 
 - The server binds to `127.0.0.1` only.
 - The desktop app does not expose user API keys through this local API.
-- Workflow import and multi-agent execution will be added as explicit tools after the UI flow is stable.
+- Workbench 的文件、终端和电脑工具通过受信任 Electron IPC 使用，不会由这个无认证的 localhost 端点暴露。

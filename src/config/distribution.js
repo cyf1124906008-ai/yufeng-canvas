@@ -9,7 +9,7 @@
 export const DISTRIBUTION_CONFIG = {
   branding: {
     appName: 'YUFENG Canvas',
-    apiKeyHelpUrl: 'https://dataeyes.ai/?promoter_code=nqg9bv83',
+    apiKeyHelpUrl: 'https://dataeyes.ai/',
     githubUrl: 'https://github.com/cyf1124906008-ai/yufeng-canvas'
   },
   api: {

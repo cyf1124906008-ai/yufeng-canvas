@@ -15,7 +15,7 @@
   ·
   <a href="https://github.com/cyf1124906008-ai/yufeng-canvas/releases/latest">Latest Release</a>
   ·
-  <a href="https://dataeyes.ai/?promoter_code=nqg9bv83">Get a DataEyes API Key</a>
+  <a href="https://dataeyes.ai/">Get a DataEyes API Key</a>
 </p>
 
 ![YUFENG Canvas overview](docs/images/product-overview.svg)
@@ -81,7 +81,7 @@ https://cloud.dataeyes.ai
 
 Get an API key:
 
-[https://dataeyes.ai/?promoter_code=nqg9bv83](https://dataeyes.ai/?promoter_code=nqg9bv83)
+[https://dataeyes.ai/](https://dataeyes.ai/)
 
 ## Model Configuration
 

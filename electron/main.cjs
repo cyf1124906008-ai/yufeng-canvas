@@ -1,4 +1,4 @@
-const { app, BrowserWindow, shell, ipcMain, dialog } = require('electron')
+const { app, BrowserWindow, shell, ipcMain, dialog, systemPreferences } = require('electron')
 let autoUpdater
 try {
   autoUpdater = require('electron-updater').autoUpdater
@@ -16,6 +16,12 @@ const comfyProcess = require('./comfy/process.cjs')
 const comfyPaths = require('./comfy/paths.cjs')
 const comfyExecutor = require('./comfy/executor.cjs')
 const assetManager = require('./assets/manager.cjs')
+const { createAgentTools } = require('./agent-tools/index.cjs')
+const {
+  agentToolApprovalDetail,
+  attachNativeApproval,
+  canonicalizeAgentToolPayload
+} = require('./agent-tools/approval.cjs')
 const imageGeneration = require('./imageGeneration.cjs')
 
 const rendererUrl = process.env.ELECTRON_RENDERER_URL
@@ -61,6 +67,7 @@ let updateState = {
 let updateCheckMode = 'auto'
 let updateSourceIndex = 0
 let localApiServer = null
+let desktopAgentTools = null
 const localApiPort = Number.parseInt(process.env.YUFENG_LOCAL_API_PORT || '43112', 10) || 43112
 let localApiState = {
   enabled: process.env.YUFENG_LOCAL_API !== '0',
@@ -72,8 +79,8 @@ let localApiState = {
 
 const isPackagedRuntime = () => app.isPackaged && !rendererUrl
 
-const isTrustedRendererEvent = (event) => {
-  const source = String(event?.senderFrame?.url || event?.sender?.getURL?.() || '')
+const isTrustedRendererUrl = (value) => {
+  const source = String(value || '')
   if (!source) return false
   if (rendererUrl) {
     try {
@@ -91,12 +98,51 @@ const isTrustedRendererEvent = (event) => {
   }
 }
 
+const isTrustedRendererEvent = (event) => isTrustedRendererUrl(
+  event?.senderFrame?.url || event?.sender?.getURL?.()
+)
+
 const requireTrustedRenderer = (event) => {
   if (!isTrustedRendererEvent(event)) {
     const error = new Error('拒绝来自非应用页面的 IPC 请求')
     error.code = 'UNTRUSTED_RENDERER_IPC'
     throw error
   }
+}
+
+const confirmAgentToolAction = async (event, action, input = {}) => {
+  requireTrustedRenderer(event)
+  let payload = canonicalizeAgentToolPayload(action, input)
+  if (action === 'workspace.set') {
+    const realPath = await fs.promises.realpath(payload.path)
+    const stat = await fs.promises.stat(realPath)
+    if (!stat.isDirectory()) {
+      const error = new Error('workspace root 必须是目录')
+      error.code = 'WORKSPACE_NOT_DIRECTORY'
+      throw error
+    }
+    payload = Object.freeze({ path: realPath })
+  }
+  const parent = BrowserWindow.fromWebContents(event.sender) || undefined
+  const options = {
+    type: 'warning',
+    title: 'YUFENG Agent 安全确认',
+    message: `允许执行一次 ${action}？`,
+    detail: agentToolApprovalDetail(action, payload),
+    buttons: ['取消', '允许一次'],
+    defaultId: 0,
+    cancelId: 0,
+    noLink: true
+  }
+  const result = parent
+    ? await dialog.showMessageBox(parent, options)
+    : await dialog.showMessageBox(options)
+  if (result.response !== 1) {
+    const error = new Error(`用户取消了操作: ${action}`)
+    error.code = 'NATIVE_APPROVAL_REJECTED'
+    throw error
+  }
+  return attachNativeApproval(action, payload)
 }
 
 const getCurrentUpdateSource = () => updateSources[updateSourceIndex] || githubUpdateSource
@@ -446,7 +492,7 @@ const mcpTools = [
   },
   {
     name: 'yufeng.prompt_suggestions',
-    description: 'Return starter prompt ideas for image, video and workflow creation.',
+    description: 'Return starter task ideas for the desktop Agent Workbench.',
     inputSchema: {
       type: 'object',
       properties: {}
@@ -465,7 +511,7 @@ const handleMcpRequest = async (body = {}) => {
       result: {
         protocolVersion: '2024-11-05',
         serverInfo: {
-          name: 'yufeng-canvas-local',
+          name: 'yufeng-agent-local',
           version: packageJson.version
         },
         capabilities: {
@@ -535,7 +581,7 @@ const handleMcpRequest = async (body = {}) => {
                 email: '16689675868@163.com',
                 github: `https://github.com/${repo}`,
                 issues: `https://github.com/${repo}/issues`,
-                apiKey: 'https://dataeyes.ai/?promoter_code=nqg9bv83'
+                apiKey: 'https://dataeyes.ai/'
               }, null, 2)
             }
           ]
@@ -552,11 +598,11 @@ const handleMcpRequest = async (body = {}) => {
             {
               type: 'text',
               text: JSON.stringify([
-                '把这个中文提示词优化得更适合生图，但不要翻译成英文',
-                '生成一个 6 镜头短视频分镜，包含首尾帧建议',
-                '根据产品照片设计一套电商主图和详情页画面',
-                '帮我把角色设定扩展成可直接图生图的提示词',
-                '我想做一个公共工作流模板，请帮我拆成输入节点、生成节点和结果节点'
+                '检查当前项目结构，告诉我最需要修复的问题',
+                '读取 README 和 package.json，然后运行测试并总结结果',
+                '在工作区搜索所有 TODO，按优先级整理',
+                '查看当前屏幕，说明正在打开什么并建议下一步',
+                '调用 Creative 工具制作一张黑银科技感汽车海报'
               ], null, 2)
             }
           ]
@@ -600,7 +646,7 @@ const startLocalApiServer = () => {
 
       if (request.method === 'GET' && url.pathname === '/mcp') {
         sendJson(response, 200, {
-          name: 'yufeng-canvas-local',
+          name: 'yufeng-agent-local',
           version: packageJson.version,
           transport: 'json-rpc-over-http',
           endpoint: `${localApiState.origin}/mcp`,
@@ -615,7 +661,7 @@ const startLocalApiServer = () => {
           email: '16689675868@163.com',
           github: `https://github.com/${repo}`,
           issues: `https://github.com/${repo}/issues`,
-          apiKey: 'https://dataeyes.ai/?promoter_code=nqg9bv83'
+          apiKey: 'https://dataeyes.ai/'
         })
         return
       }
@@ -862,8 +908,14 @@ function createWindow() {
   })
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url)
+    if (/^https?:\/\//i.test(url)) shell.openExternal(url)
     return { action: 'deny' }
+  })
+
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    if (isTrustedRendererUrl(url)) return
+    event.preventDefault()
+    if (/^https?:\/\//i.test(url)) shell.openExternal(url)
   })
 
   mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL) => {
@@ -872,6 +924,7 @@ function createWindow() {
 
   mainWindow.webContents.on('render-process-gone', (_event, details) => {
     console.error('[electron] render-process-gone', details)
+    desktopAgentTools?.shutdown?.()
   })
 
   if (rendererUrl) {
@@ -882,8 +935,15 @@ function createWindow() {
   }
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   migrateLegacyUserDataStorage()
+  const agentTools = createAgentTools({
+    userDataPath: app.getPath('userData'),
+    tempPath: app.getPath('temp'),
+    systemPreferences
+  })
+  desktopAgentTools = agentTools
+  await agentTools.initialize()
   setupAutoUpdater()
   // 本地 ComfyUI 仅作为高级用户可选能力，不在应用启动时自动装载。
 
@@ -1045,6 +1105,78 @@ app.whenReady().then(() => {
     return assetManager.deleteAgentRefs(runId, assetRefs, retainedRefs)
   })
 
+  // Agent desktop tools. Every handler independently verifies the renderer;
+  // approval-bearing actions are validated again inside agent-tools.
+  ipcMain.handle('app:agent-tools:get-capabilities', (event) => {
+    requireTrustedRenderer(event)
+    return agentTools.getCapabilities()
+  })
+  ipcMain.handle('app:agent-tools:get-workspace-root', (event) => {
+    requireTrustedRenderer(event)
+    return agentTools.getWorkspaceRoot()
+  })
+  ipcMain.handle('app:agent-tools:choose-workspace-root', async (event, input) => {
+    requireTrustedRenderer(event)
+    const result = await dialog.showOpenDialog({
+      title: '选择 Agent Workspace Root',
+      properties: ['openDirectory']
+    })
+    if (result.canceled || !result.filePaths?.[0]) return { ok: false, canceled: true }
+    return agentTools.setChosenWorkspaceRoot(result.filePaths[0])
+  })
+  ipcMain.handle('app:agent-tools:set-workspace-root', async (event, input) => {
+    requireTrustedRenderer(event)
+    return agentTools.setWorkspaceRoot(await confirmAgentToolAction(event, 'workspace.set', input))
+  })
+  ipcMain.handle('app:agent-tools:list-files', (event, input) => {
+    requireTrustedRenderer(event)
+    return agentTools.listFiles(input)
+  })
+  ipcMain.handle('app:agent-tools:read-file', (event, input) => {
+    requireTrustedRenderer(event)
+    return agentTools.readFile(input)
+  })
+  ipcMain.handle('app:agent-tools:write-file', async (event, input) => {
+    requireTrustedRenderer(event)
+    return agentTools.writeFile(await confirmAgentToolAction(event, 'workspace.write', input))
+  })
+  ipcMain.handle('app:agent-tools:search-files', (event, input) => {
+    requireTrustedRenderer(event)
+    return agentTools.searchFiles(input)
+  })
+  ipcMain.handle('app:agent-tools:start-command', async (event, input) => {
+    requireTrustedRenderer(event)
+    return agentTools.startCommand(await confirmAgentToolAction(event, 'terminal.run', input))
+  })
+  ipcMain.handle('app:agent-tools:get-command', (event, input) => {
+    requireTrustedRenderer(event)
+    return agentTools.getCommand(input)
+  })
+  ipcMain.handle('app:agent-tools:cancel-command', (event, input) => {
+    requireTrustedRenderer(event)
+    return agentTools.cancelCommand(input)
+  })
+  ipcMain.handle('app:agent-tools:get-permissions', (event) => {
+    requireTrustedRenderer(event)
+    return agentTools.getPermissions()
+  })
+  ipcMain.handle('app:agent-tools:capture-screen', async (event, input) => {
+    requireTrustedRenderer(event)
+    return agentTools.captureScreen(await confirmAgentToolAction(event, 'computer.capture_screen', input))
+  })
+  ipcMain.handle('app:agent-tools:open-application', async (event, input) => {
+    requireTrustedRenderer(event)
+    return agentTools.openApplication(await confirmAgentToolAction(event, 'computer.open_application', input))
+  })
+  ipcMain.handle('app:agent-tools:click', async (event, input) => {
+    requireTrustedRenderer(event)
+    return agentTools.click(await confirmAgentToolAction(event, 'computer.click', input))
+  })
+  ipcMain.handle('app:agent-tools:type-text', async (event, input) => {
+    requireTrustedRenderer(event)
+    return agentTools.typeText(await confirmAgentToolAction(event, 'computer.type_text', input))
+  })
+
   // Image Generation IPC (main-process execution for stability)
   ipcMain.handle('app:image:generate', (_event, config) => imageGeneration.executeImageGeneration(config))
   ipcMain.handle('app:image:get-pending-result', (_event, taskId) => imageGeneration.getPendingResult(taskId))
@@ -1065,4 +1197,8 @@ app.on('window-all-closed', () => {
     localApiServer?.close()
     app.quit()
   }
+})
+
+app.on('before-quit', () => {
+  desktopAgentTools?.shutdown?.()
 })
