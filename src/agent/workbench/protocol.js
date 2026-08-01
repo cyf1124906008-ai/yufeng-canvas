@@ -48,10 +48,12 @@ export const TOOL_APPROVAL_POLICIES = Object.freeze(['never', 'on_danger', 'alwa
 export const APPROVAL_STATUSES = Object.freeze(['pending', 'approved', 'rejected'])
 export const OBSERVATION_STATUSES = Object.freeze(['succeeded', 'failed', 'rejected'])
 export const NEXT_ACTION_TYPES = Object.freeze(['message', 'tool_call', 'finish'])
+export const TASK_PLAN_STATUSES = Object.freeze(['pending', 'in_progress', 'completed'])
 
 const TOOL_RISK_LEVEL_SET = new Set(TOOL_RISK_LEVELS)
 const TOOL_APPROVAL_POLICY_SET = new Set(TOOL_APPROVAL_POLICIES)
 const APPROVAL_STATUS_SET = new Set(APPROVAL_STATUSES)
+const TASK_PLAN_STATUS_SET = new Set(TASK_PLAN_STATUSES)
 const TOOL_NAME_PATTERN = /^[a-zA-Z][a-zA-Z0-9_.-]{0,127}$/
 const SENSITIVE_KEY_PATTERN = /(?:^|[_.-])(?:api[_-]?keys?|authorization|auth(?:entication)?(?:[_-]?(?:token|header|secret|key|credentials?))?|tokens?|secrets?|credentials?|client[_-]?secrets?|access[_-]?(?:tokens?|keys?)|refresh[_-]?tokens?|session[_-]?(?:tokens?|keys?)|(?:set[_-]?)?cookies?|private[_-]?keys?|passwords?|passwd|asset[_-]?path)(?:$|[_.-])/i
 const MEDIA_KEY_PATTERN = /^(?:url|uri|source|preview[_-]?url|media[_-]?(?:url|source)|data[_-]?url|base64|b64[_-]?json|image[_-]?data|video[_-]?data|media[_-]?data)$/i
@@ -298,4 +300,105 @@ export function normalizeApprovalDecision(value) {
     status,
     reason: String(typeof value === 'object' ? value?.reason || '' : '').trim()
   }
+}
+
+export function normalizeTaskPlan(value = {}) {
+  if (!isRecord(value) || !Array.isArray(value.steps) || value.steps.length < 1 || value.steps.length > 32) {
+    throw new TypeError('Task plan must contain 1 to 32 steps')
+  }
+  let inProgress = 0
+  const ids = new Set()
+  const steps = value.steps.map((item, index) => {
+    if (!isRecord(item)) throw new TypeError(`Task plan step ${index + 1} must be an object`)
+    const id = String(item.id || `step-${index + 1}`).trim()
+    if (!/^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,127}$/.test(id) || ids.has(id)) {
+      throw new TypeError(`Task plan step ${index + 1} has an invalid or duplicate id`)
+    }
+    ids.add(id)
+    const step = String(item.step || '').trim()
+    if (!step || step.length > 1_000) throw new TypeError(`Task plan step ${index + 1} requires bounded text`)
+    const status = String(item.status || 'pending')
+    if (!TASK_PLAN_STATUS_SET.has(status)) throw new TypeError(`Unknown task plan status: ${status}`)
+    if (status === 'in_progress') inProgress += 1
+    return { id, step, status }
+  })
+  if (inProgress > 1) throw new TypeError('Task plan can have at most one in_progress step')
+  const explanation = String(value.explanation || '').trim()
+  if (explanation.length > 4_000) throw new TypeError('Task plan explanation is too long')
+  const status = steps.every(step => step.status === 'completed')
+    ? 'completed'
+    : inProgress === 1 ? 'in_progress' : 'pending'
+  return sanitizeWorkbenchValue({ status, explanation, steps })
+}
+
+export function normalizeToolProgress(value = {}) {
+  if (!isRecord(value)) throw new TypeError('Tool progress must be an object')
+  const phase = String(value.phase || '').trim()
+  if (!/^[a-z][a-z0-9_.-]{0,63}$/i.test(phase)) {
+    throw new TypeError('Tool progress requires a stable phase')
+  }
+  const normalized = sanitizeWorkbenchValue({ ...value, phase })
+  if (JSON.stringify(normalized).length > 64 * 1024) {
+    throw new TypeError('Tool progress exceeds the event size limit')
+  }
+  return normalized
+}
+
+export function normalizeWorkspaceDiff(value = {}) {
+  if (!isRecord(value)) throw new TypeError('Workspace diff must be an object')
+  const path = String(value.path || '').trim()
+  if (!path || path.length > 2_048) throw new TypeError('Workspace diff requires a bounded path')
+  const hashPattern = /^[a-f0-9]{64}$/i
+  if (!hashPattern.test(String(value.beforeSha256 || '')) || !hashPattern.test(String(value.afterSha256 || ''))) {
+    throw new TypeError('Workspace diff requires before and after SHA-256 values')
+  }
+  if (!Array.isArray(value.hunks) || value.hunks.length < 1 || value.hunks.length > 128) {
+    throw new TypeError('Workspace diff requires 1 to 128 hunks')
+  }
+  const operation = value.operation == null ? 'apply' : String(value.operation)
+  if (!['apply', 'revert'].includes(operation)) throw new TypeError('Workspace diff operation is invalid')
+  const rollbackId = value.rollbackId == null ? '' : String(value.rollbackId).trim()
+  if (rollbackId.length > 128) throw new TypeError('Workspace diff rollbackId is too long')
+  const revertsDiffId = value.revertsDiffId == null ? '' : String(value.revertsDiffId).trim()
+  if (revertsDiffId.length > 128) throw new TypeError('Workspace diff revertsDiffId is too long')
+  let totalLines = 0
+  let totalCharacters = 0
+  const hunks = value.hunks.map((hunk, index) => {
+    if (!isRecord(hunk) || !Number.isInteger(hunk.startLine) || hunk.startLine < 1) {
+      throw new TypeError(`Workspace diff hunk ${index + 1} is invalid`)
+    }
+    if (!Array.isArray(hunk.oldLines) || !Array.isArray(hunk.newLines)) {
+      throw new TypeError(`Workspace diff hunk ${index + 1} requires line arrays`)
+    }
+    totalLines += hunk.oldLines.length + hunk.newLines.length
+    if (totalLines > 2_000) throw new TypeError('Workspace diff exceeds the line limit')
+    const oldLines = hunk.oldLines.map(line => String(line))
+    const newLines = hunk.newLines.map(line => String(line))
+    totalCharacters += [...oldLines, ...newLines].reduce((total, line) => total + line.length, 0)
+    if (totalCharacters > 64 * 1024 || [...oldLines, ...newLines].some(line => line.length > 16_384)) {
+      throw new TypeError('Workspace diff exceeds the content limit')
+    }
+    return {
+      startLine: hunk.startLine,
+      oldLines,
+      newLines
+    }
+  })
+  return sanitizeWorkbenchValue({
+    operation,
+    ...(revertsDiffId ? { revertsDiffId } : {}),
+    path,
+    beforeSha256: String(value.beforeSha256).toLowerCase(),
+    afterSha256: String(value.afterSha256).toLowerCase(),
+    hunks,
+    finalNewlineBefore: value.finalNewlineBefore === true,
+    finalNewlineAfter: value.finalNewlineAfter === true,
+    rollback: {
+      state: rollbackId ? 'conditional' : 'unavailable',
+      ...(rollbackId ? { rollbackId } : {}),
+      requires: ['ephemeral_record_present', 'current_sha256_matches_after'],
+      expires: 'app_session',
+      expectedCurrentSha256: String(value.afterSha256).toLowerCase()
+    }
+  })
 }

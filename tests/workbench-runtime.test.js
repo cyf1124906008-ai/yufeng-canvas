@@ -4,7 +4,12 @@ import assert from 'node:assert/strict'
 import { WorkbenchSession } from '../src/agent/workbench/index.js'
 import { WorkbenchSessionRepository } from '../src/agent/memory/WorkbenchSessionRepository.js'
 import { createDesktopWorkbenchToolRegistry, waitForCommand } from '../src/agent/runtime/desktopWorkbenchTools.js'
-import { compactSession, createWorkbenchPlanner, parseAction } from '../src/agent/runtime/workbenchPlanner.js'
+import {
+  compactSession,
+  createWorkbenchPlanner,
+  parseAction,
+  WORKBENCH_MESSAGE_CONTEXT_CHARACTERS
+} from '../src/agent/runtime/workbenchPlanner.js'
 import { useAgentWorkbench } from '../src/agent/runtime/useAgentWorkbench.js'
 
 test('Workbench planner accepts strict JSON actions and preserves ordinary replies', async () => {
@@ -45,6 +50,17 @@ test('Workbench planner compacts large tool observations before the next model c
   assert.match(compacted.observations[0].output.content, /已截断/)
 })
 
+test('Workbench planner preserves every character within the composer context budget', () => {
+  const content = 'normal context with spaces\n'
+    .repeat(WORKBENCH_MESSAGE_CONTEXT_CHARACTERS)
+    .slice(0, WORKBENCH_MESSAGE_CONTEXT_CHARACTERS)
+  const compacted = compactSession({
+    messages: [{ role: 'user', content }]
+  })
+
+  assert.equal(compacted.messages[0].content, content)
+})
+
 test('terminal tool cannot execute before approval and receives an exact approval grant', async () => {
   const calls = []
   const api = {
@@ -56,7 +72,7 @@ test('terminal tool cannot execute before approval and receives an exact approva
       ok: true,
       jobId: 'job-1',
       status: 'completed',
-      stdout: 'ok\n',
+      stdout: 'DATABASE_PASSWORD=hunter2\n',
       stderr: '',
       exitCode: 0,
       truncated: false
@@ -78,7 +94,48 @@ test('terminal tool cannot execute before approval and receives an exact approva
   assert.equal(completed.status, 'completed')
   assert.equal(calls.length, 1)
   assert.deepEqual(calls[0].approval, { granted: true, action: 'terminal.run' })
-  assert.equal(completed.observations[0].output.stdout, 'ok\n')
+  assert.equal(calls[0].maxOutputBytes, 128 * 1024)
+  assert.equal(completed.observations[0].output.stdout, 'DATABASE_PASSWORD=[redacted]\n')
+  assert.deepEqual(completed.toolProgress.map(item => item.phase), ['starting', 'started', 'completed'])
+  assert.equal(completed.toolCalls[0].latestProgress.exitCode, 0)
+  assert.equal('stdoutDelta' in completed.toolCalls[0].latestProgress, false)
+  assert.doesNotMatch(JSON.stringify(session.events()), /hunter2/)
+})
+
+test('terminal progress never persists raw text that can be split across polling deltas', async () => {
+  let poll = 0
+  const progress = []
+  const result = await waitForCommand({
+    getCommand: async () => {
+      poll += 1
+      return poll === 1
+        ? {
+            jobId: 'job-secret',
+            status: 'running',
+            stdout: 'DATABASE_PASSWORD=',
+            stderr: '',
+            outputBytes: 18,
+            maxOutputBytes: 1024
+          }
+        : {
+            jobId: 'job-secret',
+            status: 'completed',
+            stdout: 'DATABASE_PASSWORD=hunter2',
+            stderr: '',
+            outputBytes: 25,
+            maxOutputBytes: 1024,
+            exitCode: 0
+          }
+    }
+  }, 'job-secret', null, {
+    reportProgress: value => progress.push(value)
+  })
+
+  assert.equal(result.stdout, 'DATABASE_PASSWORD=hunter2')
+  assert.equal(progress.length, 2)
+  assert.equal(progress.every(item => !('stdoutDelta' in item) && !('stderrDelta' in item)), true)
+  assert.doesNotMatch(JSON.stringify(progress), /DATABASE_PASSWORD|hunter2/)
+  assert.deepEqual(progress.map(item => item.stdoutLength), [18, 25])
 })
 
 test('terminal wrapper fails closed when process termination cannot be confirmed', async () => {
@@ -120,6 +177,150 @@ test('workspace.write executes approved source without applying history redactio
   assert.equal(writes.length, 1)
   assert.equal(writes[0].content, content)
   assert.deepEqual(writes[0].approval, { granted: true, action: 'workspace.write' })
+})
+
+test('workspace.patch keeps raw approved hunks ephemeral and emits a sanitized structured diff', async () => {
+  const applied = []
+  const beforeSha256 = 'a'.repeat(64)
+  const afterSha256 = 'b'.repeat(64)
+  const rawSecret = 'API_KEY=sk-super-secret-value-1234567890'
+  const registry = createDesktopWorkbenchToolRegistry({
+    desktopAgentTools: {
+      applyPatch: async input => {
+        applied.push(input)
+        return {
+          ok: true,
+          path: input.path,
+          beforeSha256,
+          afterSha256,
+          diff: {
+            rollbackId: 'rollback-1',
+            path: input.path,
+            beforeSha256,
+            afterSha256,
+            hunks: input.hunks,
+            finalNewlineBefore: true,
+            finalNewlineAfter: true
+          }
+        }
+      }
+    }
+  })
+  const session = new WorkbenchSession({
+    toolRegistry: registry,
+    planner: ({ session: state }) => state.observations.length
+      ? { type: 'finish', result: { content: '补丁完成' } }
+      : {
+          type: 'tool_call',
+          name: 'workspace.patch',
+          input: {
+            path: 'src/config.js',
+            beforeSha256,
+            hunks: [{ startLine: 1, oldLines: ['API_KEY=old'], newLines: [rawSecret] }]
+          }
+        }
+  })
+
+  const pending = await session.submitUserMessage('更新配置')
+  assert.equal(applied.length, 0)
+  const completed = await session.resolveApproval(pending.pendingApproval.id, 'approved')
+  assert.equal(applied[0].hunks[0].newLines[0], rawSecret)
+  assert.deepEqual(applied[0].approval, { granted: true, action: 'workspace.patch' })
+  assert.equal(completed.workspaceDiffs.length, 1)
+  assert.equal(completed.workspaceDiffs[0].path, 'src/config.js')
+  assert.equal(completed.workspaceDiffs[0].operation, 'apply')
+  assert.deepEqual(completed.workspaceDiffs[0].rollback, {
+    state: 'conditional',
+    rollbackId: 'rollback-1',
+    requires: ['ephemeral_record_present', 'current_sha256_matches_after'],
+    expires: 'app_session',
+    expectedCurrentSha256: afterSha256
+  })
+  assert.equal(completed.toolCalls[0].workspaceDiffId, completed.workspaceDiffs[0].id)
+  assert.equal(completed.observations[0].output.diffId, completed.workspaceDiffs[0].id)
+  assert.doesNotMatch(JSON.stringify(session.events()), /super-secret|sk-super/)
+  assert.match(completed.workspaceDiffs[0].hunks[0].newLines[0], /redacted/)
+})
+
+test('workspace.revert_patch remains approval-gated and links the inverse diff', async () => {
+  const calls = []
+  const originalSha = 'a'.repeat(64)
+  const currentSha = 'b'.repeat(64)
+  const registry = createDesktopWorkbenchToolRegistry({
+    desktopAgentTools: {
+      revertPatch: async input => {
+        calls.push(input)
+        return {
+          ok: true,
+          path: 'src/file.js',
+          beforeSha256: currentSha,
+          afterSha256: originalSha,
+          diff: {
+            operation: 'revert',
+            rollbackId: 'rollback-redo',
+            revertsDiffId: input.revertsDiffId,
+            path: 'src/file.js',
+            beforeSha256: currentSha,
+            afterSha256: originalSha,
+            hunks: [{ startLine: 2, oldLines: ['new'], newLines: ['old'] }],
+            finalNewlineBefore: true,
+            finalNewlineAfter: true
+          }
+        }
+      }
+    }
+  })
+  const session = new WorkbenchSession({
+    toolRegistry: registry,
+    planner: ({ session: state }) => state.observations.length
+      ? { type: 'finish', result: { content: '已回滚' } }
+      : {
+          type: 'tool_call',
+          name: 'workspace.revert_patch',
+          input: {
+            rollbackId: 'rollback-original',
+            revertsDiffId: 'diff-original'
+          }
+        }
+  })
+
+  const pending = await session.submitUserMessage('回滚文件')
+  assert.equal(calls.length, 0)
+  const completed = await session.resolveApproval(pending.pendingApproval.id, 'approved')
+  assert.deepEqual(calls[0].approval, { granted: true, action: 'workspace.revert_patch' })
+  assert.equal(calls[0].rollbackId, 'rollback-original')
+  assert.equal(completed.workspaceDiffs[0].operation, 'revert')
+  assert.equal(completed.workspaceDiffs[0].revertsDiffId, 'diff-original')
+})
+
+test('task.update_plan projects stable step status and revision into the session', async () => {
+  const registry = createDesktopWorkbenchToolRegistry({ desktopAgentTools: null })
+  const session = new WorkbenchSession({
+    toolRegistry: registry,
+    planner: ({ session: state }) => state.plan
+      ? { type: 'finish', result: { content: '计划已建立' } }
+      : {
+          type: 'tool_call',
+          name: 'task.update_plan',
+          input: {
+            explanation: '先审计，再修改',
+            steps: [
+              { id: 'audit', step: '审计代码', status: 'in_progress' },
+              { id: 'change', step: '应用修改', status: 'pending' }
+            ]
+          }
+        }
+  })
+
+  const completed = await session.submitUserMessage('处理项目')
+  assert.equal(completed.status, 'completed')
+  assert.equal(completed.plan.status, 'in_progress')
+  assert.equal(completed.plan.revision, 1)
+  assert.deepEqual(completed.plan.steps.map(step => [step.id, step.status]), [
+    ['audit', 'in_progress'],
+    ['change', 'pending']
+  ])
+  assert.equal(session.events().filter(event => event.type === 'plan_updated').length, 1)
 })
 
 test('screen inspection keeps raw screenshots outside the serializable observation', async () => {

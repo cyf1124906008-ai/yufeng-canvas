@@ -1,125 +1,150 @@
 <template>
-  <section class="wb-thread">
+  <section class="thread-shell">
     <header class="thread-header">
-      <div>
-        <button type="button" class="mobile-nav" aria-label="打开导航" @click="emit('open-navigation')">☰</button>
-        <span class="session-mark">{{ mode === 'history' ? 'H' : 'A' }}</span>
-        <span>
+      <div class="thread-heading">
+        <button type="button" class="header-icon mobile-nav" aria-label="打开导航" @click="emit('open-navigation')">
+          <workbench-icon name="panel-left" :size="16" />
+        </button>
+        <span class="thread-symbol"><workbench-icon :name="mode === 'history' ? 'history' : 'sparkles'" :size="14" /></span>
+        <div>
           <strong>{{ sessionTitle }}</strong>
-          <small>{{ modeLabel }}</small>
-        </span>
+          <small>{{ modeLabel }}<span v-if="snapshot.eventCount"> · {{ snapshot.eventCount }} 个事件</span></small>
+        </div>
       </div>
-      <div class="thread-header-actions">
+      <div class="header-actions">
         <span class="run-status" :class="`is-${status.tone}`"><i></i>{{ status.label }}</span>
-        <button type="button" aria-label="打开运行检查器" @click="emit('toggle-inspector')">检查器</button>
+        <button type="button" class="header-icon" aria-label="切换上下文面板" title="上下文面板" @click="emit('toggle-inspector')">
+          <workbench-icon name="panel-right" :size="16" />
+        </button>
       </div>
     </header>
 
     <div ref="scroller" class="thread-scroll">
-      <div v-if="loading" class="thread-loading" role="status">
-        <span></span>
-        正在读取任务…
+      <div v-if="loading" class="loading-state" role="status">
+        <span></span><p>正在读取任务…</p>
       </div>
 
-      <div v-else-if="mode === 'draft'" class="thread-empty">
-        <div class="empty-orbit"><span>Y</span></div>
-        <h1>把任务交给 Agent</h1>
-        <p>描述最终目标。Agent 会逐步选择文件、终端、电脑控制或 Creative 工具，并只展示真实发生的动作。</p>
-        <div class="suggestion-grid">
-          <button v-for="suggestion in suggestions" :key="suggestion" type="button" @click="emit('apply-suggestion', suggestion)">
-            <span>↗</span>{{ suggestion }}
+      <div v-else-if="mode === 'draft'" class="welcome-state">
+        <div class="welcome-intro">
+          <span class="welcome-mark"><workbench-icon name="sparkles" :size="18" /></span>
+          <div>
+            <h1>开始一个 Agent 任务</h1>
+            <p>说明目标即可。Agent 会读取项目、调用工具并在危险操作前请求批准。</p>
+          </div>
+        </div>
+        <div class="suggestion-list">
+          <button v-for="(suggestion, index) in suggestions" :key="suggestion" type="button" @click="emit('apply-suggestion', suggestion)">
+            <span>{{ index + 1 }}</span>
+            <strong>{{ suggestion }}</strong>
+            <workbench-icon name="chevron-right" :size="13" />
           </button>
+        </div>
+        <div class="welcome-capabilities" aria-label="可用能力">
+          <span><workbench-icon name="file" :size="12" />文件</span>
+          <span><workbench-icon name="terminal" :size="12" />终端</span>
+          <span><workbench-icon name="monitor" :size="12" />电脑控制</span>
+          <span><workbench-icon name="sparkles" :size="12" />创作模型</span>
         </div>
       </div>
 
       <div v-else class="thread-content">
         <div v-if="mode === 'history'" class="history-banner">
-          <div>
-            <span>只读历史</span>
-            <strong>已保存任务</strong>
-            <small>以下内容是历史记录，不会影响当前 Agent。</small>
-          </div>
-          <button type="button" @click="emit('reuse-goal')">使用此目标新建任务</button>
+          <workbench-icon name="history" :size="16" />
+          <div><strong>只读历史</strong><small>此任务不会继续执行，也不会重新触发旧审批。</small></div>
+          <button type="button" @click="emit('reuse-goal')">复用目标</button>
         </div>
 
-        <article v-if="goal" class="user-message">
-          <div class="message-avatar">U</div>
+        <article v-if="goal" class="chat-message is-user">
+          <span class="message-avatar">你</span>
           <div>
             <header><strong>你</strong><time v-if="startedAt">{{ startedAt }}</time></header>
             <p>{{ goal }}</p>
           </div>
         </article>
 
-        <section v-if="plan.length" class="plan-card">
-          <header>
-            <div><span class="card-icon">≡</span><strong>动态计划</strong></div>
-            <small>{{ completedPlanCount }}/{{ plan.length }} 已完成</small>
-          </header>
+        <details v-if="plan.length" class="plan-summary" :open="status.tone === 'running'">
+          <summary>
+            <span class="summary-icon"><workbench-icon name="list" :size="14" /></span>
+            <strong>执行计划</strong>
+            <small>{{ completedPlanCount }}/{{ plan.length }}</small>
+            <span class="plan-progress"><i :style="{ width: `${planProgress}%` }"></i></span>
+            <workbench-icon name="chevron-down" :size="13" class="summary-chevron" />
+          </summary>
           <ol>
             <li v-for="item in plan" :key="item.id" :class="`is-${item.status}`">
-              <span class="plan-state">{{ item.status === 'completed' ? '✓' : item.status === 'running' ? '●' : '○' }}</span>
-              <span class="plan-tool">{{ item.icon }}</span>
+              <span class="plan-state">
+                <workbench-icon v-if="item.status === 'completed'" name="check" :size="12" />
+                <i v-else></i>
+              </span>
               <strong>{{ item.label }}</strong>
               <small v-if="item.step">步骤 {{ item.step }}</small>
+              <span>{{ planStatus(item.status) }}</span>
             </li>
           </ol>
-          <p>计划只根据本次真实选择过的动作生成，不预先虚构后续步骤。</p>
-        </section>
+        </details>
 
-        <section v-if="activities.length" class="activity-stream" aria-label="Agent 活动">
-          <article
-            v-for="activity in activities"
-            :key="activity.id"
-            class="activity-card"
-            :class="[`is-${activity.kind}`, `tone-${activity.tone}`]"
-          >
-            <div class="activity-rail"><span>{{ activity.tool.icon }}</span><i></i></div>
-            <div class="activity-body">
-              <header>
-                <div>
-                  <strong>{{ activity.title }}</strong>
-                  <span class="activity-status" :class="`is-${activity.tone}`">{{ activity.statusLabel }}</span>
+        <section v-if="displayActivities.length" class="activity-stream" aria-label="Agent 活动" aria-live="polite">
+          <template v-for="activity in displayActivities" :key="activity.id">
+            <article v-if="activity.kind === 'message'" class="chat-message" :class="activity.role === 'user' ? 'is-user' : 'is-agent'">
+              <span class="message-avatar">{{ activity.role === 'user' ? '你' : 'Y' }}</span>
+              <div>
+                <header><strong>{{ activity.role === 'user' ? '你' : 'Agent' }}</strong><time v-if="activity.timeLabel">{{ activity.timeLabel }}</time></header>
+                <p>{{ activity.message }}</p>
+              </div>
+            </article>
+
+            <article v-else-if="activity.kind === 'approval'" class="approval-card">
+              <div class="approval-heading">
+                <span><workbench-icon name="shield" :size="17" /></span>
+                <div><strong>需要你的批准</strong><small>{{ activity.tool.label }}</small></div>
+                <span class="status-pill is-approval">等待批准</span>
+              </div>
+              <p>{{ activity.message || '这项操作必须得到明确批准后才能继续。' }}</p>
+              <pre v-if="activity.input">{{ activity.input }}</pre>
+              <div class="approval-actions">
+                <button type="button" :disabled="readOnly" @click="emit('approval', { id: activity.approvalId, decision: 'reject', activity: activity.raw })">拒绝</button>
+                <button type="button" class="approve" :disabled="readOnly" @click="emit('approval', { id: activity.approvalId, decision: 'approve', activity: activity.raw })">
+                  <workbench-icon name="check" :size="13" />批准一次
+                </button>
+              </div>
+            </article>
+
+            <article v-else class="tool-event" :class="[`is-${activity.kind}`, `tone-${activity.tone}`]">
+              <div class="tool-rail">
+                <span><workbench-icon :name="iconForActivity(activity)" :size="14" /></span>
+                <i></i>
+              </div>
+              <div class="tool-body">
+                <header>
+                  <div><strong>{{ activity.title }}</strong><span class="status-pill" :class="`is-${activity.tone}`">{{ activity.statusLabel }}</span></div>
+                  <time v-if="activity.timeLabel">{{ activity.timeLabel }}</time>
+                </header>
+                <p v-if="activity.message">{{ activity.message }}</p>
+                <div v-if="activity.step || activity.attempt || activity.artifactRef" class="tool-meta">
+                  <span v-if="activity.step">步骤 {{ activity.step }}</span>
+                  <span v-if="activity.attempt">尝试 {{ activity.attempt }}</span>
+                  <span v-if="activity.artifactRef">{{ activity.artifactRef }}</span>
                 </div>
-                <time v-if="activity.timeLabel">{{ activity.timeLabel }}</time>
-              </header>
-              <p v-if="activity.message">{{ activity.message }}</p>
-              <div v-if="activity.step || activity.attempt || activity.artifactRef" class="activity-meta">
-                <span v-if="activity.step">步骤 {{ activity.step }}</span>
-                <span v-if="activity.attempt">尝试 {{ activity.attempt }}</span>
-                <span v-if="activity.artifactRef">{{ activity.artifactRef }}</span>
-              </div>
 
-              <div v-if="activity.kind === 'approval'" class="approval-card">
-                <p>{{ activity.message || '这项操作必须得到明确批准后才能继续。' }}</p>
-                <pre v-if="activity.input">{{ activity.input }}</pre>
-                <div>
-                  <button type="button" :disabled="readOnly" @click="emit('approval', { id: activity.approvalId, decision: 'reject', activity: activity.raw })">拒绝</button>
-                  <button type="button" class="approve" :disabled="readOnly" @click="emit('approval', { id: activity.approvalId, decision: 'approve', activity: activity.raw })">批准一次</button>
+                <details v-if="activity.kind === 'terminal' && (activity.command || activity.output)" class="terminal-output" :open="activity.tone === 'error'">
+                  <summary><workbench-icon name="terminal" :size="13" /><code>{{ activity.command ? `$ ${activity.command}` : '终端输出' }}</code><workbench-icon name="chevron-down" :size="12" /></summary>
+                  <pre v-if="activity.output">{{ activity.output }}</pre>
+                </details>
+
+                <div v-if="activity.kind === 'computer' && activity.output" class="computer-output">
+                  <workbench-icon name="monitor" :size="13" /><span>{{ activity.output }}</span>
                 </div>
               </div>
-
-              <div v-if="activity.kind === 'terminal'" class="terminal-card">
-                <div><span></span><span></span><span></span><strong>终端</strong></div>
-                <code v-if="activity.command">$ {{ activity.command }}</code>
-                <pre v-if="activity.output">{{ activity.output }}</pre>
-                <p v-if="!activity.command && !activity.output">没有保留终端输出。</p>
-              </div>
-
-              <div v-if="activity.kind === 'computer'" class="computer-card">
-                <div class="computer-screen"><span>电脑操作结果</span></div>
-                <p>{{ activity.output || '没有保留可视结果。' }}</p>
-              </div>
-            </div>
-          </article>
+            </article>
+          </template>
         </section>
 
         <section v-else-if="status.status !== 'idle'" class="waiting-card">
-          <span></span>
-          <div><strong>{{ status.label }}</strong><p>尚未记录详细事件。</p></div>
+          <span class="loading-ring"></span><div><strong>{{ status.label }}</strong><p>正在等待下一条真实事件。</p></div>
         </section>
 
-        <section v-if="normalizedArtifacts.length" class="thread-artifacts">
-          <header><strong>产物</strong><span>{{ normalizedArtifacts.length }} 个</span></header>
+        <section v-if="normalizedArtifacts.length" class="artifact-strip">
+          <header><strong>任务产物</strong><span>{{ normalizedArtifacts.length }}</span></header>
           <div>
             <button
               v-for="artifact in normalizedArtifacts"
@@ -130,9 +155,8 @@
             >
               <img v-if="artifact.kind === 'image' && artifact.url" :src="artifact.url" :alt="artifact.label" />
               <video v-else-if="artifact.kind === 'video' && artifact.url" :src="artifact.url" muted></video>
-              <span v-else class="artifact-placeholder">{{ artifact.kind.toUpperCase() }}</span>
-              <strong>{{ artifact.label }}</strong>
-              <small>{{ artifact.isFinal ? '最终交付' : artifact.status.label }}</small>
+              <span v-else><workbench-icon :name="artifact.kind === 'video' ? 'video' : artifact.kind === 'image' ? 'image' : 'file'" :size="18" /></span>
+              <div><strong>{{ artifact.label }}</strong><small>{{ artifact.isFinal ? '最终交付' : artifact.status.label }}</small></div>
             </button>
           </div>
         </section>
@@ -150,6 +174,7 @@ import {
   normalizeWorkbenchArtifacts,
   workbenchStatus
 } from './workbenchView.js'
+import WorkbenchIcon from './WorkbenchIcon.vue'
 
 defineOptions({ name: 'WorkbenchActivityFeed' })
 
@@ -176,204 +201,210 @@ const scroller = ref(null)
 const goal = computed(() => String(props.snapshot?.goal || '').trim())
 const status = computed(() => workbenchStatus(props.snapshot?.status || 'idle'))
 const activities = computed(() => buildWorkbenchActivities(props.snapshot, props.injectedActivities))
+const displayActivities = computed(() => {
+  const calls = new Map(activities.value.filter(item => item.type === 'tool_call').map(item => [item.id, item]))
+  const completedCallIds = new Set(activities.value.filter(item => item.type === 'observation').map(item => item.toolCallId))
+  return activities.value
+    .filter(item => item.type !== 'tool_call' || !completedCallIds.has(item.id))
+    .map(item => {
+      if (item.type !== 'observation') return item
+      const call = calls.get(item.toolCallId)
+      return call ? {
+        ...item,
+        command: item.command || call.command,
+        input: item.input || call.input,
+        actionName: item.actionName || call.actionName,
+        tool: item.tool?.name ? item.tool : call.tool
+      } : item
+    })
+})
 const plan = computed(() => buildWorkbenchPlan(props.snapshot, activities.value))
 const completedPlanCount = computed(() => plan.value.filter(item => item.status === 'completed').length)
+const planProgress = computed(() => plan.value.length ? Math.round((completedPlanCount.value / plan.value.length) * 100) : 0)
 const normalizedArtifacts = computed(() => normalizeWorkbenchArtifacts(props.artifacts, props.snapshot))
-const startedAt = computed(() => formatWorkbenchTime(props.snapshot?.startedAt))
+const startedAt = computed(() => formatWorkbenchTime(props.snapshot?.startedAt || props.snapshot?.createdAt))
 const sessionTitle = computed(() => goal.value || (props.mode === 'draft' ? '新任务' : 'Agent 任务'))
 const modeLabel = computed(() => ({ draft: '本地草稿', live: '实时会话', history: '已保存历史' })[props.mode] || '会话')
 
-watch(() => [activities.value.length, normalizedArtifacts.value.length], async () => {
+const iconForActivity = activity => {
+  if (activity.kind === 'terminal') return 'terminal'
+  if (activity.kind === 'computer') return 'monitor'
+  if (activity.kind === 'plan') return 'list'
+  if (activity.kind === 'error') return 'alert'
+  if (activity.actionName?.includes('image')) return 'image'
+  if (activity.actionName?.includes('video')) return 'video'
+  if (activity.actionName?.startsWith('workspace.')) return 'file'
+  if (activity.actionName?.startsWith('creative.')) return 'sparkles'
+  return activity.tone === 'success' ? 'check' : 'activity'
+}
+
+const planStatus = value => ({ planned: '待执行', running: '执行中', completed: '已完成', failed: '失败' })[value] || value
+
+watch(() => [displayActivities.value.length, normalizedArtifacts.value.length], async () => {
   await nextTick()
   if (scroller.value && props.mode === 'live') scroller.value.scrollTop = scroller.value.scrollHeight
 })
 </script>
 
 <style scoped>
-.wb-thread { display: grid; grid-template-rows: auto minmax(0, 1fr); min-width: 0; min-height: 0; color: var(--wb-text); background: #151619; }
-.thread-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 51px; border-bottom: 1px solid var(--wb-border); padding: 8px 13px; background: rgba(21, 22, 25, 0.96); }
-.thread-header > div { display: flex; align-items: center; min-width: 0; gap: 8px; }
-.session-mark { display: grid; flex: 0 0 auto; width: 25px; height: 25px; place-items: center; border: 1px solid #34363b; border-radius: 6px; color: #afdcc5; background: #222429; font-size: 9px; font-weight: 850; }
-.thread-header > div > span:last-child { min-width: 0; }
-.thread-header strong,
-.thread-header small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.thread-header strong { max-width: min(48vw, 540px); color: #dfe0e3; font-size: 10px; }
-.thread-header small { margin-top: 1px; color: #666970; font-size: 7.5px; }
-.thread-header-actions { justify-content: flex-end; }
-.thread-header-actions > button { border: 1px solid #34363b; border-radius: 6px; padding: 5px 7px; color: #a2a5ab; font-size: 8px; }
-.thread-header-actions > button:hover { color: #fff; background: #26282d; }
-.mobile-nav { display: none; color: #9b9ea5; }
-.run-status { display: inline-flex; align-items: center; gap: 5px; border: 1px solid #32343a; border-radius: 999px; padding: 4px 7px; color: #9699a1; background: #1d1f23; font-size: 7.5px; }
-.run-status i { width: 5px; height: 5px; border-radius: 50%; background: #777a82; }
-.run-status.is-running i { background: #75bdf2; animation: status-pulse 1s infinite alternate; }
-.run-status.is-success i { background: #72d6a8; }
-.run-status.is-error i { background: #ef8383; }
-.run-status.is-retry i { background: #b89af3; }
-.run-status.is-stopped i { background: #d7a667; }
-
-.thread-scroll { min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: #34363c transparent; }
-.thread-content { width: min(800px, calc(100% - 32px)); margin: 0 auto; padding: 26px 0 54px; }
-.thread-loading { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 55vh; color: #858890; font-size: 9px; }
-.thread-loading span { width: 8px; height: 8px; border: 2px solid #3b3e44; border-top-color: #9ee3c1; border-radius: 50%; animation: spin 700ms linear infinite; }
-.thread-empty { display: flex; min-height: 66vh; flex-direction: column; align-items: center; justify-content: center; padding: 42px 20px; text-align: center; }
-.empty-orbit { display: grid; width: 48px; height: 48px; place-items: center; border: 1px solid #35373d; border-radius: 14px; background: linear-gradient(145deg, #282a2f, #1c1e22); box-shadow: 0 16px 46px rgba(0, 0, 0, 0.25); transform: rotate(-4deg); }
-.empty-orbit span { color: #b7f5d5; font-size: 21px; font-weight: 900; transform: rotate(4deg); }
-.thread-empty h1 { margin: 16px 0 0; color: #f1f1f2; font-size: clamp(20px, 3vw, 29px); letter-spacing: -0.035em; }
-.thread-empty > p { max-width: 480px; margin: 8px 0 0; color: #82858c; font-size: 10px; line-height: 1.65; }
-.suggestion-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; width: min(510px, 100%); margin-top: 22px; }
-.suggestion-grid button { display: flex; align-items: flex-start; gap: 8px; border: 1px solid #303238; border-radius: 9px; padding: 10px 11px; color: #afb1b6; background: #1c1e22; font-size: 8.5px; line-height: 1.45; text-align: left; }
-.suggestion-grid button:hover { border-color: #45484f; color: #e2e3e5; background: #222429; }
-.suggestion-grid span { color: #82d3ae; }
-
-.history-banner { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 22px; border: 1px solid #343c38; border-radius: 9px; padding: 9px 11px; background: #1b221f; }
-.history-banner > div { min-width: 0; }
-.history-banner span,
+.thread-shell { display: grid; grid-template-rows: auto minmax(0,1fr); min-width: 0; min-height: 0; color: var(--wb-text); background: #151719; }
+.thread-header { display: flex; min-height: 51px; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--wb-border); padding: 7px 11px; background: rgba(21,23,25,.96); }
+.thread-heading,
+.header-actions { display: flex; min-width: 0; align-items: center; gap: 8px; }
+.thread-symbol { display: grid; width: 26px; height: 26px; flex: 0 0 auto; place-items: center; border: 1px solid #34383a; border-radius: 7px; color: #9edbb9; background: #202326; }
+.thread-heading > div { min-width: 0; }
+.thread-heading strong,
+.thread-heading small { display: block; overflow: hidden; max-width: min(48vw, 580px); text-overflow: ellipsis; white-space: nowrap; }
+.thread-heading strong { color: #dfe2e0; font-size: 13px; font-weight: 650; }
+.thread-heading small { margin-top: 2px; color: #62686a; font-size: 11px; }
+.header-icon { display: grid; width: 28px; height: 28px; place-items: center; border: 1px solid transparent; border-radius: 7px; color: #787e7f; }
+.header-icon:hover { border-color: #35393b; color: #e0e3e1; background: #222527; }
+.mobile-nav { display: none; }
+.run-status { display: inline-flex; height: 26px; align-items: center; gap: 6px; border: 1px solid #303436; border-radius: 999px; padding: 0 9px; color: #858b8b; background: #1d2022; font-size: 11px; white-space: nowrap; }
+.run-status i { width: 5px; height: 5px; border-radius: 50%; background: #6f7576; }
+.run-status.is-running i { background: #71b9e3; animation: pulse 850ms infinite alternate; }
+.run-status.is-success i { background: #6ec99b; }
+.run-status.is-error i { background: #e17676; }
+.run-status.is-approval i { background: #d2a45f; }
+.thread-scroll { min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: #34383a transparent; }
+.thread-content,
+.welcome-state { width: min(760px, calc(100% - 34px)); margin: 0 auto; }
+.thread-content { padding: 25px 0 58px; }
+.welcome-state { padding: clamp(36px, 8vh, 78px) 0 40px; }
+.welcome-intro { display: grid; grid-template-columns: 39px minmax(0,1fr); align-items: start; gap: 12px; }
+.welcome-mark { display: grid; width: 38px; height: 38px; place-items: center; border: 1px solid #34393a; border-radius: 10px; color: #a3e0be; background: linear-gradient(145deg,#25292b,#1d2022); }
+.welcome-intro h1 { margin: 1px 0 0; color: #eceeed; font-size: 22px; font-weight: 680; letter-spacing: -.025em; }
+.welcome-intro p { max-width: 580px; margin: 6px 0 0; color: #747a7a; font-size: 13px; line-height: 1.6; }
+.suggestion-list { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 6px; margin-top: 22px; }
+.suggestion-list button { display: grid; grid-template-columns: 26px minmax(0,1fr) auto; min-height: 50px; align-items: center; gap: 8px; border: 1px solid #303436; border-radius: 9px; padding: 8px 10px; color: #a5aaa8; background: #1b1e20; text-align: left; }
+.suggestion-list button:hover { border-color: #444a49; color: #dfe2e0; background: #202426; transform: translateY(-1px); }
+.suggestion-list button > span { display: grid; width: 25px; height: 25px; place-items: center; border-radius: 6px; color: #7b9d8b; background: #232a27; font-size: 11px; }
+.suggestion-list strong { overflow: hidden; font-size: 12.5px; font-weight: 540; line-height: 1.4; text-overflow: ellipsis; white-space: nowrap; }
+.suggestion-list svg { color: #555b5c; }
+.welcome-capabilities { display: flex; flex-wrap: wrap; gap: 14px; margin: 16px 2px 0 50px; color: #5f6565; font-size: 11px; }
+.welcome-capabilities span { display: inline-flex; align-items: center; gap: 4px; }
+.loading-state { display: flex; min-height: 60vh; align-items: center; justify-content: center; gap: 8px; color: #707677; font-size: 11px; }
+.loading-state span,
+.loading-ring { width: 13px; height: 13px; border: 2px solid #363a3c; border-top-color: #8bd5ae; border-radius: 50%; animation: spin 700ms linear infinite; }
+.history-banner { display: grid; grid-template-columns: 22px minmax(0,1fr) auto; align-items: center; gap: 8px; margin-bottom: 21px; border: 1px solid #334139; border-radius: 8px; padding: 8px 10px; color: #8ccbaa; background: #19201d; }
 .history-banner strong,
 .history-banner small { display: block; }
-.history-banner span { color: #8ad8b2; font-size: 7px; font-weight: 850; letter-spacing: 0.12em; }
-.history-banner strong { margin-top: 1px; color: #d4ded9; font-size: 9px; }
-.history-banner small { margin-top: 2px; color: #738079; font-size: 7.5px; }
-.history-banner button { flex: 0 0 auto; border: 1px solid #3d5148; border-radius: 7px; padding: 6px 8px; color: #a7dfc4; font-size: 8px; }
+.history-banner strong { color: #bfd8ca; font-size: 12px; }
+.history-banner small { margin-top: 2px; color: #68776f; font-size: 11px; }
+.history-banner button { border: 1px solid #405249; border-radius: 6px; padding: 6px 9px; color: #a6d9be; font-size: 11px; }
 .history-banner button:hover { background: #243129; }
-.user-message { display: grid; grid-template-columns: 27px minmax(0, 1fr); gap: 10px; margin: 0 0 20px; }
-.message-avatar { display: grid; width: 26px; height: 26px; place-items: center; border-radius: 7px; color: #191b1f; background: #d6d9df; font-size: 8px; font-weight: 850; }
-.user-message header { display: flex; align-items: center; gap: 8px; min-height: 24px; }
-.user-message strong { color: #d7d8dc; font-size: 9px; }
-.user-message time { color: #64676e; font-size: 7px; }
-.user-message p { margin: 3px 0 0; color: #ececed; font-size: 11px; line-height: 1.7; white-space: pre-wrap; }
-
-.plan-card { margin: 0 0 18px 37px; border: 1px solid #303238; border-radius: 9px; background: #1b1d20; }
-.plan-card > header { display: flex; align-items: center; justify-content: space-between; gap: 10px; border-bottom: 1px solid #292b30; padding: 8px 10px; }
-.plan-card > header div { display: flex; align-items: center; gap: 7px; }
-.plan-card strong { color: #cfd0d4; font-size: 9px; }
-.plan-card > header small { color: #6f7279; font-size: 7.5px; }
-.card-icon { display: grid; width: 20px; height: 20px; place-items: center; border-radius: 5px; color: #9eddbf; background: #233128; font-size: 10px; }
-.plan-card ol { display: grid; gap: 1px; padding: 6px; list-style: none; }
-.plan-card li { display: grid; grid-template-columns: 17px 24px minmax(0, 1fr) auto; align-items: center; gap: 5px; border-radius: 6px; padding: 5px 6px; color: #989ba2; }
-.plan-card li.is-running { color: #d8dadd; background: #23252a; }
-.plan-card li.is-completed { color: #7d9488; }
-.plan-state { color: #676a72; font-size: 9px; }
-.is-running .plan-state { color: #79c6ec; }
-.is-completed .plan-state { color: #70cba0; }
-.plan-tool { display: grid; width: 21px; height: 21px; place-items: center; border: 1px solid #34363c; border-radius: 5px; background: #222429; font-size: 6.5px; font-weight: 800; }
-.plan-card li strong { font-size: 8.5px; }
-.plan-card li small { color: #62656c; font-size: 7px; }
-.plan-card > p { margin: 0; border-top: 1px solid #292b30; padding: 6px 10px; color: #5f6269; font-size: 7px; }
-
-.activity-stream { display: grid; gap: 0; margin-left: 37px; }
-.activity-card { display: grid; grid-template-columns: 27px minmax(0, 1fr); gap: 8px; min-width: 0; }
-.activity-rail { position: relative; display: flex; justify-content: center; }
-.activity-rail > span { position: relative; z-index: 1; display: grid; width: 23px; height: 23px; place-items: center; border: 1px solid #37393f; border-radius: 6px; color: #9a9da4; background: #202226; font-size: 6.5px; font-weight: 850; }
-.activity-rail i { position: absolute; top: 24px; bottom: 0; width: 1px; background: #2b2d32; }
-.activity-card:last-child .activity-rail i { display: none; }
-.activity-body { min-width: 0; padding: 2px 0 18px; }
-.activity-body > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 9px; min-height: 22px; }
-.activity-body > header > div { display: flex; min-width: 0; flex-wrap: wrap; align-items: center; gap: 6px; }
-.activity-body > header strong { overflow: hidden; color: #c9cbd0; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
-.activity-body > header time { flex: 0 0 auto; color: #5f6269; font-size: 7px; }
-.activity-body > p { margin: 3px 0 0; color: #858890; font-size: 8.5px; line-height: 1.5; }
-.activity-status { border-radius: 999px; padding: 2px 5px; color: #8a8d94; background: #25272b; font-size: 6.5px; }
-.activity-status.is-running { color: #83c9ed; background: #1d2b33; }
-.activity-status.is-success { color: #82d5ad; background: #1e2e27; }
-.activity-status.is-error { color: #ee9696; background: #342124; }
-.activity-status.is-retry { color: #c2a7f0; background: #2a2336; }
-.activity-status.is-approval { color: #e5bd79; background: #342c1e; }
-.activity-meta { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
-.activity-meta span { border: 1px solid #303238; border-radius: 4px; padding: 2px 5px; color: #686b72; background: #1b1c20; font-size: 6.5px; }
-.tone-success .activity-rail > span { color: #78cda4; border-color: #31493e; }
-.tone-error .activity-rail > span { color: #e48787; border-color: #4a2d31; }
-.tone-running .activity-rail > span { color: #7fc1e5; border-color: #2b4655; }
-
-.approval-card { margin-top: 7px; border: 1px solid #4a402d; border-radius: 8px; padding: 9px; background: #262218; }
-.approval-card > p { margin: 0; color: #bfb29b; font-size: 8px; line-height: 1.5; }
-.approval-card > pre { max-height: 220px; overflow: auto; margin: 7px 0 0; border: 1px solid #3b352a; border-radius: 6px; padding: 7px; color: #d0c5b2; background: #18150f; font: 9px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; word-break: break-word; }
-.approval-card > div { display: flex; justify-content: flex-end; gap: 5px; margin-top: 8px; }
-.approval-card button { border: 1px solid #4a4438; border-radius: 6px; padding: 5px 8px; color: #a6a098; font-size: 7.5px; }
-.approval-card button.approve { border-color: #46624f; color: #b5e4ca; background: #28372e; }
-.approval-card button:disabled { cursor: not-allowed; opacity: 0.4; }
-.terminal-card { overflow: hidden; margin-top: 7px; border: 1px solid #33363b; border-radius: 8px; background: #0d0e10; }
-.terminal-card > div { display: flex; align-items: center; gap: 4px; border-bottom: 1px solid #25272b; padding: 6px 8px; background: #18191c; }
-.terminal-card > div span { width: 5px; height: 5px; border-radius: 50%; background: #676a71; }
-.terminal-card > div span:first-child { background: #d76f6f; }
-.terminal-card > div span:nth-child(2) { background: #d3a75c; }
-.terminal-card > div span:nth-child(3) { background: #69b88c; }
-.terminal-card > div strong { margin-left: 4px; color: #878a91; font-size: 7px; }
-.terminal-card code,
-.terminal-card pre,
-.terminal-card > p { display: block; margin: 0; padding: 7px 9px; color: #aeb9b3; font: 8px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; }
-.terminal-card pre { border-top: 1px solid #1d1f22; color: #82878d; }
-.computer-card { margin-top: 7px; border: 1px solid #34363c; border-radius: 8px; padding: 7px; background: #1b1d20; }
-.computer-screen { display: grid; min-height: 72px; place-items: center; border: 1px solid #2e3035; border-radius: 5px; color: #686b72; background: repeating-linear-gradient(135deg, #17181b 0 9px, #191a1e 9px 18px); font-size: 7px; }
-.computer-card > p { margin: 6px 1px 0; color: #75787f; font-size: 7.5px; }
-.waiting-card { display: flex; align-items: center; gap: 10px; margin: 12px 0 0 37px; border: 1px solid #303238; border-radius: 8px; padding: 10px; background: #1b1d20; }
-.waiting-card > span { width: 9px; height: 9px; border: 2px solid #3d4046; border-top-color: #81cfaa; border-radius: 50%; animation: spin 800ms linear infinite; }
-.waiting-card strong { color: #bfc1c6; font-size: 8.5px; }
-.waiting-card p { margin: 2px 0 0; color: #696c73; font-size: 7.5px; }
-
-.thread-artifacts { margin: 18px 0 0 37px; border-top: 1px solid #292b30; padding-top: 14px; }
-.thread-artifacts > header { display: flex; align-items: center; justify-content: space-between; }
-.thread-artifacts > header strong { color: #bfc1c6; font-size: 9px; }
-.thread-artifacts > header span { color: #65686f; font-size: 7px; }
-.thread-artifacts > div { display: grid; grid-template-columns: repeat(auto-fill, minmax(145px, 1fr)); gap: 7px; margin-top: 8px; }
-.thread-artifacts button { overflow: hidden; min-width: 0; border: 1px solid #303238; border-radius: 8px; color: #aeb0b5; background: #1c1e22; text-align: left; }
-.thread-artifacts button:not(:disabled):hover { border-color: #4a4d54; transform: translateY(-1px); }
-.thread-artifacts img,
-.thread-artifacts video,
-.artifact-placeholder { display: grid; width: 100%; aspect-ratio: 16/10; place-items: center; object-fit: cover; color: #65686f; background: #17181b; font-size: 8px; }
-.thread-artifacts strong,
-.thread-artifacts small { display: block; overflow: hidden; margin: 0 8px; text-overflow: ellipsis; white-space: nowrap; }
-.thread-artifacts strong { margin-top: 7px; font-size: 8px; }
-.thread-artifacts small { margin-top: 2px; margin-bottom: 7px; color: #686b72; font-size: 7px; }
-
-.thread-header strong,
-.user-message strong,
-.plan-card strong,
-.activity-body > header strong,
-.thread-artifacts > header strong { font-size: 11px; }
-.thread-header small,
-.run-status,
-.plan-card > header small,
-.plan-card li strong,
-.activity-body > p,
-.approval-card > p,
-.waiting-card strong,
-.thread-artifacts strong { font-size: 10px; }
-.plan-card li small,
-.plan-card > p,
-.activity-body > header time,
-.activity-status,
-.activity-meta span,
-.approval-card button,
-.terminal-card > div strong,
-.computer-screen,
-.computer-card > p,
-.waiting-card p,
-.thread-artifacts > header span,
-.thread-artifacts small { font-size: 9px; }
-.terminal-card code,
-.terminal-card pre,
-.terminal-card > p { font-size: 10px; }
+.chat-message { display: grid; grid-template-columns: 27px minmax(0,1fr); gap: 10px; margin-bottom: 18px; }
+.message-avatar { display: grid; width: 26px; height: 26px; place-items: center; border: 1px solid #363a3c; border-radius: 7px; color: #9aa09e; background: #222527; font-size: 10px; font-weight: 750; }
+.chat-message.is-user .message-avatar { border-color: #d6d9d7; color: #181b1b; background: #d6d9d7; }
+.chat-message header { display: flex; min-height: 23px; align-items: center; gap: 8px; }
+.chat-message header strong { color: #c9cdcb; font-size: 12px; }
+.chat-message time { color: #606667; font-size: 11px; }
+.chat-message p { margin: 3px 0 0; color: #dfe2e0; font-size: 14px; line-height: 1.72; white-space: pre-wrap; }
+.chat-message.is-agent p { color: #c9cdcb; }
+.plan-summary { margin: 0 0 18px 37px; overflow: hidden; border: 1px solid #303436; border-radius: 8px; background: #1a1d1f; }
+.plan-summary summary { display: grid; grid-template-columns: 24px auto auto minmax(50px,1fr) 18px; min-height: 39px; align-items: center; gap: 7px; padding: 5px 9px; cursor: pointer; list-style: none; }
+.plan-summary summary::-webkit-details-marker { display: none; }
+.summary-icon { display: grid; width: 23px; height: 23px; place-items: center; border-radius: 6px; color: #91c8aa; background: #222b27; }
+.plan-summary summary strong { color: #bec3c0; font-size: 12px; }
+.plan-summary summary small { color: #696f6e; font-size: 11px; }
+.plan-progress { overflow: hidden; height: 3px; border-radius: 999px; background: #2b2f30; }
+.plan-progress i { display: block; height: 100%; border-radius: inherit; background: #78c69c; transition: width 180ms ease; }
+.summary-chevron { color: #626869; transition: transform 140ms ease; }
+.plan-summary[open] .summary-chevron { transform: rotate(180deg); }
+.plan-summary ol { display: grid; gap: 1px; border-top: 1px solid #292d2e; padding: 5px; list-style: none; }
+.plan-summary li { display: grid; grid-template-columns: 19px minmax(0,1fr) auto auto; align-items: center; gap: 6px; border-radius: 5px; padding: 5px 6px; color: #858b89; }
+.plan-summary li.is-running { color: #c7ccca; background: #222628; }
+.plan-summary li.is-completed { color: #71827a; }
+.plan-state { display: grid; width: 17px; height: 17px; place-items: center; color: #6ec99a; }
+.plan-state i { width: 6px; height: 6px; border: 1px solid #5b6161; border-radius: 50%; }
+.is-running .plan-state i { border-color: #73b8dd; background: #73b8dd; box-shadow: 0 0 0 3px rgba(115,184,221,.08); }
+.plan-summary li strong { font-size: 12px; font-weight: 560; }
+.plan-summary li small,
+.plan-summary li > span:last-child { color: #646a6b; font-size: 10.5px; }
+.activity-stream { display: grid; margin-left: 37px; }
+.tool-event { display: grid; grid-template-columns: 27px minmax(0,1fr); gap: 8px; }
+.tool-rail { position: relative; display: flex; justify-content: center; }
+.tool-rail > span { position: relative; z-index: 1; display: grid; width: 24px; height: 24px; place-items: center; border: 1px solid #363a3c; border-radius: 7px; color: #8a908f; background: #1f2224; }
+.tool-rail > i { position: absolute; top: 25px; bottom: 0; width: 1px; background: #2b2f30; }
+.tool-event:last-child .tool-rail > i { display: none; }
+.tone-success .tool-rail > span { border-color: #30483c; color: #70c799; }
+.tone-error .tool-rail > span { border-color: #493033; color: #dd7e7e; }
+.tone-running .tool-rail > span { border-color: #2f4652; color: #72b4d9; }
+.tool-body { min-width: 0; padding: 2px 0 18px; }
+.tool-body > header { display: flex; min-height: 23px; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.tool-body > header > div { display: flex; min-width: 0; flex-wrap: wrap; align-items: center; gap: 6px; }
+.tool-body > header strong { overflow: hidden; color: #c6cac8; font-size: 12.5px; font-weight: 590; text-overflow: ellipsis; white-space: nowrap; }
+.tool-body > header time { color: #5e6465; font-size: 10.5px; }
+.tool-body > p { margin: 3px 0 0; color: #777d7c; font-size: 12px; line-height: 1.55; }
+.status-pill { border-radius: 999px; padding: 2px 6px; color: #777d7d; background: #25292a; font-size: 10px; }
+.status-pill.is-running { color: #78b9da; background: #1b2a32; }
+.status-pill.is-success { color: #75c89d; background: #1e2d26; }
+.status-pill.is-error { color: #df8585; background: #332124; }
+.status-pill.is-approval { color: #d5ac6a; background: #322a1e; }
+.tool-meta { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
+.tool-meta span { border: 1px solid #303435; border-radius: 4px; padding: 2px 5px; color: #626869; font-size: 10px; }
+.terminal-output { overflow: hidden; margin-top: 7px; border: 1px solid #303436; border-radius: 7px; background: #0f1112; }
+.terminal-output summary { display: grid; grid-template-columns: 18px minmax(0,1fr) auto; min-height: 31px; align-items: center; gap: 5px; padding: 4px 8px; color: #777e7d; cursor: pointer; list-style: none; }
+.terminal-output summary::-webkit-details-marker { display: none; }
+.terminal-output code { overflow: hidden; color: #aeb5b1; font: 11px ui-monospace,SFMono-Regular,Menlo,monospace; text-overflow: ellipsis; white-space: nowrap; }
+.terminal-output pre { overflow: auto; max-height: 260px; margin: 0; border-top: 1px solid #262a2b; padding: 10px; color: #99a29e; font: 11px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace; white-space: pre-wrap; }
+.computer-output { display: flex; gap: 7px; margin-top: 7px; border: 1px solid #303436; border-radius: 7px; padding: 9px; color: #818786; background: #1a1d1f; font-size: 11.5px; line-height: 1.5; }
+.approval-card { margin: 2px 0 18px 37px; border: 1px solid #4a402e; border-radius: 9px; padding: 11px; background: #242016; box-shadow: inset 3px 0 #d2a65f; }
+.approval-heading { display: grid; grid-template-columns: 31px minmax(0,1fr) auto; align-items: center; gap: 8px; }
+.approval-heading > span:first-child { display: grid; width: 30px; height: 30px; place-items: center; border-radius: 7px; color: #ddb875; background: #332c1f; }
+.approval-heading strong,
+.approval-heading small { display: block; }
+.approval-heading strong { color: #dfd5c3; font-size: 13px; }
+.approval-heading small { margin-top: 2px; color: #8e8069; font-size: 11px; }
+.approval-card > p { margin: 9px 1px 0; color: #b9ad98; font-size: 12px; line-height: 1.55; }
+.approval-card > pre { overflow: auto; max-height: 180px; margin: 8px 0 0; border: 1px solid #423a2a; border-radius: 6px; padding: 9px; color: #bfb49f; background: #17150f; font: 11px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; white-space: pre-wrap; }
+.approval-actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 10px; }
+.approval-actions button { display: inline-flex; height: 31px; align-items: center; gap: 5px; border: 1px solid #4b4438; border-radius: 6px; padding: 0 10px; color: #a7a097; font-size: 11px; }
+.approval-actions button:hover { color: #e0d8cc; background: #2d281e; }
+.approval-actions button.approve { border-color: #48604f; color: #b5dfc7; background: #29362e; }
+.approval-actions button:disabled { cursor: not-allowed; opacity: .4; }
+.waiting-card { display: flex; align-items: center; gap: 9px; margin: 8px 0 0 37px; border: 1px solid #303436; border-radius: 8px; padding: 9px; background: #1a1d1f; }
+.waiting-card strong { color: #b9bdbb; font-size: 12px; }
+.waiting-card p { margin: 2px 0 0; color: #626869; font-size: 11px; }
+.artifact-strip { margin: 18px 0 0 37px; border-top: 1px solid #2a2e2f; padding-top: 13px; }
+.artifact-strip > header { display: flex; align-items: center; gap: 6px; }
+.artifact-strip > header strong { color: #aeb3b1; font-size: 12px; }
+.artifact-strip > header span { display: grid; min-width: 17px; height: 17px; place-items: center; border-radius: 999px; color: #707676; background: #262a2b; font-size: 10px; }
+.artifact-strip > div { display: grid; grid-template-columns: repeat(auto-fill,minmax(175px,1fr)); gap: 6px; margin-top: 8px; }
+.artifact-strip button { display: grid; grid-template-columns: 48px minmax(0,1fr); align-items: center; gap: 8px; overflow: hidden; border: 1px solid #303436; border-radius: 8px; color: #aeb3b1; background: #1b1e20; text-align: left; }
+.artifact-strip button:not(:disabled):hover { border-color: #454a4b; transform: translateY(-1px); }
+.artifact-strip img,
+.artifact-strip video,
+.artifact-strip button > span { display: grid; width: 48px; height: 43px; place-items: center; object-fit: cover; color: #6d7473; background: #222527; }
+.artifact-strip button > div { min-width: 0; padding-right: 7px; }
+.artifact-strip button strong,
+.artifact-strip button small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.artifact-strip button strong { font-size: 12px; }
+.artifact-strip button small { margin-top: 2px; color: #686e6f; font-size: 10.5px; }
 
 @keyframes spin { to { transform: rotate(360deg); } }
-@keyframes status-pulse { to { opacity: 0.4; } }
+@keyframes pulse { to { opacity: .35; } }
 
-@media (max-width: 880px) {
-  .mobile-nav { display: block; }
-  .thread-header strong { max-width: 52vw; }
+@media (max-width: 860px) {
+  .mobile-nav { display: grid; }
+  .thread-heading strong { max-width: 48vw; }
 }
 
 @media (max-width: 620px) {
-  .thread-content { width: calc(100% - 20px); padding-top: 15px; }
-  .thread-header-actions .run-status { display: none; }
-  .suggestion-grid { grid-template-columns: 1fr; }
-  .suggestion-grid button:nth-child(n + 4) { display: none; }
-  .history-banner { align-items: flex-start; flex-direction: column; }
-  .history-banner button { width: 100%; }
-  .plan-card,
+  .thread-content,
+  .welcome-state { width: calc(100% - 20px); }
+  .welcome-state { padding-top: 28px; }
+  .suggestion-list { grid-template-columns: 1fr; }
+  .suggestion-list button:nth-child(n+4) { display: none; }
+  .welcome-capabilities { margin-left: 0; }
+  .run-status { display: none; }
+  .history-banner { grid-template-columns: 20px minmax(0,1fr); }
+  .history-banner button { grid-column: 1 / -1; }
+  .plan-summary,
   .activity-stream,
+  .approval-card,
   .waiting-card,
-  .thread-artifacts { margin-left: 0; }
-  .user-message { grid-template-columns: 24px minmax(0, 1fr); gap: 7px; }
-  .message-avatar { width: 23px; height: 23px; }
+  .artifact-strip { margin-left: 0; }
+  .chat-message { gap: 7px; }
 }
 </style>

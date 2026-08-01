@@ -1,105 +1,128 @@
 <template>
-  <aside class="wb-sidebar" :class="{ 'is-open': open }" aria-label="任务导航">
-    <header class="wb-sidebar-brand">
-      <button type="button" class="brand-mark" aria-label="YUFENG Agent 首页" @click="emit('new-task')">
-        Y
+  <aside class="wb-sidebar" :class="{ 'is-open': open }" aria-label="项目与任务导航">
+    <header class="sidebar-brand">
+      <button type="button" class="brand-button" aria-label="YUFENG Agent 首页" :disabled="newTaskDisabled" @click="emit('new-task')">
+        <span>Y</span>
       </button>
-      <div>
+      <div class="brand-copy">
         <strong>YUFENG</strong>
-        <span>桌面 Agent 工作台</span>
+        <small>Agent Workbench</small>
       </div>
-      <button type="button" class="mobile-close" aria-label="关闭导航" @click="emit('close')">×</button>
+      <button type="button" class="icon-button mobile-close" aria-label="关闭导航" @click="emit('close')">
+        <workbench-icon name="close" :size="17" />
+      </button>
     </header>
 
-    <button type="button" class="new-task" :disabled="newTaskDisabled" @click="emit('new-task')">
-      <span>＋</span>
-      新任务
-      <kbd>⌘ N</kbd>
-    </button>
-
-    <nav class="workspace-nav" aria-label="工作区">
-      <p class="nav-label">工作区</p>
-      <button
-        v-for="workspace in workspaces"
-        :key="workspace.id"
-        type="button"
-        :class="{ 'is-active': workspace.id === activeWorkspaceId }"
-        @click="emit('select-workspace', workspace.id)"
-      >
-        <span class="nav-icon">{{ workspace.icon || '◇' }}</span>
-        <span>
-          <strong>{{ workspace.label }}</strong>
-          <small v-if="workspace.description">{{ workspace.description }}</small>
-        </span>
-        <i v-if="workspace.badge">{{ workspace.badge }}</i>
+    <div class="primary-actions">
+      <button type="button" class="new-task" :disabled="newTaskDisabled" @click="emit('new-task')">
+        <workbench-icon name="plus" :size="15" />
+        <span>新任务</span>
+        <kbd>⌘N</kbd>
       </button>
-    </nav>
+      <label class="task-search" :class="{ 'has-value': query }">
+        <workbench-icon name="search" :size="14" />
+        <input ref="searchInput" v-model="query" type="search" placeholder="搜索任务" aria-label="搜索任务历史" />
+        <button v-if="query" type="button" aria-label="清除搜索" @click="query = ''">
+          <workbench-icon name="close" :size="13" />
+        </button>
+        <kbd v-else>⌘K</kbd>
+      </label>
+    </div>
 
-    <section class="task-history" :aria-busy="loading ? 'true' : 'false'">
-      <div class="section-row">
-        <p class="nav-label">任务</p>
+    <section class="sidebar-section project-section">
+      <div class="section-heading">
+        <span>项目</span>
+      </div>
+      <nav class="project-list" aria-label="项目">
+        <button
+          v-for="workspace in workspaces"
+          :key="workspace.id"
+          type="button"
+          :class="{ 'is-active': workspace.id === activeWorkspaceId }"
+          @click="emit('select-workspace', workspace.id)"
+        >
+          <span class="project-icon"><workbench-icon :name="workspace.iconName || iconForWorkspace(workspace.id)" :size="15" /></span>
+          <span class="project-copy">
+            <strong>{{ workspace.label }}</strong>
+            <small v-if="workspace.description">{{ workspace.description }}</small>
+          </span>
+          <span v-if="workspace.badge" class="project-badge">{{ workspace.badge }}</span>
+          <workbench-icon v-else name="chevron-right" :size="13" class="project-arrow" />
+        </button>
+      </nav>
+    </section>
+
+    <section class="sidebar-section history-section" :aria-busy="loading ? 'true' : 'false'">
+      <div class="section-heading">
+        <span>最近任务</span>
         <button
           type="button"
-          class="clear-history"
           :disabled="loading || !normalizedRecords.length"
           @click="emit('clear-history')"
-        >
-          清空
-        </button>
+        >清空</button>
       </div>
 
-      <div v-if="loading" class="history-loading" role="status">
-        <span></span><span></span><span></span>
-        正在读取任务
+      <div v-if="loading" class="sidebar-empty" role="status">
+        <span class="loading-ring"></span>
+        <p>正在读取任务…</p>
       </div>
 
-      <div v-else-if="normalizedRecords.length" class="history-list">
+      <div v-else-if="filteredRecords.length" class="history-list">
         <article
-          v-for="record in normalizedRecords"
+          v-for="record in filteredRecords"
           :key="record.key"
           :class="{ 'is-selected': record.id === normalizedSelectedId }"
         >
           <button type="button" class="history-main" @click="emit('select-history', record.id)">
-            <span class="history-dot" :class="`is-${record.tone}`"></span>
-            <span>
+            <span class="history-status" :class="`is-${record.tone}`"></span>
+            <span class="history-copy">
               <strong>{{ record.goal }}</strong>
-              <small>{{ record.timeLabel }} · {{ record.stepCount }} 步</small>
+              <small>{{ record.timeLabel }}<span>·</span>{{ record.stepCount }} 步</small>
             </span>
           </button>
           <button
             type="button"
             class="history-delete"
             :aria-label="`删除任务 ${record.goal}`"
-            @click="emit('delete-history', record.id)"
+            @click.stop="emit('delete-history', record.id)"
           >
-            ×
+            <workbench-icon name="trash" :size="13" />
           </button>
         </article>
       </div>
 
-      <div v-else class="history-empty">
-        <span>⌁</span>
-        <strong>暂无任务</strong>
-        <small>任务事件仅保存在这台设备。</small>
+      <div v-else-if="query" class="sidebar-empty">
+        <workbench-icon name="search" :size="18" />
+        <strong>没有匹配任务</strong>
+        <p>换个关键词试试。</p>
+      </div>
+
+      <div v-else class="sidebar-empty">
+        <workbench-icon name="history" :size="18" />
+        <strong>还没有任务</strong>
+        <p>完成的会话会保存在本机。</p>
       </div>
     </section>
 
     <footer class="sidebar-footer">
-      <div class="provider-state">
-        <span class="provider-dot"></span>
+      <div class="connection-state">
+        <span class="connection-dot" :class="{ 'is-offline': !providerConfigured }"></span>
         <span>
-          <small>模型服务</small>
-          <strong>{{ provider || '未配置' }}</strong>
+          <small>模型服务 · {{ providerConfigured ? '已配置' : '未配置' }}</small>
+          <strong>{{ provider || '未选择' }}</strong>
         </span>
       </div>
-      <button type="button" aria-label="模型与 API 设置" @click="emit('open-settings')">⚙</button>
+      <button type="button" class="icon-button" aria-label="模型与 API 设置" @click="emit('open-settings')">
+        <workbench-icon name="settings" :size="15" />
+      </button>
     </footer>
   </aside>
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { normalizeAgentRunHistoryRecords } from '../agent/agentRunHistoryView.js'
+import WorkbenchIcon from './WorkbenchIcon.vue'
 
 defineOptions({ name: 'WorkbenchSidebar' })
 
@@ -108,6 +131,7 @@ const props = defineProps({
   selectedId: { type: [String, Number], default: '' },
   loading: { type: Boolean, default: false },
   provider: { type: String, default: '' },
+  providerConfigured: { type: Boolean, default: false },
   workspaces: { type: Array, default: () => [] },
   activeWorkspaceId: { type: String, default: '' },
   newTaskDisabled: { type: Boolean, default: false },
@@ -124,8 +148,31 @@ const emit = defineEmits({
   close: () => true
 })
 
+const query = ref('')
+const searchInput = ref(null)
 const normalizedSelectedId = computed(() => String(props.selectedId ?? '').trim())
 const normalizedRecords = computed(() => normalizeAgentRunHistoryRecords(props.records))
+const filteredRecords = computed(() => {
+  const needle = query.value.trim().toLocaleLowerCase()
+  if (!needle) return normalizedRecords.value
+  return normalizedRecords.value.filter(record => record.goal.toLocaleLowerCase().includes(needle))
+})
+
+const iconForWorkspace = (id) => ({
+  'local-workspace': 'folder',
+  tools: 'shield',
+  artifacts: 'box'
+})[id] || 'folder'
+
+const onSearchShortcut = (event) => {
+  if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+    event.preventDefault()
+    searchInput.value?.focus()
+  }
+}
+
+onMounted(() => window.addEventListener('keydown', onSearchShortcut))
+onBeforeUnmount(() => window.removeEventListener('keydown', onSearchShortcut))
 </script>
 
 <style scoped>
@@ -134,168 +181,104 @@ const normalizedRecords = computed(() => normalizeAgentRunHistoryRecords(props.r
   grid-template-rows: auto auto auto minmax(0, 1fr) auto;
   min-width: 0;
   height: 100%;
+  overflow: hidden;
   border-right: 1px solid var(--wb-border);
   color: var(--wb-text);
-  background: #101113;
+  background: #111214;
 }
 
-.wb-sidebar-brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 60px;
-  padding: 12px 14px;
-}
+button,
+input { font: inherit; }
 
-.brand-mark {
-  display: grid;
-  flex: 0 0 auto;
-  width: 30px;
-  height: 30px;
-  place-items: center;
-  border-radius: 8px;
-  color: #0b1612;
-  background: #b7f5d5;
-  font-size: 15px;
-  font-weight: 900;
-}
+.sidebar-brand { display: flex; align-items: center; gap: 9px; min-height: 54px; padding: 10px 12px; }
+.brand-button { display: grid; width: 29px; height: 29px; flex: 0 0 auto; place-items: center; border-radius: 8px; color: #102018; background: #a7e8c4; box-shadow: inset 0 1px rgba(255,255,255,.36); }
+.brand-button:disabled { cursor: not-allowed; opacity: .45; }
+.brand-button span { font-size: 14px; font-weight: 900; }
+.brand-copy { min-width: 0; }
+.brand-copy strong,
+.brand-copy small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.brand-copy strong { color: #eceeed; font-size: 13px; letter-spacing: .1em; }
+.brand-copy small { margin-top: 1px; color: #6f7475; font-size: 11px; }
+.icon-button { display: grid; width: 28px; height: 28px; place-items: center; border: 1px solid transparent; border-radius: 7px; color: #777c7e; }
+.icon-button:hover { border-color: #313437; color: #d7dad9; background: #202225; }
+.mobile-close { display: none; margin-left: auto; }
 
-.wb-sidebar-brand > div { min-width: 0; }
-.wb-sidebar-brand strong,
-.wb-sidebar-brand span { display: block; }
-.wb-sidebar-brand strong { font-size: 12px; letter-spacing: 0.08em; }
-.wb-sidebar-brand span { margin-top: 1px; color: var(--wb-muted); font-size: 9px; }
-.mobile-close { display: none; margin-left: auto; color: var(--wb-muted); font-size: 22px; }
+.primary-actions { display: grid; gap: 8px; padding: 4px 11px 13px; }
+.new-task { display: flex; align-items: center; gap: 8px; min-height: 38px; border: 1px solid #35393a; border-radius: 8px; padding: 0 10px; color: #e3e6e4; background: #202326; box-shadow: inset 0 1px rgba(255,255,255,.025); font-size: 13px; font-weight: 680; text-align: left; }
+.new-task:hover { border-color: #464b4c; background: #272a2d; }
+.new-task:disabled { cursor: not-allowed; opacity: .42; }
+.new-task kbd { margin-left: auto; color: #74797a; font-size: 10px; font-weight: 600; }
+.task-search { display: flex; align-items: center; gap: 7px; height: 35px; border: 1px solid transparent; border-radius: 7px; padding: 0 9px; color: #666b6d; background: #191b1d; }
+.task-search:focus-within { border-color: #3d5147; box-shadow: 0 0 0 2px rgba(142,218,178,.07); }
+.task-search input { min-width: 0; flex: 1; border: 0; outline: 0; color: #d8dbda; background: transparent; font-size: 12px; }
+.task-search input::-webkit-search-cancel-button { display: none; }
+.task-search input::placeholder { color: #656a6c; }
+.task-search button { color: #6e7375; }
+.task-search kbd { color: #575c5e; font-size: 10px; }
 
-.new-task {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 3px 10px 14px;
-  border: 1px solid #383a3f;
-  border-radius: 8px;
-  padding: 9px 10px;
-  color: #f5f5f5;
-  background: #202226;
-  font-size: 11px;
-  font-weight: 700;
-  text-align: left;
-}
+.sidebar-section { min-width: 0; padding: 0 8px; }
+.project-section { padding-bottom: 10px; }
+.section-heading { display: flex; align-items: center; justify-content: space-between; min-height: 31px; padding: 0 7px; color: #686d6f; font-size: 11px; font-weight: 750; letter-spacing: .06em; text-transform: uppercase; }
+.section-heading button { color: #666b6d; font-size: 11px; letter-spacing: 0; text-transform: none; }
+.section-heading button:hover { color: #c5c9c7; }
+.section-heading button:disabled { opacity: .3; }
+.project-list { display: grid; gap: 2px; }
+.project-list > button { display: grid; grid-template-columns: 30px minmax(0,1fr) auto; align-items: center; gap: 8px; width: 100%; min-height: 46px; border-radius: 8px; padding: 5px 8px; color: #aeb2b1; text-align: left; }
+.project-list > button:hover,
+.project-list > button.is-active { color: #ecedec; background: #1e2023; }
+.project-list > button.is-active { box-shadow: inset 2px 0 #84cfa9; }
+.project-icon { display: grid; width: 29px; height: 29px; place-items: center; border-radius: 7px; color: #8b9290; background: #26292c; }
+.project-copy { min-width: 0; }
+.project-copy strong,
+.project-copy small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.project-copy strong { font-size: 13px; font-weight: 630; }
+.project-copy small { margin-top: 2px; color: #626769; font-size: 11px; }
+.project-badge { border: 1px solid #303436; border-radius: 999px; padding: 2px 6px; color: #6c7272; font-size: 10px; }
+.project-arrow { color: #555a5c; }
 
-.new-task:hover { border-color: #52555c; background: #292b30; }
-.new-task:disabled { cursor: not-allowed; opacity: 0.45; }
-.new-task > span { color: #b7f5d5; font-size: 17px; line-height: 1; }
-.new-task kbd {
-  margin-left: auto;
-  border: 1px solid #414349;
-  border-radius: 5px;
-  padding: 2px 5px;
-  color: #8b8e95;
-  background: #16171a;
-  font: inherit;
-  font-size: 8px;
-}
-
-.workspace-nav { padding: 0 8px 10px; }
-.nav-label {
-  margin: 0;
-  color: #6f727a;
-  font-size: 8px;
-  font-weight: 800;
-  letter-spacing: 0.13em;
-}
-
-.workspace-nav > .nav-label { padding: 0 8px 7px; }
-.workspace-nav button {
-  display: grid;
-  grid-template-columns: 25px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 7px;
-  width: 100%;
-  border-radius: 7px;
-  padding: 7px 8px;
-  color: #c8cad0;
-  text-align: left;
-}
-
-.workspace-nav button:hover,
-.workspace-nav button.is-active { color: #fff; background: #202226; }
-.workspace-nav button > span:nth-child(2) { min-width: 0; }
-.workspace-nav strong,
-.workspace-nav small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.workspace-nav strong { font-size: 10px; }
-.workspace-nav small { margin-top: 1px; color: #74777f; font-size: 8px; }
-.workspace-nav i { border-radius: 999px; padding: 2px 5px; color: #8e9198; background: #292b30; font-size: 8px; font-style: normal; }
-.nav-icon { display: grid; width: 23px; height: 23px; place-items: center; border-radius: 6px; color: #a8abb3; background: #292b30; font-size: 10px; }
-
-.task-history {
-  display: flex;
-  min-height: 0;
-  flex-direction: column;
-  border-top: 1px solid #25272b;
-  padding: 11px 8px 8px;
-}
-
-.section-row { display: flex; align-items: center; justify-content: space-between; padding: 0 8px 7px; }
-.clear-history { color: #777a82; font-size: 8px; }
-.clear-history:hover { color: #d4d5d8; }
-.clear-history:disabled { cursor: default; opacity: 0.35; }
-.history-list { min-height: 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #303238 transparent; }
-.history-list article { display: grid; grid-template-columns: minmax(0, 1fr) 22px; align-items: center; border-radius: 7px; }
+.history-section { display: flex; min-height: 0; flex-direction: column; border-top: 1px solid #24272a; padding-top: 5px; }
+.history-list { min-height: 0; overflow-y: auto; padding-bottom: 8px; scrollbar-width: thin; scrollbar-color: #303437 transparent; }
+.history-list article { display: grid; grid-template-columns: minmax(0,1fr) 25px; align-items: center; border-radius: 7px; }
 .history-list article:hover,
-.history-list article.is-selected { background: #202226; }
-.history-list article.is-selected { box-shadow: inset 2px 0 #80d9b4; }
-.history-main { display: grid; grid-template-columns: 8px minmax(0, 1fr); align-items: center; gap: 7px; min-width: 0; padding: 8px 5px 8px 8px; text-align: left; }
-.history-main > span:last-child { min-width: 0; }
-.history-main strong,
-.history-main small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.history-main strong { color: #d7d8dc; font-size: 9px; font-weight: 650; }
-.history-main small { margin-top: 2px; color: #70737b; font-size: 7.5px; }
-.history-dot { width: 6px; height: 6px; border-radius: 50%; background: #666a72; }
-.history-dot.is-running { background: #75bdf2; box-shadow: 0 0 0 3px rgba(117, 189, 242, 0.08); }
-.history-dot.is-success { background: #72d6a8; }
-.history-dot.is-error { background: #ee7a7a; }
-.history-dot.is-retry { background: #b89af3; }
-.history-dot.is-stopped { background: #d6a35f; }
-.history-delete { width: 20px; height: 20px; border-radius: 5px; color: transparent; font-size: 14px; }
+.history-list article.is-selected { background: #1e2023; }
+.history-list article.is-selected { box-shadow: inset 2px 0 #84cfa9; }
+.history-main { display: grid; grid-template-columns: 8px minmax(0,1fr); align-items: center; gap: 8px; min-width: 0; padding: 9px 4px 9px 8px; text-align: left; }
+.history-status { width: 6px; height: 6px; border-radius: 50%; background: #616668; }
+.history-status.is-running { background: #70b8ea; box-shadow: 0 0 0 3px rgba(112,184,234,.08); }
+.history-status.is-success { background: #6fcc9e; }
+.history-status.is-error { background: #e47878; }
+.history-status.is-stopped { background: #c99a5d; }
+.history-status.is-retry { background: #aa8ee5; }
+.history-copy { min-width: 0; }
+.history-copy strong,
+.history-copy small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.history-copy strong { color: #cfd2d1; font-size: 12.5px; font-weight: 560; }
+.history-copy small { margin-top: 3px; color: #64696b; font-size: 11px; }
+.history-copy small span { padding: 0 4px; }
+.history-delete { display: grid; width: 23px; height: 23px; place-items: center; border-radius: 6px; color: transparent; }
 .history-list article:hover .history-delete,
-.history-delete:focus-visible { color: #777a82; }
-.history-delete:hover { color: #ef8c8c !important; background: #332124; }
-.history-empty,
-.history-loading { display: grid; min-height: 132px; place-content: center; color: #696c74; text-align: center; }
-.history-empty span { font-size: 20px; }
-.history-empty strong { margin-top: 6px; color: #9699a1; font-size: 9px; }
-.history-empty small { margin-top: 2px; font-size: 8px; }
-.history-loading { grid-template-columns: repeat(3, 5px); gap: 5px; font-size: 8px; }
-.history-loading span { width: 5px; height: 5px; border-radius: 50%; background: #8bdcb8; animation: wb-pulse 900ms infinite alternate; }
-.history-loading span:nth-child(2) { animation-delay: 120ms; }
-.history-loading span:nth-child(3) { animation-delay: 240ms; }
-.history-loading { grid-auto-flow: column; }
+.history-delete:focus-visible { color: #737879; }
+.history-delete:hover { color: #e58484 !important; background: #322124; }
+.sidebar-empty { display: flex; min-height: 115px; flex-direction: column; align-items: center; justify-content: center; color: #505557; text-align: center; }
+.sidebar-empty strong { margin-top: 8px; color: #858a89; font-size: 12px; }
+.sidebar-empty p { margin: 4px 0 0; color: #595e60; font-size: 11px; }
+.loading-ring { width: 15px; height: 15px; border: 2px solid #333739; border-top-color: #8bd5ae; border-radius: 50%; animation: spin 700ms linear infinite; }
 
-.sidebar-footer { display: flex; align-items: center; gap: 8px; border-top: 1px solid #25272b; padding: 10px 12px; }
-.provider-state { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1; }
-.provider-dot { flex: 0 0 auto; width: 7px; height: 7px; border-radius: 50%; background: #73d4a8; box-shadow: 0 0 0 3px rgba(115, 212, 168, 0.08); }
-.provider-state > span:last-child { min-width: 0; }
-.provider-state small,
-.provider-state strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.provider-state small { color: #64676e; font-size: 7px; letter-spacing: 0.09em; }
-.provider-state strong { margin-top: 1px; color: #bfc1c6; font-size: 9px; }
-.sidebar-footer > button { display: grid; width: 27px; height: 27px; place-items: center; border-radius: 6px; color: #8b8e95; }
-.sidebar-footer > button:hover { color: #fff; background: #292b30; }
+.sidebar-footer { display: flex; align-items: center; gap: 8px; border-top: 1px solid #24272a; padding: 9px 11px; }
+.connection-state { display: flex; min-width: 0; flex: 1; align-items: center; gap: 8px; }
+.connection-dot { width: 6px; height: 6px; flex: 0 0 auto; border-radius: 50%; background: #70ce9e; box-shadow: 0 0 0 3px rgba(112,206,158,.07); }
+.connection-dot.is-offline { background: #7b8081; box-shadow: none; }
+.connection-state > span:last-child { min-width: 0; }
+.connection-state small,
+.connection-state strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.connection-state small { color: #5e6365; font-size: 10.5px; }
+.connection-state strong { margin-top: 2px; color: #b8bcba; font-size: 12px; font-weight: 620; }
 
-@keyframes wb-pulse { to { opacity: 0.3; transform: translateY(2px); } }
+@keyframes spin { to { transform: rotate(360deg); } }
 
-@media (max-width: 880px) {
-  .wb-sidebar {
-    position: fixed;
-    z-index: 60;
-    inset: 0 auto 0 0;
-    width: min(290px, 86vw);
-    box-shadow: 18px 0 60px rgba(0, 0, 0, 0.42);
-    transform: translateX(-103%);
-    transition: transform 180ms ease;
-  }
-  .wb-sidebar.is-open { transform: translateX(0); }
-  .mobile-close { display: block; }
+@media (max-width: 860px) {
+  .wb-sidebar { position: fixed; z-index: 70; inset: 0 auto 0 0; width: min(290px, 90vw); visibility: hidden; pointer-events: none; box-shadow: 18px 0 60px rgba(0,0,0,.45); transform: translateX(-103%); transition: transform 170ms ease, visibility 0s linear 170ms; }
+  .wb-sidebar.is-open { visibility: visible; pointer-events: auto; transform: translateX(0); transition-delay: 0s; }
+  .mobile-close { display: grid; }
 }
 </style>

@@ -1,5 +1,7 @@
 import { normalizeNextAction, sanitizeWorkbenchValue } from '../workbench/index.js'
 
+export const WORKBENCH_MESSAGE_CONTEXT_CHARACTERS = 24 * 1024
+
 function read(value) {
   return value && typeof value === 'object' && 'value' in value ? value.value : value
 }
@@ -76,12 +78,14 @@ function compactSession(session = {}) {
   const messages = Array.isArray(session.messages) ? session.messages.slice(-18) : []
   const toolCalls = Array.isArray(session.toolCalls) ? session.toolCalls.slice(-16) : []
   const observations = Array.isArray(session.observations) ? session.observations.slice(-16) : []
+  const workspaceDiffs = Array.isArray(session.workspaceDiffs) ? session.workspaceDiffs.slice(-8) : []
   return sanitizeWorkbenchValue({
     status: session.status,
     turnCount: session.turnCount,
+    plan: truncateForPrompt(session.plan),
     messages: messages.map(message => ({
       role: message.role,
-      content: String(message.content || '').slice(0, 12_000)
+      content: String(message.content || '').slice(0, WORKBENCH_MESSAGE_CONTEXT_CHARACTERS)
     })),
     toolCalls: toolCalls.map(call => ({
       id: call.id,
@@ -96,7 +100,12 @@ function compactSession(session = {}) {
       status: observation.status,
       output: truncateForPrompt(observation.output),
       error: truncateForPrompt(observation.error)
-    }))
+    })),
+    workspaceDiffs: workspaceDiffs.map(diff => truncateForPrompt(diff)),
+    latestToolProgress: toolCalls.map(call => call.latestProgress ? {
+      toolCallId: call.id,
+      progress: truncateForPrompt(call.latestProgress)
+    } : null).filter(Boolean)
   })
 }
 
@@ -111,6 +120,10 @@ function plannerPrompt({ session, tools }) {
     '不要声称执行了尚未调用的工具。不要臆造文件、命令输出或电脑状态。',
     '工具失败或被拒绝后，读取 observation，再解释、改用安全方案或向用户提问。',
     '危险工具会由 Harness 自动暂停并请求批准；你不能伪造 approval 参数。',
+    '多步骤任务先调用 task.update_plan 建立简短计划；推进时保持至多一个 in_progress，并及时标记 completed。',
+    '修改现有文件时，先 workspace.read 获取 content 与 sha256，再优先调用 workspace.patch；不要用 workspace.write 整体覆盖现有文件。',
+    '回滚文件变更只能使用 workspace.revert_patch，并传入 workspace_diff.rollback.rollbackId 与 workspace_diff.id；回滚记录过期或 SHA 不匹配时不要强行覆盖。',
+    '终端运行期间 Harness 只提供阶段、输出长度等状态事件；完整输出在最终 observation 中统一脱敏，只根据实际 observation 判断命令是否成功。',
     '不要输出隐藏思维链，只给必要结论、操作事实和简短计划摘要。',
     `可用工具：${JSON.stringify(tools)}`,
     `当前任务状态：${JSON.stringify(compactSession(session))}`

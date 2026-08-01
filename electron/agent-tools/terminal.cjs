@@ -64,6 +64,8 @@ function publicJob(job) {
     completedAt: job.completedAt,
     stdout: job.stdout,
     stderr: job.stderr,
+    outputBytes: job.outputBytes,
+    maxOutputBytes: job.maxOutputBytes,
     exitCode: job.exitCode,
     signal: job.signal,
     truncated: job.truncated,
@@ -123,10 +125,11 @@ class TerminalManager {
     let executable
     try {
       ;[cwd, executable] = await Promise.all([
-        this.workspace.resolve(cwdInput, { type: 'directory' }),
+        this.workspace.resolveBound(cwdInput, { type: 'directory' }, input),
         resolveExecutable(command)
       ])
       this.#assertStartAllowed(reservationId, startGeneration)
+      this.workspace.assertBinding(input)
     } catch (error) {
       this.pendingStarts.delete(reservationId)
       throw error
@@ -139,7 +142,7 @@ class TerminalManager {
       status: 'running',
       command,
       args: normalizedArgs,
-      cwdRelative: path.relative(this.workspace.root, cwd.path).split(path.sep).join('/') || '.',
+      cwdRelative: path.relative(cwd.workspaceRoot, cwd.path).split(path.sep).join('/') || '.',
       startedAt: Date.now(),
       completedAt: null,
       stdout: '',
@@ -173,6 +176,7 @@ class TerminalManager {
 
     let child
     try {
+      this.workspace.assertBinding(input)
       child = this.spawnProcess(executable, normalizedArgs, {
         cwd: cwd.path,
         shell: false,

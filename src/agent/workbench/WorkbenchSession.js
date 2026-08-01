@@ -7,7 +7,10 @@ import {
   createToolCall,
   normalizeApprovalDecision,
   normalizeNextAction,
+  normalizeTaskPlan,
+  normalizeToolProgress,
   normalizeToolDefinition,
+  normalizeWorkspaceDiff,
   serializeWorkbenchError,
   toolDefinitionsFromRegistry
 } from './protocol.js'
@@ -104,6 +107,7 @@ export class WorkbenchSession {
   async submitUserMessage(content, options = {}) {
     const message = String(content || '').trim()
     if (!message) throw new TypeError('Workbench user message is required')
+    const displayContent = String(options.displayContent ?? message).trim() || message
     this.#assertCanAcceptUserMessage()
     this.turnActionCount = 0
     this.stream.append('user_message', {
@@ -111,6 +115,7 @@ export class WorkbenchSession {
         id: String(this.idFactory('message')),
         role: 'user',
         content: message,
+        ...(displayContent !== message ? { displayContent } : {}),
         createdAt: this.now()
       }
     })
@@ -243,17 +248,40 @@ export class WorkbenchSession {
   async #executeTool(toolCall, signal) {
     const startedAt = this.now()
     this.stream.append('tool_started', { toolCallId: toolCall.id })
+    let acceptsRuntimeEvents = true
+    const appendRuntimeEvent = (type, detail) => {
+      if (!acceptsRuntimeEvents || signal.aborted) return null
+      return this.stream.append(type, { toolCallId: toolCall.id, toolName: toolCall.name, ...detail })
+    }
+    const reportProgress = progress => appendRuntimeEvent('tool_progress', {
+      progress: normalizeToolProgress(progress)
+    })
+    const updatePlan = plan => appendRuntimeEvent('plan_updated', {
+      plan: normalizeTaskPlan(plan)
+    })
+    const reportWorkspaceDiff = diff => {
+      const normalized = normalizeWorkspaceDiff(diff)
+      const diffId = String(this.idFactory('diff'))
+      const event = appendRuntimeEvent('workspace_diff', {
+        diff: { id: diffId, ...normalized }
+      })
+      return event ? { id: diffId, eventId: event.id } : null
+    }
     try {
       const output = await this.#withCancellation(
         this.toolRegistry.execute(toolCall.name, toolCall.input, {
           signal,
           session: this.snapshot(),
           toolCall,
-          definition: this.#definitionFor(toolCall.name)
+          definition: this.#definitionFor(toolCall.name),
+          reportProgress,
+          reportWorkspaceDiff,
+          updatePlan
         }),
         signal
       )
       this.#throwIfAborted(signal)
+      acceptsRuntimeEvents = false
       const observation = createObservation(toolCall, 'succeeded', {
         output,
         startedAt,
@@ -262,6 +290,7 @@ export class WorkbenchSession {
       this.stream.append('observation', { observation })
       return observation
     } catch (error) {
+      acceptsRuntimeEvents = false
       if (signal.aborted) throw abortError(signal.reason)
       const observation = createObservation(toolCall, 'failed', {
         error: serializeWorkbenchError(error, 'TOOL_EXECUTION_FAILED'),
@@ -289,7 +318,7 @@ export class WorkbenchSession {
     if (status === 'awaiting_approval') {
       throw sessionError('APPROVAL_REQUIRED', 'Resolve the pending approval before sending another message')
     }
-    if (['completed', 'failed', 'cancelled'].includes(status)) {
+    if (['failed', 'cancelled'].includes(status)) {
       throw sessionError('WORKBENCH_TERMINAL', `Workbench session is already ${status}`)
     }
   }

@@ -11,6 +11,20 @@ function updateToolCall(state, id, patch) {
   if (index !== -1) state.toolCalls[index] = { ...state.toolCalls[index], ...patch }
 }
 
+function finalMessage(event, result, timestamp) {
+  const content = typeof result === 'string'
+    ? result.trim()
+    : String(result?.content || '').trim()
+  if (!content) return null
+  return {
+    id: `message_final_${String(event.id || event.seq || timestamp)}`,
+    role: 'assistant',
+    content,
+    final: true,
+    createdAt: timestamp
+  }
+}
+
 function initialProjection(sessionId = '') {
   return {
     schemaVersion: WORKBENCH_SCHEMA_VERSION,
@@ -20,7 +34,10 @@ function initialProjection(sessionId = '') {
     messages: [],
     toolCalls: [],
     observations: [],
+    toolProgress: [],
+    workspaceDiffs: [],
     approvals: [],
+    plan: null,
     pendingApproval: null,
     final: null,
     error: null,
@@ -52,7 +69,9 @@ export function projectWorkbenchEvents(events = []) {
       if (detail.message) state.messages.push(detail.message)
       state.turnCount += 1
       state.status = 'running'
+      state.final = null
       state.error = null
+      state.completedAt = null
     } else if (event.type === 'planning') {
       state.status = 'running'
     } else if (event.type === 'assistant_message') {
@@ -84,6 +103,37 @@ export function projectWorkbenchEvents(events = []) {
     } else if (event.type === 'tool_started') {
       updateToolCall(state, detail.toolCallId, { status: 'running', startedAt: timestamp })
       state.status = 'running'
+    } else if (event.type === 'tool_progress') {
+      const progress = {
+        eventId: String(event.id || ''),
+        toolCallId: String(detail.toolCallId || ''),
+        toolName: String(detail.toolName || ''),
+        timestamp,
+        ...(detail.progress || {})
+      }
+      state.toolProgress.push(progress)
+      updateToolCall(state, progress.toolCallId, {
+        status: 'running',
+        latestProgress: progress,
+        progressUpdatedAt: timestamp
+      })
+      state.status = 'running'
+    } else if (event.type === 'plan_updated') {
+      const revision = Number(state.plan?.revision || 0) + 1
+      state.plan = detail.plan ? { ...detail.plan, revision, updatedAt: timestamp } : null
+      state.status = 'running'
+    } else if (event.type === 'workspace_diff') {
+      if (detail.diff) {
+        const diff = {
+          ...detail.diff,
+          eventId: String(event.id || ''),
+          toolCallId: String(detail.toolCallId || ''),
+          timestamp
+        }
+        upsertById(state.workspaceDiffs, diff)
+        updateToolCall(state, diff.toolCallId, { workspaceDiffId: diff.id })
+      }
+      state.status = 'running'
     } else if (event.type === 'observation') {
       if (detail.observation) {
         upsertById(state.observations, detail.observation)
@@ -96,6 +146,8 @@ export function projectWorkbenchEvents(events = []) {
     } else if (event.type === 'finished') {
       state.status = 'completed'
       state.final = detail.result ?? null
+      const message = finalMessage(event, state.final, timestamp)
+      if (message) upsertById(state.messages, message)
       state.pendingApproval = null
       state.completedAt = timestamp
     } else if (event.type === 'failed') {

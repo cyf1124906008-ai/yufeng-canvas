@@ -8,7 +8,7 @@ import { useHeadlessCreativeAgent } from './useHeadlessCreativeAgent.js'
 import { appendRuntimeLog } from './runtimeLog.js'
 
 const ACTIVE_STATUSES = new Set(['running', 'awaiting_approval'])
-const TERMINAL_STATUSES = new Set(['completed', 'failed', 'cancelled'])
+const RESTART_STATUSES = new Set(['failed', 'cancelled'])
 
 function defaultStorage() {
   try {
@@ -29,7 +29,7 @@ function createHistoryRepository(storage) {
 
 function titleFromProjection(projection) {
   const firstUser = projection?.messages?.find(message => message.role === 'user')
-  return String(firstUser?.content || '新任务').trim().slice(0, 160)
+  return String(firstUser?.displayContent || firstUser?.content || '新任务').trim().slice(0, 160)
 }
 
 function interruptedEvents(record) {
@@ -95,7 +95,10 @@ export function useAgentWorkbench({
     messages: [],
     toolCalls: [],
     observations: [],
+    toolProgress: [],
+    workspaceDiffs: [],
     approvals: [],
+    plan: null,
     pendingApproval: null,
     final: null
   })
@@ -171,13 +174,16 @@ export function useAgentWorkbench({
     return createSession()
   }
 
-  const submit = async (content) => {
+  const submit = async (content, options = {}) => {
     const text = String(content || '').trim()
     if (!text) return null
-    if (!session.value || TERMINAL_STATUSES.has(projection.value.status)) newTask()
+    if (!session.value || RESTART_STATUSES.has(projection.value.status)) newTask()
     error.value = null
     try {
-      return await session.value.submitUserMessage(text)
+      return await session.value.submitUserMessage(text, {
+        ...(options.signal ? { signal: options.signal } : {}),
+        ...(options.displayContent != null ? { displayContent: options.displayContent } : {})
+      })
     } catch (submitError) {
       error.value = submitError
       throw submitError
@@ -293,22 +299,7 @@ export function useAgentWorkbench({
     }
   }
 
-  const displayMessages = computed(() => {
-    const items = [...(projection.value.messages || [])]
-    const finalContent = projection.value.final?.content || (
-      typeof projection.value.final === 'string' ? projection.value.final : ''
-    )
-    if (finalContent) {
-      items.push({
-        id: `final_${selectedSessionId.value}`,
-        role: 'assistant',
-        content: finalContent,
-        final: true,
-        createdAt: projection.value.completedAt
-      })
-    }
-    return items
-  })
+  const displayMessages = computed(() => [...(projection.value.messages || [])])
 
   const pendingToolCall = computed(() => {
     const approval = projection.value.pendingApproval
@@ -333,6 +324,9 @@ export function useAgentWorkbench({
     messages: displayMessages,
     toolCalls: computed(() => projection.value.toolCalls || []),
     observations: computed(() => projection.value.observations || []),
+    toolProgress: computed(() => projection.value.toolProgress || []),
+    workspaceDiffs: computed(() => projection.value.workspaceDiffs || []),
+    plan: computed(() => projection.value.plan || null),
     pendingApproval: computed(() => projection.value.pendingApproval),
     pendingToolCall,
     status: computed(() => projection.value.status || 'idle'),

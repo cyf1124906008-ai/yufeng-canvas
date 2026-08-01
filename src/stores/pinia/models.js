@@ -198,6 +198,25 @@ const canonicalModelKey = (key = '') => {
   return canonical
 }
 
+export const resolveProviderConnectionPair = (profiles = {}) => {
+  for (const capability of API_KEY_CAPABILITIES) {
+    const profile = profiles?.[capability]
+    if (!profile || typeof profile !== 'object') continue
+    const apiKey = String(profile.apiKey || '').trim()
+    const normalized = normalizeProviderEndpoint(profile.baseUrl)
+    if (!apiKey || !normalized.baseUrl) continue
+    return {
+      capability,
+      apiKey,
+      baseUrl: normalized.baseUrl,
+      warnings: normalized.warnings || []
+    }
+  }
+  return null
+}
+
+const cloneSettingsValue = value => JSON.parse(JSON.stringify(value))
+
 const getStored = (key, defaultValue = '') => {
   try {
     return localStorage.getItem(key) || defaultValue
@@ -513,6 +532,38 @@ export const useModelStore = defineStore('model', () => {
     delete baseUrlsByProvider.value[provider]
   }
 
+  const createApiSettingsSnapshot = () => cloneSettingsValue({
+    currentProvider: currentProvider.value,
+    selectedChatModel: selectedChatModel.value,
+    selectedImageModel: selectedImageModel.value,
+    selectedVideoModel: selectedVideoModel.value,
+    customChatModels: customChatModels.value,
+    customImageModels: customImageModels.value,
+    customVideoModels: customVideoModels.value,
+    customChatModelsByProvider: customChatModelsByProvider.value,
+    customImageModelsByProvider: customImageModelsByProvider.value,
+    customVideoModelsByProvider: customVideoModelsByProvider.value,
+    apiKeysByProvider: apiKeysByProvider.value,
+    baseUrlsByProvider: baseUrlsByProvider.value
+  })
+
+  const restoreApiSettingsSnapshot = (snapshot) => {
+    if (!snapshot || typeof snapshot !== 'object' || !PROVIDERS[snapshot.currentProvider]) return false
+    customChatModels.value = cloneSettingsValue(snapshot.customChatModels || [])
+    customImageModels.value = cloneSettingsValue(snapshot.customImageModels || [])
+    customVideoModels.value = cloneSettingsValue(snapshot.customVideoModels || [])
+    customChatModelsByProvider.value = cloneSettingsValue(snapshot.customChatModelsByProvider || {})
+    customImageModelsByProvider.value = cloneSettingsValue(snapshot.customImageModelsByProvider || {})
+    customVideoModelsByProvider.value = cloneSettingsValue(snapshot.customVideoModelsByProvider || {})
+    apiKeysByProvider.value = cloneSettingsValue(snapshot.apiKeysByProvider || {})
+    baseUrlsByProvider.value = cloneSettingsValue(snapshot.baseUrlsByProvider || {})
+    currentProvider.value = snapshot.currentProvider
+    selectedChatModel.value = String(snapshot.selectedChatModel || '')
+    selectedImageModel.value = String(snapshot.selectedImageModel || '')
+    selectedVideoModel.value = String(snapshot.selectedVideoModel || '')
+    return true
+  }
+
   const allChatModels = computed(() => mergeModelsByKey(
     REQUIRE_USER_MODELS ? [] : CHAT_MODELS.map((model) => ({ ...model, isCustom: false })),
     customChatModels.value.map((model) => buildCustomChatModel(model)),
@@ -749,7 +800,7 @@ export const useModelStore = defineStore('model', () => {
     }
 
     customChatModelsByProvider.value[provider].push({ key: modelKey, label: label || modelKey })
-    selectedChatModel.value = modelKey
+    if (provider === currentProvider.value) selectedChatModel.value = modelKey
     return true
   }
 
@@ -767,7 +818,7 @@ export const useModelStore = defineStore('model', () => {
     }
 
     customImageModelsByProvider.value[provider].push({ key: modelKey, label: label || modelKey, protocol: options.protocol || 'auto' })
-    selectedImageModel.value = modelKey
+    if (provider === currentProvider.value) selectedImageModel.value = modelKey
     return true
   }
 
@@ -785,7 +836,7 @@ export const useModelStore = defineStore('model', () => {
     }
 
     customVideoModelsByProvider.value[provider].push({ key: modelKey, label: label || modelKey })
-    selectedVideoModel.value = modelKey
+    if (provider === currentProvider.value) selectedVideoModel.value = modelKey
     return true
   }
 
@@ -898,6 +949,9 @@ export const useModelStore = defineStore('model', () => {
     }
 
     models.splice(index, 1)
+    if (provider === currentProvider.value && selectedChatModel.value === modelKey) {
+      selectedChatModel.value = availableChatModels.value[0]?.key || getProviderChatFallback(provider)
+    }
     return true
   }
 
@@ -913,6 +967,9 @@ export const useModelStore = defineStore('model', () => {
     }
 
     models.splice(index, 1)
+    if (provider === currentProvider.value && selectedImageModel.value === modelKey) {
+      selectedImageModel.value = availableImageModels.value[0]?.key || (REQUIRE_USER_MODELS ? '' : DEFAULT_IMAGE_MODEL)
+    }
     return true
   }
 
@@ -928,6 +985,9 @@ export const useModelStore = defineStore('model', () => {
     }
 
     models.splice(index, 1)
+    if (provider === currentProvider.value && selectedVideoModel.value === modelKey) {
+      selectedVideoModel.value = availableVideoModels.value[0]?.key || getProviderVideoFallback(provider)
+    }
     return true
   }
 
@@ -1051,6 +1111,8 @@ export const useModelStore = defineStore('model', () => {
     getBaseUrlByProvider,
     setApiKeyByProvider,
     setBaseUrlByProvider,
-    clearApiConfigByProvider
+    clearApiConfigByProvider,
+    createApiSettingsSnapshot,
+    restoreApiSettingsSnapshot
   }
 })

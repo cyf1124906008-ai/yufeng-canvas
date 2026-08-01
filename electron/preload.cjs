@@ -60,6 +60,8 @@ contextBridge.exposeInMainWorld('desktopApp', {
     listFiles: (input) => ipcRenderer.invoke('app:agent-tools:list-files', input),
     readFile: (input) => ipcRenderer.invoke('app:agent-tools:read-file', input),
     writeFile: (input) => ipcRenderer.invoke('app:agent-tools:write-file', input),
+    applyPatch: (input) => ipcRenderer.invoke('app:agent-tools:apply-patch', input),
+    revertPatch: (input) => ipcRenderer.invoke('app:agent-tools:revert-patch', input),
     searchFiles: (input) => ipcRenderer.invoke('app:agent-tools:search-files', input),
     startCommand: (input) => ipcRenderer.invoke('app:agent-tools:start-command', input),
     getCommand: (input) => ipcRenderer.invoke('app:agent-tools:get-command', input),

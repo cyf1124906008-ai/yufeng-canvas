@@ -2,6 +2,7 @@ import { ToolRegistry } from '../core/ToolRegistry.js'
 import { defineTool } from '../workbench/index.js'
 
 const TERMINAL_DONE = new Set(['completed', 'failed', 'cancelled', 'timed_out', 'termination_unconfirmed'])
+const MAX_WORKBENCH_TERMINAL_OUTPUT_BYTES = 128 * 1024
 
 function desktopUnavailable(capability) {
   const error = new Error(`${capability} 只在 YUFENG Desktop App 中可用`)
@@ -52,13 +53,44 @@ function delay(ms, signal) {
   })
 }
 
-async function waitForCommand(api, jobId, signal) {
+async function waitForCommand(api, jobId, signal, runtime = null) {
   const getCommand = requireMethod(api, 'getCommand', 'terminal.run')
   const cancelCommand = typeof api?.cancelCommand === 'function' ? api.cancelCommand.bind(api) : null
+  let previous = { status: '', stdoutLength: 0, stderrLength: 0, truncated: false }
   try {
     while (true) {
       if (signal?.aborted) throw signal.reason || new DOMException('Cancelled', 'AbortError')
       const job = await getCommand({ jobId })
+      const stdout = String(job?.stdout || '')
+      const stderr = String(job?.stderr || '')
+      const changed = job?.status !== previous.status || stdout.length !== previous.stdoutLength ||
+        stderr.length !== previous.stderrLength || Boolean(job?.truncated) !== previous.truncated
+      if (changed) {
+        // Persist only metadata while the command is running. Redacting
+        // independently sliced text is unsafe because a credential assignment
+        // can be split across polling boundaries. The final cumulative output
+        // is sanitized as one observation by the Workbench protocol.
+        runtime?.reportProgress?.({
+          kind: 'terminal',
+          phase: String(job?.status || 'running').replaceAll('_', '-'),
+          status: job?.status || 'running',
+          jobId,
+          stdoutLength: stdout.length,
+          stderrLength: stderr.length,
+          outputBytes: Number(job?.outputBytes || 0),
+          maxOutputBytes: Number(job?.maxOutputBytes || 0),
+          truncated: Boolean(job?.truncated),
+          timedOut: Boolean(job?.timedOut),
+          exitCode: Number.isInteger(job?.exitCode) ? job.exitCode : null,
+          termination: job?.termination || null
+        })
+        previous = {
+          status: job?.status || '',
+          stdoutLength: stdout.length,
+          stderrLength: stderr.length,
+          truncated: Boolean(job?.truncated)
+        }
+      }
       if (job?.status === 'termination_unconfirmed') {
         const error = new Error('终端进程未确认完全退出；可能仍有脱离受控进程组的后台后代')
         error.code = 'TERMINAL_TERMINATION_UNCONFIRMED'
@@ -68,7 +100,10 @@ async function waitForCommand(api, jobId, signal) {
       await delay(180, signal)
     }
   } catch (error) {
-    if (signal?.aborted && cancelCommand) await cancelCommand({ jobId }).catch(() => null)
+    if (signal?.aborted && cancelCommand) {
+      runtime?.reportProgress?.({ kind: 'terminal', phase: 'cancelling', status: 'cancelling', jobId })
+      await cancelCommand({ jobId }).catch(() => null)
+    }
     throw error
   }
 }
@@ -86,6 +121,38 @@ export function createDesktopWorkbenchToolRegistry({
 } = {}) {
   const api = desktopApi(injectedDesktopAgentTools)
   const registry = new ToolRegistry()
+
+  registry.register('task.update_plan', defineTool({
+    name: 'task.update_plan',
+    description: '创建或更新当前任务的结构化计划。多步骤任务开始时建立计划，每完成一步就更新状态；最多一个步骤为 in_progress。',
+    riskLevel: 'safe',
+    approvalPolicy: 'never',
+    inputSchema: jsonSchema({
+      explanation: { type: 'string' },
+      steps: {
+        type: 'array',
+        minItems: 1,
+        maxItems: 32,
+        items: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+            step: { type: 'string' },
+            status: { type: 'string', enum: ['pending', 'in_progress', 'completed'] }
+          },
+          required: ['step', 'status']
+        }
+      }
+    }, ['steps'])
+  }, (input, runtime) => {
+    if (typeof runtime?.updatePlan !== 'function') {
+      const error = new Error('任务计划只能在 Workbench session 中更新')
+      error.code = 'WORKBENCH_PLAN_RUNTIME_REQUIRED'
+      throw error
+    }
+    const event = runtime.updatePlan(input)
+    return { ok: true, plan: event?.detail?.plan || input }
+  }))
 
   registry.register('workspace.get', defineTool({
     name: 'workspace.get',
@@ -115,7 +182,7 @@ export function createDesktopWorkbenchToolRegistry({
 
   registry.register('workspace.read', defineTool({
     name: 'workspace.read',
-    description: '读取工作区内文本文件。拒绝二进制、路径逃逸和超大文件。',
+    description: '读取工作区内文本文件及其 SHA-256。拒绝二进制、路径逃逸和超大文件；修改前用返回的 sha256 绑定 workspace.patch。',
     riskLevel: 'safe',
     approvalPolicy: 'never',
     inputSchema: jsonSchema({ path: { type: 'string' } }, ['path'])
@@ -148,6 +215,69 @@ export function createDesktopWorkbenchToolRegistry({
     approval: approvalFor(runtime, 'workspace.write')
   })))
 
+  registry.register('workspace.patch', defineTool({
+    name: 'workspace.patch',
+    description: '基于 workspace.read 返回的 SHA-256，对现有文本文件应用精确行级补丁。旧行不匹配或文件已变化时拒绝；执行前必须审核完整补丁。修改现有文件时优先使用本工具。',
+    riskLevel: 'dangerous',
+    approvalPolicy: 'always',
+    inputSchema: jsonSchema({
+      path: { type: 'string' },
+      beforeSha256: { type: 'string', pattern: '^[a-fA-F0-9]{64}$' },
+      hunks: {
+        type: 'array',
+        minItems: 1,
+        maxItems: 128,
+        items: {
+          type: 'object',
+          properties: {
+            startLine: { type: 'integer', minimum: 1 },
+            oldLines: { type: 'array', items: { type: 'string' } },
+            newLines: { type: 'array', items: { type: 'string' } }
+          },
+          required: ['startLine', 'oldLines', 'newLines']
+        }
+      },
+      finalNewline: { type: 'boolean', description: '省略时保持原文件状态' }
+    }, ['path', 'beforeSha256', 'hunks'])
+  }, async (input, runtime) => {
+    const applyPatch = requireMethod(api, 'applyPatch', 'workspace.patch')
+    const result = await applyPatch({
+      ...input,
+      approval: approvalFor(runtime, 'workspace.patch')
+    })
+    if (!result?.diff) return result
+    const { diff, ...output } = result
+    const reported = runtime?.reportWorkspaceDiff?.(diff)
+    return {
+      ...output,
+      ...(reported ? { diffId: reported.id, diffEventId: reported.eventId } : {})
+    }
+  }))
+
+  registry.register('workspace.revert_patch', defineTool({
+    name: 'workspace.revert_patch',
+    description: '用 workspace_diff.rollback.rollbackId 原子回滚该文件。原始 hunks 只保存在 Electron 当前会话内；当前 SHA 或回滚后 SHA 不匹配都会拒绝。执行前必须审核。',
+    riskLevel: 'dangerous',
+    approvalPolicy: 'always',
+    inputSchema: jsonSchema({
+      rollbackId: { type: 'string', description: 'workspace_diff.rollback.rollbackId；仅当前 App 会话有效' },
+      revertsDiffId: { type: 'string', description: '被回滚的 workspace_diff.id' }
+    }, ['rollbackId'])
+  }, async (input, runtime) => {
+    const revertPatch = requireMethod(api, 'revertPatch', 'workspace.revert_patch')
+    const result = await revertPatch({
+      ...input,
+      approval: approvalFor(runtime, 'workspace.revert_patch')
+    })
+    if (!result?.diff) return result
+    const { diff, ...output } = result
+    const reported = runtime?.reportWorkspaceDiff?.(diff)
+    return {
+      ...output,
+      ...(reported ? { diffId: reported.id, diffEventId: reported.eventId } : {})
+    }
+  }))
+
   registry.register('terminal.run', defineTool({
     name: 'terminal.run',
     description: '在工作区目录内运行一个 executable 与参数数组；不使用 shell 拼接。执行前必须批准。',
@@ -157,16 +287,28 @@ export function createDesktopWorkbenchToolRegistry({
       command: { type: 'string', description: '例如 git、node、pnpm；不能包含路径分隔符' },
       args: { type: 'array', items: { type: 'string' } },
       cwd: { type: 'string', description: '工作区相对目录，默认 .' },
-      timeoutMs: { type: 'integer', minimum: 100, maximum: 300000 }
+      timeoutMs: { type: 'integer', minimum: 100, maximum: 300000 },
+      maxOutputBytes: { type: 'integer', minimum: 1024, maximum: MAX_WORKBENCH_TERMINAL_OUTPUT_BYTES }
     }, ['command'])
   }, async (input, runtime) => {
     const startCommand = requireMethod(api, 'startCommand', 'terminal.run')
+    runtime?.reportProgress?.({ kind: 'terminal', phase: 'starting', status: 'starting' })
     const started = await startCommand({
       ...input,
+      maxOutputBytes: Math.min(
+        Math.max(Number(input?.maxOutputBytes) || MAX_WORKBENCH_TERMINAL_OUTPUT_BYTES, 1_024),
+        MAX_WORKBENCH_TERMINAL_OUTPUT_BYTES
+      ),
       approval: approvalFor(runtime, 'terminal.run')
     })
     if (!started?.jobId) return started
-    return waitForCommand(api, started.jobId, runtime.signal)
+    runtime?.reportProgress?.({
+      kind: 'terminal',
+      phase: 'started',
+      status: started.status || 'running',
+      jobId: started.jobId
+    })
+    return waitForCommand(api, started.jobId, runtime.signal, runtime)
   }))
 
   registry.register('computer.permissions', defineTool({

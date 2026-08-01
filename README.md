@@ -31,8 +31,9 @@ YUFENG Agent 不要求用户拖节点或手工连接工作流。默认入口是�
 WorkbenchSession → Planner 每轮决定一个动作
   ↓
 ToolRegistry
-  ├── 工作区：列出 / 读取 / 搜索 / 写入文件
-  ├── 终端：运行命令、等待结果、停止任务
+  ├── 任务：建立计划 / 更新步骤状态
+  ├── 工作区：列出 / 读取 / 搜索 / 结构化补丁 / 条件回滚
+  ├── 终端：运行命令 / 实时状态 / 最终脱敏输出 / 停止任务
   ├── 电脑：检查屏幕、打开应用、点击、输入文本
   └── Creative Agent：图片 / 视频生成与观察
   ↓
@@ -45,11 +46,14 @@ Observation → 继续 / 改道 / 请求批准 / 最终答复
 
 | 能力 | 当前实现 |
 | --- | --- |
-| Codex-style Agent Workbench | 三栏桌面工作台：任务历史、对话与工具轨迹、运行检查器。支持同一任务多轮补充。 |
+| Codex-style Agent Workbench | 新三栏命令中心：工作区与任务历史、对话和实时工具轨迹、计划 / 文件变更 / 产物检查器；支持多轮补充和文本附件。 |
 | Generic Agent Session | Planner 每轮只返回 `message`、`tool_call` 或 `finish`；工具失败与拒绝都会作为 observation 继续决策。 |
-| Local Workspace Tools | 在用户选择的根目录内列文件、读文本、搜索和写入；拒绝路径逃逸与符号链接绕过。 |
-| Controlled Terminal | 使用 executable + args 运行，不拼接 shell；支持超时、输出上限、轮询和停止。每次执行都要批准。 |
+| Task Plan | Agent 可建立并更新结构化步骤，最多一个步骤处于 `in_progress`；计划状态通过事件流实时投影，不展示隐藏思维链。 |
+| Local Workspace Tools | 在用户选择的根目录内列文件、读文本、搜索和新建文件；现有文件优先使用 SHA 绑定的行级补丁，产生可审查 diff。 |
+| Conditional File Rollback | 每次结构化补丁生成当前 App 会话内的一次性回滚记录；只有记录仍存在且当前文件 SHA 与原变更一致时，才可经再次审批原子回滚。 |
+| Controlled Terminal | 使用 executable + args 运行，不拼接 shell；支持超时、输出上限、实时阶段与输出长度、停止，以及结束后的统一脱敏输出。每次执行都要批准。 |
 | macOS Computer Tools | 检查系统权限、截屏并用 Vision 分析、打开应用、坐标点击和输入文本；副作用逐项批准。 |
+| Provider Console | 统一管理 Provider、默认与能力专用 Base URL / API Key、连接测试、接口映射、模型同步、DataEyes 实测目录导入与手动模型目录。 |
 | Headless Provider Runtime | Agent 工具直接调用图片、Vision 与视频 Provider，不依赖 Canvas 组件挂载或节点点击。 |
 | Result Observation | 图片生成后自动做技术检查与视觉评价；未达标时改进提示词并有限重做。 |
 | Model Intelligence Router | 按能力、质量、速度、成本、可靠性与可用性排序，安全处理临时失败与 fallback。 |
@@ -61,8 +65,9 @@ Observation → 继续 / 改道 / 请求批准 / 最终答复
 
 ## 安全边界
 
-- `workspace.write`、`terminal.run`、截屏、打开应用、点击、输入文本和 Creative 模型调用都会先暂停，必须由用户在界面中明确批准；桌面副作用还会由 Electron 主进程弹出一次绑定实际参数的原生确认。
+- `workspace.write`、`workspace.patch`、`workspace.revert_patch`、`terminal.run`、截屏、打开应用、点击、输入文本和 Creative 模型调用都会先暂停，必须由用户在界面中明确批准；桌面副作用还会由 Electron 主进程弹出一次绑定实际参数的原生确认。
 - 文件访问限制在用户选择的 workspace root 内，并校验 realpath、父目录与符号链接。
+- 结构化补丁以 `workspace.read` 返回的 SHA-256 绑定基线，并精确校验旧行；文件变化或补丁上下文不一致时拒绝写入。回滚是条件能力，不是永久撤销：原始补丁只在当前 App 内存中保留，切换工作区、记录过期或重启后会拒绝。
 - `.env`、私钥、credentials 等敏感文件不会被自动读取或搜索；普通文件内容中的常见 Key、Bearer Token 和私钥片段会在离开主进程前脱敏。
 - 终端不是完整 OS 沙箱：批准后启动的程序仍拥有当前 macOS 用户权限，所以批准卡会显示完整命令与参数。
 - 终端取消采用 best-effort 边界：macOS/Linux 会终止受控进程组，Windows 会终止直接子进程；程序若主动脱离进程组或另建后台服务，系统无法保证后代全部退出，此时任务会明确显示 `termination_unconfirmed`，不会伪装成已完全终止。
@@ -78,7 +83,7 @@ pnpm install
 pnpm dev
 ```
 
-打开右上角“模型与 API”，配置自己的 Provider、Base URL、API Key 和模型名。YUFENG Agent 不内置或上传用户的 Key。
+打开“模型与 API”进入 Provider Console，配置自己的 Provider、Base URL、API Key 和模型名，也可以测试连接、同步模型或导入 DataEyes 实测目录。YUFENG Agent 不内置或上传用户的 Key。
 
 推荐的 DataEyes 地址：
 
@@ -129,6 +134,8 @@ pnpm desktop:dist:mac
 - [V0.4 Headless Runtime](docs/plans/agent-v0.4-headless-runtime.md)
 - [V0.5a Local Run History](docs/plans/agent-v0.5a-run-history.md)
 - [V0.6 Desktop Workbench](docs/plans/agent-v0.6-workbench.md)
+- [V0.7 Command Center](docs/plans/agent-v0.7-command-center.md)
+- [v1.2.0 Release Notes](docs/releases/v1.2.0.md)
 - [Local API / MCP](docs/local-api-mcp.md)
 
 ## Roadmap
@@ -139,8 +146,11 @@ pnpm desktop:dist:mac
 - ✅ V0.4：无画布 Provider 工具、Agent Workspace、运行投影和桌面入口。
 - ✅ V0.5a：本地运行历史、安全脱敏、桌面图片引用恢复与中断状态识别。
 - ✅ V0.6：通用多轮 Workbench、文件 / 终端 / macOS 工具、逐项审批和 Creative 工具化。
-- 下一阶段：结构化文件补丁、命令差异预览、checkpoint / 续跑、预算与调用统计。
-- 后续阶段：浏览器工具、视频内容观察，以及更多可安装的 Tool / MCP 扩展。
+- ✅ V0.7：新命令中心、结构化计划、SHA 绑定的行级补丁与 diff 事件、当前 App 会话内的条件回滚、终端实时状态、Provider Console。
+- 下一阶段：真正的 PTY 终端、任务 checkpoint / 安全续跑、成本预算与调用统计。
+- 后续阶段：任务级多并发隔离与 Git worktree、可配置权限模式、浏览器工具，以及更多可安装的 Tool / MCP 扩展。
+
+当前版本仍不包含真正 PTY、任务级多并发隔离 / 自动 Git worktree，或 `read-only` / `ask` / `full-access` 等可配置权限模式。现有终端是非交互式受控子进程，所有任务共享用户明确选择的工作区，危险操作继续逐项审批。
 
 ## 技术栈
 

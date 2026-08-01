@@ -20,6 +20,7 @@ const { createAgentTools } = require('./agent-tools/index.cjs')
 const {
   agentToolApprovalDetail,
   attachNativeApproval,
+  bindWorkspaceApprovalPayload,
   canonicalizeAgentToolPayload
 } = require('./agent-tools/approval.cjs')
 const imageGeneration = require('./imageGeneration.cjs')
@@ -110,7 +111,36 @@ const requireTrustedRenderer = (event) => {
   }
 }
 
-const confirmAgentToolAction = async (event, action, input = {}) => {
+const WORKSPACE_BOUND_APPROVAL_ACTIONS = new Set([
+  'workspace.write',
+  'workspace.patch',
+  'workspace.revert_patch',
+  'terminal.run'
+])
+
+const currentWorkspaceIdentity = async (expected = null) => {
+  const identity = await desktopAgentTools?.getWorkspaceIdentity?.()
+  if (!identity?.workspaceRoot || !Number.isSafeInteger(Number(identity.workspaceGeneration))) {
+    const error = new Error('请先选择有效的 workspace root')
+    error.code = 'WORKSPACE_NOT_SET'
+    throw error
+  }
+  const normalized = {
+    workspaceRoot: identity.workspaceRoot,
+    workspaceGeneration: Number(identity.workspaceGeneration)
+  }
+  if (expected && (
+    expected.workspaceRoot !== normalized.workspaceRoot ||
+    Number(expected.workspaceGeneration) !== normalized.workspaceGeneration
+  )) {
+    const error = new Error('workspace root 在回滚记录创建或审批后已发生变化，请重新发起操作')
+    error.code = 'WORKSPACE_IDENTITY_MISMATCH'
+    throw error
+  }
+  return normalized
+}
+
+const confirmAgentToolAction = async (event, action, input = {}, { expectedWorkspaceIdentity = null } = {}) => {
   requireTrustedRenderer(event)
   let payload = canonicalizeAgentToolPayload(action, input)
   if (action === 'workspace.set') {
@@ -122,6 +152,11 @@ const confirmAgentToolAction = async (event, action, input = {}) => {
       throw error
     }
     payload = Object.freeze({ path: realPath })
+  } else if (WORKSPACE_BOUND_APPROVAL_ACTIONS.has(action)) {
+    payload = bindWorkspaceApprovalPayload(
+      payload,
+      await currentWorkspaceIdentity(expectedWorkspaceIdentity)
+    )
   }
   const parent = BrowserWindow.fromWebContents(event.sender) || undefined
   const options = {
@@ -141,6 +176,12 @@ const confirmAgentToolAction = async (event, action, input = {}) => {
     const error = new Error(`用户取消了操作: ${action}`)
     error.code = 'NATIVE_APPROVAL_REJECTED'
     throw error
+  }
+  if (WORKSPACE_BOUND_APPROVAL_ACTIONS.has(action)) {
+    await currentWorkspaceIdentity({
+      workspaceRoot: payload.workspaceRoot,
+      workspaceGeneration: payload.workspaceGeneration
+    })
   }
   return attachNativeApproval(action, payload)
 }
@@ -1139,6 +1180,24 @@ app.whenReady().then(async () => {
   ipcMain.handle('app:agent-tools:write-file', async (event, input) => {
     requireTrustedRenderer(event)
     return agentTools.writeFile(await confirmAgentToolAction(event, 'workspace.write', input))
+  })
+  ipcMain.handle('app:agent-tools:apply-patch', async (event, input) => {
+    requireTrustedRenderer(event)
+    return agentTools.applyPatch(await confirmAgentToolAction(event, 'workspace.patch', input))
+  })
+  ipcMain.handle('app:agent-tools:revert-patch', async (event, input) => {
+    requireTrustedRenderer(event)
+    const prepared = agentTools.prepareRevertPatch(input)
+    const expectedWorkspaceIdentity = {
+      workspaceRoot: prepared.workspaceRoot,
+      workspaceGeneration: prepared.workspaceGeneration
+    }
+    return agentTools.revertPatch(await confirmAgentToolAction(
+      event,
+      'workspace.revert_patch',
+      prepared,
+      { expectedWorkspaceIdentity }
+    ))
   })
   ipcMain.handle('app:agent-tools:search-files', (event, input) => {
     requireTrustedRenderer(event)

@@ -84,6 +84,54 @@ test('WorkbenchSession supports generic tools and multiple user turns', async ()
   assert.deepEqual(restoredProjection, session.snapshot())
 })
 
+test('a completed Workbench task can continue in the same session with separate display content', async () => {
+  const runtime = deterministicRuntime()
+  const plannerMessages = []
+  const session = new WorkbenchSession({
+    ...runtime,
+    planner: ({ session: state }) => {
+      plannerMessages.push(state.messages.map(message => ({
+        role: message.role,
+        content: message.content
+      })))
+      return {
+        type: 'finish',
+        result: { content: `第 ${state.turnCount} 轮完成` }
+      }
+    }
+  })
+
+  const first = await session.submitUserMessage(
+    '分析附件\n\n<attachment name="notes.txt">内部正文</attachment>',
+    { displayContent: '分析附件' }
+  )
+  assert.equal(first.status, 'completed')
+  assert.equal(first.messages[0].displayContent, '分析附件')
+  assert.equal(first.messages.length, 2)
+  assert.deepEqual(first.messages.map(message => message.role), ['user', 'assistant'])
+  assert.equal(first.messages[1].content, '第 1 轮完成')
+  assert.equal(first.messages[1].final, true)
+  assert.equal(first.final.content, '第 1 轮完成')
+
+  const second = await session.submitUserMessage('继续检查结果')
+  assert.equal(second.status, 'completed')
+  assert.equal(second.turnCount, 2)
+  assert.equal(second.messages.length, 4)
+  assert.deepEqual(second.messages.map(message => message.role), ['user', 'assistant', 'user', 'assistant'])
+  assert.deepEqual(second.messages.filter(message => message.final).map(message => message.content), [
+    '第 1 轮完成',
+    '第 2 轮完成'
+  ])
+  assert.equal(second.final.content, '第 2 轮完成')
+  assert.equal(second.completedAt > first.completedAt, true)
+  assert.deepEqual(plannerMessages[1], [
+    { role: 'user', content: '分析附件\n\n<attachment name="notes.txt">内部正文</attachment>' },
+    { role: 'assistant', content: '第 1 轮完成' },
+    { role: 'user', content: '继续检查结果' }
+  ])
+  assert.deepEqual(projectWorkbenchEvents(session.events()).messages, second.messages)
+})
+
 test('dangerous tools pause for approval and execute only after approval', async () => {
   const runtime = deterministicRuntime()
   let executions = 0

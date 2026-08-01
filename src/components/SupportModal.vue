@@ -129,7 +129,7 @@ const openExternal = (url) => {
 }
 
 const copySupportText = async () => {
-  const text = `YUFENG Canvas 支持入口\n微信：请在软件“联系支持”里扫码\n邮箱：${authorEmail}\nGitHub: ${getGithubUrl()}\nIssues: ${githubIssuesUrl.value}\nAPI Key: ${apiKeyHelpUrl}`
+  const text = `YUFENG Agent 支持入口\n微信：请在软件“联系支持”里扫码\n邮箱：${authorEmail}\nGitHub: ${getGithubUrl()}\nIssues: ${githubIssuesUrl.value}\nAPI Key: ${apiKeyHelpUrl}`
   try {
     await navigator.clipboard?.writeText(text)
     window.$message?.success('已复制支持信息')
@@ -139,7 +139,7 @@ const copySupportText = async () => {
 }
 
 const copyAuthorContact = async () => {
-  const text = `微信：请在 YUFENG Canvas 的“联系支持”里扫码\n邮箱：${authorEmail}`
+  const text = `微信：请在 YUFENG Agent 的“联系支持”里扫码\n邮箱：${authorEmail}`
   try {
     await navigator.clipboard?.writeText(text)
     window.$message?.success('已复制作者联系方式')

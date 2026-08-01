@@ -17,6 +17,13 @@ function createAgentTools({ userDataPath, tempPath, systemPreferences, platform 
       ok: true,
       platform,
       workspace: true,
+      workspacePatch: {
+        available: true,
+        format: 'line_hunks_v1',
+        requiresBaseSha256: true,
+        atomicRevert: true,
+        maxApprovalBytes: 32 * 1024
+      },
       terminal: true,
       terminalCancellation: { ...TERMINATION_GUARANTEE },
       computer: {
@@ -29,6 +36,7 @@ function createAgentTools({ userDataPath, tempPath, systemPreferences, platform 
       workspaceRoot: (await workspace.getRoot()).workspaceRoot
     }),
     getWorkspaceRoot: () => workspace.getRoot(),
+    getWorkspaceIdentity: () => workspace.getIdentity(),
     setWorkspaceRoot: async (input = {}) => {
       assertBoundedInput(input)
       requireApproval(input.approval, 'workspace.set')
@@ -43,6 +51,9 @@ function createAgentTools({ userDataPath, tempPath, systemPreferences, platform 
     listFiles: input => workspace.listFiles(input),
     readFile: input => workspace.readFile(input),
     writeFile: input => workspace.writeFile(input),
+    applyPatch: input => workspace.applyPatch(input),
+    prepareRevertPatch: input => workspace.prepareRevertPatch(input),
+    revertPatch: input => workspace.revertPatch(input),
     searchFiles: input => workspace.searchFiles(input),
     startCommand: input => terminal.start(input),
     getCommand: input => terminal.get(input),

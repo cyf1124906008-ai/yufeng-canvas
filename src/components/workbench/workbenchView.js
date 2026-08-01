@@ -37,6 +37,8 @@ const TOOL_META = {
   'workspace.read': { label: '读取文件', icon: 'TXT' },
   'workspace.search': { label: '搜索文件', icon: 'RG' },
   'workspace.write': { label: '写入文件', icon: 'W' },
+  'workspace.patch': { label: '修改文件', icon: 'DIF' },
+  'workspace.revert_patch': { label: '回滚修改', icon: 'REV' },
   'terminal.run': { label: '运行命令', icon: '>_' },
   'computer.permissions': { label: '检查电脑权限', icon: 'PER' },
   'computer.inspect_screen': { label: '查看屏幕', icon: 'VIS' },
@@ -44,6 +46,7 @@ const TOOL_META = {
   'computer.click': { label: '点击屏幕', icon: 'CLK' },
   'computer.type_text': { label: '输入文本', icon: 'KEY' },
   'creative.generate': { label: '创作图片或视频', icon: 'ART' },
+  'task.update_plan': { label: '更新执行计划', icon: 'PLAN' },
   terminal: { label: '终端', icon: '>_' },
   computer: { label: '电脑', icon: 'UI' },
   finish: { label: '验证交付', icon: '✓' }
@@ -109,7 +112,7 @@ function activityKind(type, actionName) {
   if (type.includes('terminal') || actionName === 'terminal' || actionName.startsWith('terminal.')) return 'terminal'
   if (type.includes('computer') || actionName === 'computer' || actionName.startsWith('computer.')) return 'computer'
   if (type === 'planning') return 'plan'
-  if (['action', 'tool_call', 'tool_started', 'tool_succeeded', 'observation'].includes(type)) return 'tool'
+  if (['action', 'tool_call', 'tool_started', 'tool_progress', 'tool_succeeded', 'observation'].includes(type)) return 'tool'
   if (['completed', 'finished'].includes(type)) return 'result'
   if (['failed'].includes(type)) return 'error'
   return 'system'
@@ -123,6 +126,19 @@ function activityTitle(type, tool, raw) {
   if (type === 'action') return `已选择：${tool.label}`
   if (type === 'tool_call') return `请求执行：${tool.label}`
   if (type === 'tool_started') return `正在执行：${tool.label}`
+  if (type === 'tool_progress') {
+    const phase = text(raw?.phase).toLowerCase()
+    const label = {
+      starting: '正在准备',
+      started: '已启动',
+      polling: '正在运行',
+      running: '正在运行',
+      retrying: '正在重试',
+      completed: '执行完成',
+      failed: '执行失败'
+    }[phase] || '运行进度'
+    return `${label}：${tool.label}`
+  }
   if (type === 'tool_succeeded') return `已完成：${tool.label}`
   if (type === 'observation') return raw?.status === 'succeeded' ? `已完成：${tool.label}` : `${tool.label}：${raw?.status || '已返回'}`
   if (type === 'finish_blocked') return '交付检查要求继续执行'
@@ -136,8 +152,15 @@ function activityTitle(type, tool, raw) {
   return text(raw?.message || type) || 'Agent 更新'
 }
 
-function activityStatus(type, rawStatus) {
+function activityStatus(type, rawStatus, raw) {
   if (type === 'tool_succeeded' || ['completed', 'finished'].includes(type)) return 'completed'
+  if (type === 'tool_progress') {
+    const phase = text(raw?.phase).toLowerCase()
+    if (phase === 'completed') return 'completed'
+    if (['failed', 'error'].includes(phase)) return 'failed'
+    if (['cancelled', 'canceled', 'stopped'].includes(phase)) return 'cancelled'
+    return rawStatus || 'running'
+  }
   if (type === 'observation' && rawStatus === 'succeeded') return 'completed'
   if (type === 'observation' && rawStatus === 'failed') return 'failed'
   if (type === 'failed') return 'failed'
@@ -155,12 +178,12 @@ function normalizeActivity(raw, index) {
   const tool = type === 'message' || type.endsWith('_message')
     ? { name: 'message', label: raw?.role === 'user' ? '用户消息' : 'Agent 消息', icon: raw?.role === 'user' ? 'U' : 'AI' }
     : workbenchTool(actionName)
-  const status = activityStatus(type, text(raw?.status).toLowerCase())
+  const status = activityStatus(type, text(raw?.status).toLowerCase(), raw)
   const statusView = workbenchStatus(status)
   const time = timestamp(raw?.timestamp || raw?.createdAt || raw?.requestedAt || raw?.resolvedAt || raw?.completedAt || raw?.startedAt || raw?.time)
   const stepValue = Number(raw?.step ?? raw?.stepNumber)
   const step = Number.isFinite(stepValue) && stepValue > 0 ? stepValue : 0
-  const message = text(raw?.content || raw?.description || raw?.reason || raw?.message || raw?.error?.message || raw?.error)
+  const message = text(raw?.displayContent || raw?.content || raw?.description || raw?.reason || raw?.message || raw?.error?.message || raw?.error)
 
   return {
     id: text(raw?.id) || `${type}-${time || 'time'}-${index}`,
@@ -180,7 +203,7 @@ function normalizeActivity(raw, index) {
     artifactRef: text(raw?.artifactRef || raw?.artifactId || raw?.outputRef),
     command: text(raw?.command || raw?.input?.command || raw?.input?.cmd),
     input: jsonText(raw?.input, 8_000),
-    output: jsonText(raw?.output ?? raw?.stdout ?? raw?.result?.text),
+    output: jsonText(raw?.output ?? raw?.stdout ?? raw?.stdoutDelta ?? raw?.stderrDelta ?? raw?.result?.text),
     approvalId: text(raw?.approvalId || raw?.requestId || raw?.id),
     toolCallId: text(raw?.toolCallId || raw?.id),
     role: text(raw?.role),
@@ -202,6 +225,26 @@ export function buildWorkbenchActivities(snapshot = {}, injectedActivities = [])
 }
 
 export function buildWorkbenchPlan(snapshot = {}, activities = []) {
+  const runtimeSteps = Array.isArray(snapshot?.plan?.steps) ? snapshot.plan.steps : []
+  if (runtimeSteps.length) {
+    return runtimeSteps.map((item, index) => {
+      const sourceStatus = text(item?.status).toLowerCase()
+      const status = ['completed', 'succeeded', 'success'].includes(sourceStatus)
+        ? 'completed'
+        : (['in_progress', 'running', 'active'].includes(sourceStatus)
+            ? 'running'
+            : (['failed', 'error'].includes(sourceStatus) ? 'failed' : 'planned'))
+      return {
+        id: text(item?.id) || `plan-step-${index + 1}`,
+        step: index + 1,
+        actionName: text(item?.actionName || item?.toolName),
+        label: text(item?.step || item?.label || item?.title) || `步骤 ${index + 1}`,
+        icon: 'PLAN',
+        status
+      }
+    })
+  }
+
   const source = Array.isArray(activities) ? activities : buildWorkbenchActivities(snapshot)
   const actions = []
   const seen = new Map()
@@ -279,13 +322,30 @@ export function normalizeWorkbenchArtifacts(artifacts = [], snapshot = {}) {
 export function buildWorkbenchInspector({ snapshot = {}, artifacts = [], context = {}, fileChanges = [], usage = {} } = {}) {
   const status = workbenchStatus(snapshot?.status)
   const normalizedArtifacts = normalizeWorkbenchArtifacts(artifacts, snapshot)
-  const changedFiles = (Array.isArray(fileChanges) ? fileChanges : []).map((file, index) => ({
-    id: text(file?.id || file?.path) || `file-${index}`,
-    path: text(file?.path || file?.name) || '未知文件',
-    status: text(file?.status || file?.change) || 'modified',
-    additions: Math.max(0, Number(file?.additions) || 0),
-    deletions: Math.max(0, Number(file?.deletions) || 0)
-  }))
+  const changedFiles = (Array.isArray(fileChanges) ? fileChanges : []).map((file, index) => {
+    const hunks = Array.isArray(file?.hunks) ? file.hunks.map(hunk => ({
+      startLine: Math.max(1, Number(hunk?.startLine) || 1),
+      oldLines: Array.isArray(hunk?.oldLines) ? hunk.oldLines.map(line => String(line)) : [],
+      newLines: Array.isArray(hunk?.newLines) ? hunk.newLines.map(line => String(line)) : []
+    })) : []
+    const additions = file?.additions == null
+      ? hunks.reduce((sum, hunk) => sum + hunk.newLines.length, 0)
+      : Math.max(0, Number(file.additions) || 0)
+    const deletions = file?.deletions == null
+      ? hunks.reduce((sum, hunk) => sum + hunk.oldLines.length, 0)
+      : Math.max(0, Number(file.deletions) || 0)
+    return {
+      id: text(file?.id || file?.eventId || file?.path) || `file-${index}`,
+      path: text(file?.path || file?.name) || '未知文件',
+      status: text(file?.status || file?.change) || 'modified',
+      operation: text(file?.operation) || 'apply',
+      revertsDiffId: text(file?.revertsDiffId),
+      additions,
+      deletions,
+      hunks,
+      rollback: file?.rollback && typeof file.rollback === 'object' ? file.rollback : null
+    }
+  })
   return {
     run: {
       id: text(snapshot?.runId || snapshot?.sessionId || snapshot?.id),

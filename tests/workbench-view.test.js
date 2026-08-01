@@ -45,6 +45,36 @@ test('dynamic plan marks a tool complete only after tool_succeeded', () => {
   assert.deepEqual(buildWorkbenchPlan({}, after).map(item => item.status), ['completed'])
 })
 
+test('runtime-projected task plan takes precedence over inferred tool history', () => {
+  const inferred = buildWorkbenchActivities({}, [
+    { id: 'old-call', type: 'tool_call', name: 'workspace.read', status: 'succeeded' }
+  ])
+  const plan = buildWorkbenchPlan({
+    plan: {
+      explanation: '先审计，再修改',
+      steps: [
+        { id: 'audit', step: '审计代码', status: 'completed' },
+        { id: 'change', step: '应用修改', status: 'in_progress' },
+        { id: 'verify', step: '验证结果', status: 'pending' }
+      ]
+    }
+  }, inferred)
+
+  assert.deepEqual(plan.map(item => item.label), ['审计代码', '应用修改', '验证结果'])
+  assert.deepEqual(plan.map(item => item.status), ['completed', 'running', 'planned'])
+})
+
+test('tool progress is rendered from projected phases without fabricating completion', () => {
+  const activities = buildWorkbenchActivities({}, [
+    { eventId: 'event-1', type: 'tool_progress', toolCallId: 'call-1', toolName: 'terminal.run', phase: 'started', timestamp: 100 },
+    { eventId: 'event-2', type: 'tool_progress', toolCallId: 'call-1', toolName: 'terminal.run', phase: 'completed', stdoutDelta: 'ok\n', timestamp: 200 }
+  ])
+
+  assert.deepEqual(activities.map(item => item.kind), ['terminal', 'terminal'])
+  assert.deepEqual(activities.map(item => item.status), ['running', 'completed'])
+  assert.equal(activities[1].output, 'ok')
+})
+
 test('approval, terminal, and computer cards require explicit injected events', () => {
   const activities = buildWorkbenchActivities({}, [
     { id: 'approval-1', type: 'approval_required', message: 'Allow publish?' },
@@ -69,7 +99,7 @@ test('Workbench activities are ordered by actual timestamps instead of data grou
 
 test('generic Workbench projection messages, tool calls, and observations map without adapter mocks', () => {
   const activities = buildWorkbenchActivities({}, [
-    { id: 'message-1', role: 'user', content: 'Inspect this workspace', createdAt: 100 },
+    { id: 'message-1', role: 'user', content: 'Inspect this workspace\n<attachment>internal</attachment>', displayContent: 'Inspect this workspace', createdAt: 100 },
     { id: 'call-1', type: 'tool_call', name: 'terminal.exec', status: 'running', input: { command: 'npm test' } },
     { id: 'observation-1', type: 'observation', toolCallId: 'call-1', toolName: 'terminal.exec', status: 'succeeded', output: { stdout: 'ok' } }
   ])
@@ -95,6 +125,23 @@ test('inspector leaves usage and file changes unreported instead of fabricating 
   assert.equal(inspector.usage.inputTokens, null)
   assert.equal(inspector.usage.outputTokens, null)
   assert.equal(inspector.usage.cost, null)
+})
+
+test('inspector preserves structured workspace diffs and calculates line counts', () => {
+  const inspector = buildWorkbenchInspector({
+    fileChanges: [{
+      id: 'diff-1',
+      path: 'src/config.js',
+      operation: 'apply',
+      hunks: [{ startLine: 4, oldLines: ['old'], newLines: ['new', 'extra'] }],
+      rollback: { state: 'conditional' }
+    }]
+  })
+
+  assert.equal(inspector.files[0].additions, 2)
+  assert.equal(inspector.files[0].deletions, 1)
+  assert.equal(inspector.files[0].hunks[0].startLine, 4)
+  assert.equal(inspector.files[0].rollback.state, 'conditional')
 })
 
 test('artifact view uses only real artifact data and preserves final selection', () => {
@@ -137,23 +184,45 @@ test('workbench components are controlled and Workspace uses the real Workbench 
   assert.doesNotMatch(workspace, /AgentRunPanel|agent-hero|GOAL IN/)
 })
 
-test('workbench visual contract keeps desktop rails, fixed session composer, and mobile drawers', async () => {
-  const [activity, composer, inspector, sidebar, workspace] = await Promise.all([
+test('workbench visual contract keeps professional desktop rails, compact composer, and mobile drawers', async () => {
+  const [activity, composer, inspector, sidebar, icon, workspace] = await Promise.all([
     readFile(new URL('../src/components/workbench/WorkbenchActivityFeed.vue', import.meta.url), 'utf8'),
     readFile(new URL('../src/components/workbench/WorkbenchComposer.vue', import.meta.url), 'utf8'),
     readFile(new URL('../src/components/workbench/WorkbenchInspector.vue', import.meta.url), 'utf8'),
     readFile(new URL('../src/components/workbench/WorkbenchSidebar.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../src/components/workbench/WorkbenchIcon.vue', import.meta.url), 'utf8'),
     readFile(new URL('../src/views/AgentWorkspace.vue', import.meta.url), 'utf8')
   ])
 
-  assert.match(workspace, /grid-template-columns: 252px minmax\(0, 1fr\) 286px/)
-  assert.match(workspace, /grid-template-rows: minmax\(0, 1fr\) auto/)
-  assert.match(workspace, /@media \(max-width: 1180px\)/)
-  assert.match(workspace, /@media \(max-width: 880px\)/)
+  assert.match(workspace, /grid-template-columns: 278px minmax\(0,1fr\) 340px/)
+  assert.match(workspace, /grid-template-rows: minmax\(0,1fr\) auto/)
+  assert.match(workspace, /@media \(max-width: 1160px\)/)
+  assert.match(workspace, /@media \(max-width: 860px\)/)
   assert.match(sidebar, /position: fixed/)
+  assert.match(sidebar, /task-search/)
+  assert.match(sidebar, /project-list/)
+  assert.match(sidebar, /onSearchShortcut/)
   assert.match(inspector, /position: fixed/)
-  assert.match(composer, /wb-composer-shell/)
+  assert.match(inspector, /inspector-panel-terminal/)
+  assert.match(inspector, /v-model:active-tab|update:activeTab/)
+  assert.match(composer, /composer-shell/)
+  assert.match(composer, /command-menu/)
+  assert.match(composer, /files-selected/)
+  assert.match(composer, /font: 14px/)
   assert.match(activity, /approval-card/)
-  assert.match(activity, /terminal-card/)
-  assert.match(activity, /computer-card/)
+  assert.match(activity, /terminal-output/)
+  assert.match(activity, /welcome-state/)
+  assert.match(activity, /font-size: 14px/)
+  assert.match(icon, /viewBox="0 0 24 24"/)
+  assert.match(workspace, /attachmentContext/)
+  assert.match(workspace, /MAX_ATTACHMENT_BYTES = 8 \* 1024/)
+  assert.match(workspace, /MAX_TOTAL_ATTACHMENT_BYTES = 16 \* 1024/)
+  assert.match(workspace, /MAX_SUBMISSION_CONTEXT_BYTES = WORKBENCH_MESSAGE_CONTEXT_CHARACTERS/)
+  assert.match(workspace, /utf8Bytes\(submitted\) > MAX_SUBMISSION_CONTEXT_BYTES/)
+  assert.match(workspace, /任务与附件总计不能超过 24 KB/)
+  assert.match(workspace, /@files-selected="addAttachments"/)
+  assert.match(workspace, /workbench\.toolProgress\.value/)
+  assert.match(workspace, /workbench\.workspaceDiffs\.value/)
+  assert.match(inspector, /planExplanation/)
+  assert.match(inspector, /diff-hunks/)
 })
