@@ -1,9 +1,9 @@
 {
   "name": "yufeng-canvas",
-  "productName": "YUFENG Canvas",
+  "productName": "YUFENG Agent",
   "private": true,
   "version": "1.0.8",
-  "description": "Visual AI canvas desktop app built with Vue, Vite and Electron",
+  "description": "Autonomous creative agent desktop harness built with Vue, Vite and Electron",
   "repository": {
     "type": "git",
     "url": "https://github.com/cyf1124906008-ai/yufeng-canvas.git"
@@ -25,15 +25,13 @@
     "desktop:dev": "concurrently -k \"cross-env APP_TARGET=desktop vite\" \"wait-on tcp:5173 && cross-env APP_TARGET=desktop ELECTRON_RENDERER_URL=http://127.0.0.1:5173 electron .\"",
     "desktop:start": "cross-env APP_TARGET=desktop electron .",
     "desktop:build": "pnpm desktop:renderer && electron-builder --dir",
-    "desktop:dist": "pnpm desktop:renderer && electron-builder --win nsis"
+    "desktop:dist": "pnpm desktop:dist:win",
+    "desktop:dist:win": "pnpm desktop:renderer && electron-builder --win nsis",
+    "desktop:dist:mac": "pnpm desktop:renderer && electron-builder --mac dmg zip --arm64 --x64",
+    "desktop:dist:mac:arm64": "pnpm desktop:renderer && electron-builder --mac dmg zip --arm64",
+    "desktop:dist:mac:x64": "pnpm desktop:renderer && electron-builder --mac dmg zip --x64"
   },
   "dependencies": {
-    "@vicons/ionicons5": "^0.13.0",
-    "@vue-flow/background": "^1.3.2",
-    "@vue-flow/controls": "^1.1.3",
-    "@vue-flow/core": "^1.48.1",
-    "@vue-flow/minimap": "^1.5.4",
-    "axios": "^1.13.2",
     "electron-updater": "^6.8.3",
     "naive-ui": "^2.43.2",
     "pinia": "^3.0.4",
@@ -54,9 +52,9 @@
   },
   "build": {
     "appId": "ai.yufeng.canvas",
-    "productName": "YUFENG Canvas",
+    "productName": "YUFENG Agent",
     "icon": "build/icon.ico",
-    "artifactName": "YUFENG-Canvas-Setup-${version}.${ext}",
+    "artifactName": "YUFENG-Agent-Setup-${version}.${ext}",
     "directories": {
       "output": "release"
     },
@@ -84,19 +82,36 @@
         }
       ]
     },
+    "mac": {
+      "icon": "build/icon.png",
+      "category": "public.app-category.graphics-design",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "YUFENG-Agent-${version}-mac-${arch}.${ext}"
+    },
+    "dmg": {
+      "title": "YUFENG Agent ${version}",
+      "artifactName": "YUFENG-Agent-${version}-mac-${arch}.${ext}"
+    },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true
     }
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "electron",
-      "electron-winstaller",
-      "esbuild",
-      "vue-demi"
-    ]
   }
 }

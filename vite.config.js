@@ -33,9 +33,7 @@ export default defineConfig(({ mode }) => {
       rollupOptions: {
         output: {
           manualChunks: {
-            'naive-ui': ['naive-ui'],
-            'vue-flow': ['@vue-flow/core'],
-            'icons': ['@vicons/ionicons5']
+            'naive-ui': ['naive-ui']
           }
         }
       }

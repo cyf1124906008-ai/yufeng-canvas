@@ -121,6 +121,29 @@ test('runner supports cancellation during a tool call', async () => {
   assert.equal(runner.state.status, 'cancelled')
 })
 
+test('subscriber failures never strand or fail an Agent run', async () => {
+  const listenerErrors = []
+  const runner = new AgentRunner({
+    tools: {
+      generate_image: async () => ({ artifactId: 'image-safe' })
+    },
+    onListenerError: (error, detail) => listenerErrors.push([error.message, detail.type])
+  })
+  runner.subscribe(() => {
+    throw new Error('broken observer')
+  })
+
+  const first = await runner.run('生成一张海报')
+  const second = await runner.run('再生成一张海报')
+
+  assert.equal(first.status, 'completed')
+  assert.equal(second.status, 'completed')
+  assert.equal(runner.controller, null)
+  assert.ok(listenerErrors.some(([, type]) => type === 'started'))
+  assert.ok(listenerErrors.some(([, type]) => type === 'tool_succeeded'))
+  assert.ok(listenerErrors.some(([, type]) => type === 'completed'))
+})
+
 test('runner enforces maxSteps when finish is repeatedly rejected', async () => {
   const planner = new Planner({
     llm: async () => '{"name":"finish","input":{}}'
@@ -167,16 +190,44 @@ test('planner repairs an impossible video-first action before calling tools', as
 })
 
 test('planner context hides media URLs and credentials', async () => {
+  const bareBase64 = 'QUJD'.repeat(40)
   const context = new ContextManager()
   context.addObservation('generate_image', {
     outputNodeId: 'image-1',
     url: 'https://example.test/private.png',
-    nested: { apiKey: 'top-secret' }
+    nested: {
+      apiKey: 'top-secret',
+      b64_json: 'short-base64-media',
+      imageData: 'short-image-media',
+      access_token: 'access-secret',
+      refreshToken: 'refresh-secret',
+      clientSecret: 'client-secret',
+      sessionToken: 'session-secret',
+      cookie: 'cookie-secret',
+      privateKey: 'private-key-secret',
+      password: 'password-secret',
+      providerPayload: bareBase64
+    }
   })
 
   const serialized = JSON.stringify(context.toMessages())
-  assert.doesNotMatch(serialized, /private\.png|top-secret/)
-  assert.match(serialized, /media-reference-hidden|redacted/)
+  for (const secret of [
+    'private.png',
+    'top-secret',
+    'short-base64-media',
+    'short-image-media',
+    'access-secret',
+    'refresh-secret',
+    'client-secret',
+    'session-secret',
+    'cookie-secret',
+    'private-key-secret',
+    'password-secret',
+    bareBase64
+  ]) {
+    assert.doesNotMatch(serialized, new RegExp(secret.replace('.', '\\.')))
+  }
+  assert.match(serialized, /media-reference-hidden|media-data-omitted|redacted/)
 
   const plannerPayloads = []
   const planner = new Planner({
@@ -194,13 +245,38 @@ test('planner context hides media URLs and credentials', async () => {
       generate_image: async () => ({
         outputNodeId: 'image-2',
         url: 'data:image/png;base64,secret-media',
-        authorization: 'Bearer private-token'
+        authorization: 'Bearer private-token',
+        b64_json: 'provider-b64-json',
+        imageData: 'provider-image-data',
+        access_token: 'provider-access-token',
+        refreshToken: 'provider-refresh-token',
+        clientSecret: 'provider-client-secret',
+        sessionToken: 'provider-session-token',
+        cookie: 'provider-cookie',
+        privateKey: 'provider-private-key',
+        password: 'provider-password',
+        rawPayload: bareBase64
       })
     }
   })
 
   await runner.run('生成一张海报')
   const secondPayload = JSON.stringify(plannerPayloads[1])
-  assert.doesNotMatch(secondPayload, /secret-media|private-token/)
-  assert.match(secondPayload, /media-reference-hidden|redacted/)
+  for (const secret of [
+    'secret-media',
+    'private-token',
+    'provider-b64-json',
+    'provider-image-data',
+    'provider-access-token',
+    'provider-refresh-token',
+    'provider-client-secret',
+    'provider-session-token',
+    'provider-cookie',
+    'provider-private-key',
+    'provider-password',
+    bareBase64
+  ]) {
+    assert.doesNotMatch(secondPayload, new RegExp(secret))
+  }
+  assert.match(secondPayload, /media-reference-hidden|media-data-omitted|redacted/)
 })

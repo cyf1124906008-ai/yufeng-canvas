@@ -2,7 +2,6 @@ const SNAPSHOT_KIND = 'yufeng-canvas.user-data'
 const SNAPSHOT_VERSION = 1
 
 const SYSTEM_ONLY_KEYS = new Set([
-  'yufeng-canvas-invite-accepted',
   'yufeng-home-welcome-seen'
 ])
 

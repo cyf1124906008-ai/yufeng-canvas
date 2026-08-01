@@ -138,7 +138,11 @@ function errorSummary(error, classification) {
     message: sanitizeText(error?.message || String(error)),
     ...(classification.code ? { code: sanitizeText(classification.code) } : {}),
     ...(classification.status == null ? {} : { status: classification.status }),
-    category: classification.category
+    category: classification.category,
+    ...((error?.acceptedByProvider === true || error?.backgroundPending === true)
+      ? { acceptedByProvider: true }
+      : {}),
+    ...(error?.taskId ? { taskId: sanitizeText(error.taskId) } : {})
   }
 }
 
@@ -172,6 +176,8 @@ export class ModelFallbackError extends Error {
     this.attempts = attempts.map((attempt) => sanitizeFallbackValue(attempt))
     this.lastError = this.attempts.at(-1)?.error || null
     if (this.lastError?.status != null) this.status = this.lastError.status
+    if (this.lastError?.acceptedByProvider === true) this.acceptedByProvider = true
+    if (this.lastError?.taskId) this.taskId = this.lastError.taskId
   }
 }
 

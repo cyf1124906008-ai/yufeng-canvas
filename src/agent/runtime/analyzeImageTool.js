@@ -1,4 +1,3 @@
-import { nodes } from '@/stores/canvas'
 import {
   PromptImprover,
   normalizeImageReview,
@@ -72,23 +71,39 @@ export function detectVisionSupport(profile = {}) {
   return { supported: false, source: 'not_declared' }
 }
 
-function resolveImageNode(input = {}, runtime = {}) {
-  const candidateIds = [
-    input.imageNodeId,
-    input.outputNodeId,
-    runtime.state?.latestOutput?.('image')?.value?.outputNodeId
-  ].filter(Boolean)
+function directImageArtifact(input = {}, runtime = {}) {
+  const latest = runtime.state?.latestOutput?.('image')?.value
+  const url = [
+    input.image,
+    input.imageUrl,
+    input.sourceImage,
+    latest?.url,
+    latest?.imageUrl,
+    latest?.src
+  ].find(value => typeof value === 'string' && value.trim())
+  if (!url) return null
 
-  for (const candidateId of candidateIds) {
-    const candidate = nodes.value.find((node) => node.id === candidateId)
-    if (candidate?.type === 'image') return candidate
-
-    const indirectOutputId = candidate?.data?.outputNodeId
-    const indirect = indirectOutputId
-      ? nodes.value.find((node) => node.id === indirectOutputId && node.type === 'image')
-      : null
-    if (indirect) return indirect
+  return {
+    id: String(
+      input.artifactId ||
+      input.imageArtifactId ||
+      latest?.artifactId ||
+      latest?.id ||
+      `artifact-${runtime.state?.stepCount || Date.now()}`
+    ),
+    type: 'image',
+    data: {
+      url,
+      prompt: input.prompt || latest?.prompt || '',
+      loading: false,
+      error: ''
+    }
   }
+}
+
+async function resolveImageNode(input = {}, runtime = {}) {
+  const directArtifact = directImageArtifact(input, runtime)
+  if (directArtifact) return directArtifact
   return null
 }
 
@@ -269,8 +284,8 @@ export function createAnalyzeImageTool({
   const promptImprover = new PromptImprover()
 
   return async function analyzeImage(input = {}, runtime = {}) {
-    const imageNode = resolveImageNode(input, runtime)
-    if (!imageNode) throw new Error('analyze_image 找不到对应的图片输出节点')
+    const imageNode = await resolveImageNode(input, runtime)
+    if (!imageNode) throw new Error('analyze_image 找不到对应的图片作品')
     if (imageNode.data?.error) throw new Error(imageNode.data.error)
     if (imageNode.data?.loading === true || !imageNode.data?.url) {
       throw new Error('analyze_image 只能检查已生成完成的真实图片')
@@ -404,7 +419,8 @@ export function createAnalyzeImageTool({
         {
           model: route.model,
           images: [imageNode.data.url],
-          isolated: true
+          isolated: true,
+          signal: runtime.signal
         }
       )
     } catch (error) {
@@ -435,7 +451,8 @@ export function createAnalyzeImageTool({
           true,
           {
             model: route.model,
-            isolated: true
+            isolated: true,
+            signal: runtime.signal
           }
         )
       } catch (repairRequestError) {

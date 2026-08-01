@@ -51,16 +51,21 @@ export class QualityPolicy {
 
   evaluate(input) {
     const review = normalizeImageReview(input)
+    const possibleBlankImage = review.technical?.possibleBlankImage === true ||
+      review.technical?.warnings?.includes('possible_blank_image')
 
     if (review.reviewMode === 'degraded') {
       const technicalOk = review.technical?.decodable === true
-      const accepted = this.allowDegradedReview && technicalOk && review.hardFailures.length === 0
+      const accepted = this.allowDegradedReview && technicalOk && !possibleBlankImage && review.hardFailures.length === 0
       const blockingReasons = []
       if (!this.allowDegradedReview) {
         blockingReasons.push({ code: 'DEGRADED_REVIEW_DISABLED', message: 'Degraded review is not allowed.' })
       }
       if (!technicalOk) {
         blockingReasons.push({ code: 'UNDECODABLE', message: 'The image failed the technical decode check.' })
+      }
+      if (possibleBlankImage) {
+        blockingReasons.push({ code: 'POSSIBLE_BLANK_IMAGE', message: 'The image appears blank or nearly uniform.' })
       }
       for (const code of review.hardFailures) {
         blockingReasons.push({ code, message: `Hard failure: ${code}` })
@@ -79,6 +84,9 @@ export class QualityPolicy {
     const blockingReasons = []
     if (review.technical?.decodable === false) {
       blockingReasons.push({ code: 'UNDECODABLE', message: 'The image failed the technical decode check.' })
+    }
+    if (possibleBlankImage) {
+      blockingReasons.push({ code: 'POSSIBLE_BLANK_IMAGE', message: 'The image appears blank or nearly uniform.' })
     }
     for (const code of review.hardFailures) {
       blockingReasons.push({ code, message: `Hard failure: ${code}` })

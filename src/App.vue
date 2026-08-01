@@ -3,16 +3,10 @@
  * Root App component | 根组件
  * Provides naive-ui config and router view
  */
-import { computed, onMounted, ref } from 'vue'
-import { NButton, NConfigProvider, NDialogProvider, NMessageProvider, NModal, darkTheme } from 'naive-ui'
+import { computed } from 'vue'
+import { NConfigProvider, NDialogProvider, NMessageProvider, darkTheme } from 'naive-ui'
 import { isDark } from './stores/theme'
 import AppFeedbackProvider from './components/AppFeedbackProvider.vue'
-import SupportModal from './components/SupportModal.vue'
-
-const SUPPORT_HINT_STORAGE_KEY = 'yufeng-canvas-support-hint-v1'
-
-const showSupportHint = ref(false)
-const showSupportModal = ref(false)
 
 // Naive UI theme based on dark mode | 基于深色模式的 Naive UI 主题
 const theme = computed(() => isDark.value ? darkTheme : null)
@@ -48,28 +42,6 @@ const themeOverrides = {
   }
 }
 
-const closeSupportHint = () => {
-  try {
-    localStorage.setItem(SUPPORT_HINT_STORAGE_KEY, 'yes')
-  } catch {
-    // Local storage can be unavailable in restricted environments.
-  }
-
-  showSupportHint.value = false
-}
-
-const openSupportFromHint = () => {
-  closeSupportHint()
-  showSupportModal.value = true
-}
-
-onMounted(() => {
-  try {
-    showSupportHint.value = localStorage.getItem(SUPPORT_HINT_STORAGE_KEY) !== 'yes'
-  } catch {
-    showSupportHint.value = true
-  }
-})
 </script>
 
 <template>
@@ -78,118 +50,8 @@ onMounted(() => {
       <n-dialog-provider>
         <app-feedback-provider>
           <router-view />
-
-          <n-modal
-            v-model:show="showSupportHint"
-            preset="card"
-            class="support-hint-modal"
-            :bordered="false"
-            :mask-closable="false"
-          >
-            <div class="support-hint">
-              <div class="support-hint-mark">
-                <img src="./assets/logo.png" alt="YUFENG Canvas" />
-              </div>
-              <p class="support-hint-kicker">YUFENG CANVAS</p>
-              <h2>遇到问题，直接联系作者。</h2>
-              <p>
-                有任何问题、扣费异常、模型配置失败或改进建议，请点击软件右上角的信封图标联系作者。
-                反馈时带上运行日志截图、模型名和请求时间，我们会更快定位。
-              </p>
-              <div class="support-hint-actions">
-                <n-button strong secondary round @click="closeSupportHint">
-                  我知道了
-                </n-button>
-                <n-button type="primary" round @click="openSupportFromHint">
-                  立即联系作者
-                </n-button>
-              </div>
-            </div>
-          </n-modal>
-
-          <support-modal v-model:show="showSupportModal" />
         </app-feedback-provider>
       </n-dialog-provider>
     </n-message-provider>
   </n-config-provider>
 </template>
-
-<style>
-.support-hint-modal {
-  width: min(520px, calc(100vw - 32px));
-  border: 1px solid rgba(203, 255, 239, 0.22);
-  border-radius: 34px;
-  overflow: hidden;
-  background:
-    radial-gradient(circle at 16% 0%, rgba(125, 249, 231, 0.2), transparent 34%),
-    radial-gradient(circle at 88% 100%, rgba(56, 189, 248, 0.16), transparent 38%),
-    rgba(5, 18, 32, 0.82);
-  box-shadow:
-    0 40px 130px rgba(0, 0, 0, 0.46),
-    inset 0 1px 0 rgba(255, 255, 255, 0.12);
-}
-
-.support-hint-modal .n-card__content {
-  padding: 34px;
-}
-
-.support-hint {
-  color: #eafff8;
-}
-
-.support-hint-mark {
-  display: grid;
-  place-items: center;
-  width: 72px;
-  height: 72px;
-  margin-bottom: 22px;
-  border: 1px solid rgba(125, 249, 231, 0.28);
-  border-radius: 24px;
-  background: rgba(255, 255, 255, 0.08);
-  box-shadow: 0 20px 54px rgba(20, 184, 166, 0.22);
-}
-
-.support-hint-mark img {
-  width: 52px;
-  height: 52px;
-  border-radius: 16px;
-}
-
-.support-hint-kicker {
-  margin: 0 0 10px;
-  color: #5ff6d2;
-  font-size: 12px;
-  font-weight: 950;
-  letter-spacing: 0.2em;
-}
-
-.support-hint h2 {
-  margin: 0;
-  color: #f8fffc;
-  font-size: clamp(30px, 4.5vw, 44px);
-  font-weight: 950;
-  letter-spacing: -0.06em;
-  line-height: 1.02;
-}
-
-.support-hint p:not(.support-hint-kicker) {
-  margin: 18px 0 28px;
-  color: rgba(234, 255, 248, 0.72);
-  font-size: 15px;
-  line-height: 1.8;
-}
-
-.support-hint-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  justify-content: flex-end;
-}
-
-.support-hint-actions .n-button {
-  min-width: 116px;
-  height: 42px;
-  border-radius: 16px;
-  font-weight: 900;
-}
-</style>

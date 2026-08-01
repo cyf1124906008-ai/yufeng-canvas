@@ -1,22 +1,42 @@
 const MEDIA_URL_PATTERN = /^(?:data:|blob:|file:|https?:\/\/)/i
-const SENSITIVE_KEY_PATTERN = /^(?:api[_-]?key|authorization|token|secret|assetPath|url|base64)$/i
+const SENSITIVE_KEY_PATTERN = /^(?:api[_-]?key|authorization|auth[_-]?token|token|secret|client[_-]?secret|access[_-]?token|refresh[_-]?token|session[_-]?token|(?:set[_-]?)?cookie|private[_-]?key|password|asset[_-]?path|url)$/i
+const BASE64_KEY_PATTERN = /^(?:base64|b64[_-]?json|image[_-]?data|video[_-]?data|media[_-]?data)$/i
+const LIKELY_BARE_BASE64 = /^[a-z0-9+/]+={0,2}$/i
 
-export function sanitizeContextValue(value, seen = new WeakSet()) {
+function isLikelyBareBase64(value) {
+  if (typeof value !== 'string' || value.length < 128) return false
+  const compact = value.replace(/\s/g, '')
+  return compact.length >= 128 && compact.length % 4 === 0 && LIKELY_BARE_BASE64.test(compact)
+}
+
+export function sanitizeContextValue(value, seen = new WeakSet(), key = '') {
   if (typeof value === 'string') {
+    if (SENSITIVE_KEY_PATTERN.test(key)) return '[redacted]'
+    if (BASE64_KEY_PATTERN.test(key) || isLikelyBareBase64(value)) return '[media-data-omitted]'
     return MEDIA_URL_PATTERN.test(value.trim()) ? '[media-reference-hidden]' : value
   }
   if (value == null || typeof value !== 'object') return value
   if (seen.has(value)) return '[circular]'
 
   seen.add(value)
-  if (Array.isArray(value)) return value.map(item => sanitizeContextValue(item, seen))
+  if (Array.isArray(value)) {
+    const result = value.map(item => sanitizeContextValue(item, seen))
+    seen.delete(value)
+    return result
+  }
 
-  return Object.fromEntries(
+  const result = Object.fromEntries(
     Object.entries(value).map(([key, item]) => [
       key,
-      SENSITIVE_KEY_PATTERN.test(key) ? '[redacted]' : sanitizeContextValue(item, seen)
+      SENSITIVE_KEY_PATTERN.test(key)
+        ? '[redacted]'
+        : BASE64_KEY_PATTERN.test(key)
+          ? '[media-data-omitted]'
+          : sanitizeContextValue(item, seen, key)
     ])
   )
+  seen.delete(value)
+  return result
 }
 
 function summarize(value, maxLength) {

@@ -124,6 +124,29 @@ test('degraded technical review is unverified but may be accepted by policy', ()
   assert.equal(result.score, null)
 })
 
+test('possible blank technical evidence survives normalization and blocks acceptance', () => {
+  const normalized = normalizeImageReview({
+    reviewMode: 'degraded',
+    overallScore: null,
+    dimensions: null,
+    hardFailures: [],
+    decision: 'unverified',
+    summary: 'technical checks only',
+    technical: {
+      decodable: true,
+      width: 1024,
+      height: 1024,
+      possibleBlankImage: true,
+      warnings: ['possible_blank_image']
+    }
+  }, { artifactRef: 'output:blank' })
+
+  const result = evaluateImageReview(normalized)
+  assert.equal(normalized.technical.possibleBlankImage, true)
+  assert.equal(result.accepted, false)
+  assert.ok(result.blockingReasons.some(reason => reason.code === 'POSSIBLE_BLANK_IMAGE'))
+})
+
 test('prompt improver preserves the goal and merges actionable suggestions', () => {
   const improver = new PromptImprover()
   const improved = improver.improve({

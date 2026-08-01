@@ -67,11 +67,19 @@ function normalizeDimension(value) {
 function normalizeTechnical(value) {
   if (value == null) return null
   if (typeof value !== 'object' || Array.isArray(value)) return value
+  const possibleBlankImage = value.possibleBlankImage ?? value.pixelSample?.possibleBlankImage
   return {
     decodable: value.decodable,
     ...(value.width == null ? {} : { width: value.width }),
     ...(value.height == null ? {} : { height: value.height }),
-    ...(value.mimeType == null ? {} : { mimeType: trimmed(value.mimeType, 100) })
+    ...(value.mimeType == null ? {} : { mimeType: trimmed(value.mimeType, 100) }),
+    ...(value.aspectRatio == null ? {} : { aspectRatio: value.aspectRatio }),
+    ...(value.orientation == null ? {} : { orientation: trimmed(value.orientation, 40) }),
+    ...(value.megapixels == null ? {} : { megapixels: value.megapixels }),
+    ...(value.warnings == null ? {} : { warnings: normalizeStringArray(value.warnings, 12, 100) }),
+    ...(possibleBlankImage == null
+      ? {}
+      : { possibleBlankImage: possibleBlankImage === true })
   }
 }
 
@@ -145,6 +153,23 @@ function validateTechnical(technical, issues, required) {
   }
   if (technical.mimeType != null && typeof technical.mimeType !== 'string') {
     issues.push('technical.mimeType must be a string')
+  }
+  if (technical.aspectRatio != null && (!Number.isFinite(technical.aspectRatio) || technical.aspectRatio <= 0)) {
+    issues.push('technical.aspectRatio must be a positive number')
+  }
+  if (technical.megapixels != null && (!Number.isFinite(technical.megapixels) || technical.megapixels < 0)) {
+    issues.push('technical.megapixels must be a non-negative number')
+  }
+  if (technical.orientation != null && typeof technical.orientation !== 'string') {
+    issues.push('technical.orientation must be a string')
+  }
+  if (technical.warnings != null && (
+    !Array.isArray(technical.warnings) || technical.warnings.some(item => typeof item !== 'string')
+  )) {
+    issues.push('technical.warnings must be a string array')
+  }
+  if (technical.possibleBlankImage != null && typeof technical.possibleBlankImage !== 'boolean') {
+    issues.push('technical.possibleBlankImage must be boolean')
   }
 }
 

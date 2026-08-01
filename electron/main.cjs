@@ -743,9 +743,18 @@ const hasFiles = (targetPath) => {
 
 const copyDirIfMissing = (sourceDir, targetDir) => {
   if (!fs.existsSync(sourceDir) || hasFiles(targetDir)) return false
-  ensureParentDir(targetDir)
-  fs.cpSync(sourceDir, targetDir, { recursive: true, force: false })
-  return true
+  try {
+    ensureParentDir(targetDir)
+    fs.cpSync(sourceDir, targetDir, { recursive: true, force: false })
+    return true
+  } catch (error) {
+    console.warn('[data-backup] skipped legacy data copy', {
+      sourceDir,
+      targetDir,
+      error: error?.message || String(error)
+    })
+    return false
+  }
 }
 
 const getLegacyUserDataCandidates = () => {
@@ -753,11 +762,12 @@ const getLegacyUserDataCandidates = () => {
   const currentUserData = app.getPath('userData')
   const currentName = path.basename(currentUserData)
   const knownNames = [
+    'YUFENG Canvas',
+    'AI Canvas',
     'huobao-canvas',
     'Huobao Canvas',
     '火宝无限画布',
-    'AI Canvas',
-    'YUFENG Canvas'
+    'YUFENG Agent'
   ]
 
   const discoveredNames = (() => {
@@ -778,22 +788,26 @@ const getLegacyUserDataCandidates = () => {
 const migrateLegacyUserDataStorage = () => {
   const currentUserData = app.getPath('userData')
   const currentLocalStorage = path.join(currentUserData, 'Local Storage', 'leveldb')
+  const currentAssets = path.join(currentUserData, 'yufeng-canvas', 'assets')
+  const needsLocalStorage = !hasFiles(currentLocalStorage)
+  const needsAssets = !hasFiles(currentAssets)
 
-  if (hasFiles(currentLocalStorage)) return
+  if (!needsLocalStorage && !needsAssets) return
 
   for (const legacyDir of getLegacyUserDataCandidates()) {
     const legacyLocalStorage = path.join(legacyDir, 'Local Storage', 'leveldb')
-    if (!hasFiles(legacyLocalStorage)) continue
+    const legacyAssets = path.join(legacyDir, 'yufeng-canvas', 'assets')
+    if (!hasFiles(legacyLocalStorage) && !hasFiles(legacyAssets)) continue
 
     const copied = [
-      copyDirIfMissing(path.join(legacyDir, 'Local Storage'), path.join(currentUserData, 'Local Storage')),
-      copyDirIfMissing(path.join(legacyDir, 'IndexedDB'), path.join(currentUserData, 'IndexedDB')),
-      copyDirIfMissing(path.join(legacyDir, 'Session Storage'), path.join(currentUserData, 'Session Storage'))
+      needsLocalStorage && copyDirIfMissing(path.join(legacyDir, 'Local Storage'), path.join(currentUserData, 'Local Storage')),
+      needsLocalStorage && copyDirIfMissing(path.join(legacyDir, 'IndexedDB'), path.join(currentUserData, 'IndexedDB')),
+      needsLocalStorage && copyDirIfMissing(path.join(legacyDir, 'Session Storage'), path.join(currentUserData, 'Session Storage')),
+      needsAssets && copyDirIfMissing(legacyAssets, currentAssets)
     ].some(Boolean)
 
     if (copied) {
       console.log('[data-backup] migrated legacy user data from', legacyDir)
-      return
     }
   }
 }

@@ -1,6 +1,14 @@
 import { sanitizeContextValue } from './ContextManager.js'
+import { InterventionPolicy } from '../dynamic/InterventionPolicy.js'
 
-const ACTION_NAMES = new Set(['generate_image', 'analyze_image', 'generate_video', 'finish'])
+const ACTION_NAMES = new Set([
+  'generate_image',
+  'analyze_image',
+  'edit_image',
+  'upscale_image',
+  'generate_video',
+  'finish'
+])
 
 const VIDEO_TERMS = /(?:视频|短片|影片|动画|动起来|tvc|video|film|movie)/i
 const IMAGE_TERMS = /(?:图片|图像|海报|封面|照片|主视觉|poster|image|photo)/i
@@ -57,7 +65,7 @@ function imageOutputs(state) {
 }
 
 function outputNodeId(output) {
-  return output?.value?.outputNodeId || output?.value?.imageNodeId || ''
+  return output?.value?.artifactId || output?.value?.outputNodeId || output?.value?.imageNodeId || ''
 }
 
 function artifactRef(output) {
@@ -77,7 +85,7 @@ export function findLatestImageReview(state) {
     const result = observation.result || {}
     if (
       (ref && result.artifactRef === ref) ||
-      (imageId && [result.imageNodeId, result.outputNodeId].includes(imageId))
+      (imageId && [result.artifactId, result.imageArtifactId, result.imageNodeId, result.outputNodeId].includes(imageId))
     ) {
       return observation
     }
@@ -105,17 +113,27 @@ export class Planner {
     systemPrompt = '',
     observationEnabled = false,
     maxQualityRetries = 2,
-    allowDegradedReview = true
+    allowDegradedReview = true,
+    dynamicWorkflowEnabled = false,
+    interventionPolicy = null,
+    getInterventionCapabilities = null
   } = {}) {
     this.llm = llm
     this.systemPrompt = systemPrompt
     this.observationEnabled = observationEnabled
     this.maxQualityRetries = maxQualityRetries
     this.allowDegradedReview = allowDegradedReview
+    this.dynamicWorkflowEnabled = dynamicWorkflowEnabled
+    this.interventionPolicy = interventionPolicy || (dynamicWorkflowEnabled ? new InterventionPolicy() : null)
+    this.getInterventionCapabilities = getInterventionCapabilities
   }
 
   inferTargetType(goal) {
     return inferTargetType(goal)
+  }
+
+  resetDynamicWorkflow() {
+    this.interventionPolicy?.reset?.()
   }
 
   async nextAction({ state, context, signal } = {}) {
@@ -134,10 +152,13 @@ export class Planner {
             }
           }
 
-          const isQualityRetry = expected.name === 'generate_image' && expected.input?.revision > 1
+          const expectedInputMustWin = (
+            (expected.name === 'generate_image' && expected.input?.revision > 1) ||
+            ['analyze_image', 'edit_image', 'upscale_image', 'generate_video'].includes(expected.name)
+          )
           return {
             ...action,
-            input: isQualityRetry
+            input: expectedInputMustWin
               ? { ...action.input, ...expected.input }
               : { ...expected.input, ...action.input }
           }
@@ -187,6 +208,9 @@ export class Planner {
           name: 'analyze_image',
           input: {
             goal: state.goal,
+            artifactId: imageId,
+            imageArtifactId: imageId,
+            image: mediaReference(latestImage),
             imageNodeId: imageId,
             outputNodeId: imageId,
             artifactRef: artifactRef(latestImage),
@@ -205,12 +229,56 @@ export class Planner {
         throw error
       }
 
-      const accepted = (
+      let accepted = (
         reviewResult.accepted === true || reviewResult.decision === 'accept'
       ) && (this.allowDegradedReview || reviewResult.qualityUnverified !== true)
 
+      let intervention = null
+      if (this.dynamicWorkflowEnabled && this.interventionPolicy) {
+        const capabilities = typeof this.getInterventionCapabilities === 'function'
+          ? this.getInterventionCapabilities(state)
+          : {}
+        intervention = this.interventionPolicy.decide({
+          review: reviewResult.review,
+          evaluation: reviewResult,
+          artifactRef: reviewResult.artifactRef || artifactRef(latestImage),
+          attempt: images.length,
+          state,
+          capabilities
+        })
+        accepted = intervention.action === 'accept'
+
+        if (['edit_image', 'upscale_image'].includes(intervention.action)) {
+          const imageId = outputNodeId(latestImage)
+          const instructionPrompt = [
+            state.goal,
+            intervention.action === 'edit_image' ? '仅修复参考图中的以下局部问题：' : '在保持参考图内容和构图不变的前提下增强清晰度：',
+            ...intervention.instructions
+          ].filter(Boolean).join('\n')
+          return {
+            name: intervention.action,
+            input: {
+              goal: state.goal,
+              prompt: instructionPrompt,
+              instruction: instructionPrompt,
+              negativePrompt: reviewResult.nextNegativePrompt || '',
+              image: mediaReference(latestImage),
+              sourceArtifactId: imageId,
+              sourceImageNodeId: imageId,
+              imageNodeId: imageId,
+              artifactRef: intervention.artifactRef,
+              attempt: images.length,
+              interventionDecision: intervention
+            },
+            reason: intervention.reason,
+            source: 'intervention_policy'
+          }
+        }
+      }
+
       if (!accepted) {
-        const retriesUsed = Math.max(0, images.length - 1)
+        const generationAttempts = images.filter(output => output.action === 'generate_image').length
+        const retriesUsed = Math.max(0, generationAttempts - 1)
         if (retriesUsed >= this.maxQualityRetries) {
           const error = new Error(`Image quality did not pass after ${images.length} candidates`)
           error.code = 'QUALITY_RETRIES_EXHAUSTED'
@@ -226,10 +294,13 @@ export class Planner {
             revision: images.length + 1,
             retryOf: reviewResult.artifactRef || artifactRef(latestImage),
             reviewRef: `review:${reviewResult.artifactRef || artifactRef(latestImage)}`,
-            purpose: targetType === 'video' ? 'video_start_frame' : undefined
+            purpose: targetType === 'video' ? 'video_start_frame' : undefined,
+            sourceArtifactId: outputNodeId(latestImage),
+            sourceImageNodeId: outputNodeId(latestImage),
+            interventionDecision: intervention
           },
-          reason: 'The latest candidate did not pass quality review; generate an improved candidate.',
-          source: 'fallback'
+          reason: intervention?.reason || 'The latest candidate did not pass quality review; generate an improved candidate.',
+          source: intervention ? 'intervention_policy' : 'fallback'
         }
       }
 
@@ -239,6 +310,7 @@ export class Planner {
           input: {
             ...commonInput,
             image: mediaReference(latestImage),
+            imageArtifactId: outputNodeId(latestImage),
             imageNodeId: outputNodeId(latestImage),
             duration: inferDuration(state.goal)
           },
@@ -295,7 +367,7 @@ export class Planner {
 
   async #callLlm(state, context, signal) {
     const payload = {
-      system: `${this.systemPrompt || 'You are YUFENG Creative Agent.'}\nReturn exactly one JSON object: {"name":"generate_image|analyze_image|generate_video|finish","input":{},"reason":"..."}. Never return an action list.`,
+      system: `${this.systemPrompt || 'You are YUFENG Creative Agent.'}\nReturn exactly one JSON object: {"name":"generate_image|analyze_image|edit_image|upscale_image|generate_video|finish","input":{},"reason":"..."}. Never return an action list.`,
       goal: state.goal,
       targetType: state.targetType,
       state: sanitizeContextValue(state.snapshot()),

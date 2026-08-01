@@ -13,7 +13,7 @@ function abortError(reason) {
 }
 
 function outputTypeFor(actionName) {
-  if (actionName === 'generate_image') return 'image'
+  if (['generate_image', 'edit_image', 'upscale_image'].includes(actionName)) return 'image'
   if (actionName === 'generate_video') return 'video'
   return null
 }
@@ -25,13 +25,15 @@ export class AgentRunner {
     tools,
     verifier = new Verifier(),
     contextManager = null,
-    maxSteps = 8
+    maxSteps = 8,
+    onListenerError = null
   } = {}) {
     this.planner = planner
     this.toolRegistry = toolRegistry || new ToolRegistry(tools)
     this.verifier = verifier
     this.contextManager = contextManager
     this.maxSteps = maxSteps
+    this.onListenerError = onListenerError
     this.listeners = new Set()
     this.controller = null
     this.state = null
@@ -148,7 +150,17 @@ export class AgentRunner {
       state: state.snapshot(),
       timestamp: Date.now()
     }
-    for (const listener of this.listeners) listener(event)
+    for (const listener of this.listeners) {
+      try {
+        listener(event)
+      } catch (error) {
+        try {
+          this.onListenerError?.(error, { type, event })
+        } catch {
+          // Observability hooks must never be able to stop or strand a run.
+        }
+      }
+    }
   }
 
   #forwardAbort(signal, controller) {

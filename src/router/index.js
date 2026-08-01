@@ -3,26 +3,21 @@
  */
 
 import { createMemoryHistory, createRouter, createWebHistory } from 'vue-router'
-import Home from '../views/Home.vue'
-
-const Canvas = () => import('../views/Canvas.vue')
-const ImageExpert = () => import('../views/ImageExpert.vue')
+import AgentWorkspace from '../views/AgentWorkspace.vue'
 
 const routes = [
   {
     path: '/',
-    name: 'Home',
-    component: Home
+    name: 'AgentWorkspace',
+    component: AgentWorkspace
   },
   {
-    path: '/canvas/:id?',
-    name: 'Canvas',
-    component: Canvas
+    path: '/canvas/:pathMatch(.*)*',
+    redirect: '/'
   },
   {
-    path: '/image-expert',
-    name: 'ImageExpert',
-    component: ImageExpert
+    path: '/:pathMatch(.*)*',
+    redirect: '/'
   }
 ]
 
