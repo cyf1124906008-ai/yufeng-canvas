@@ -26,7 +26,7 @@
     "desktop:start": "cross-env APP_TARGET=desktop electron .",
     "desktop:build": "pnpm desktop:renderer && electron-builder --dir",
     "desktop:dist": "pnpm desktop:dist:win",
-    "desktop:dist:win": "pnpm desktop:renderer && electron-builder --win nsis",
+    "desktop:dist:win": "pnpm desktop:renderer && electron-builder --win nsis --x64",
     "desktop:dist:mac": "pnpm desktop:renderer && electron-builder --mac dmg zip --arm64 --x64",
     "desktop:dist:mac:arm64": "pnpm desktop:renderer && electron-builder --mac dmg zip --arm64",
     "desktop:dist:mac:x64": "pnpm desktop:renderer && electron-builder --mac dmg zip --x64"

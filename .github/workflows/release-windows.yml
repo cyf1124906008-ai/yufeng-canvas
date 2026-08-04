@@ -1,0 +1,58 @@
+name: Build Windows Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Git tag or commit to package
+        required: true
+        default: v1.3.0
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows-x64:
+    name: Windows x64 NSIS
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out release source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.9.0
+          run_install: false
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run test suite
+        run: pnpm test
+
+      - name: Build desktop renderer
+        run: pnpm desktop:renderer
+
+      - name: Package Windows x64 installer
+        run: pnpm exec electron-builder --win nsis --x64 --publish never
+
+      - name: Upload Windows release assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: yufeng-agent-windows-x64
+          if-no-files-found: error
+          retention-days: 7
+          path: |
+            release/YUFENG-Agent-Setup-*.exe
+            release/YUFENG-Agent-Setup-*.exe.blockmap
+            release/latest.yml
