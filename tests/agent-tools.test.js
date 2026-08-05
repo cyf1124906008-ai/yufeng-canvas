@@ -553,7 +553,9 @@ test('terminal requires approval, resolves an executable name, bounds output, an
 test('terminal resolves user-installed CLIs when the desktop app starts without a login-shell PATH', async () => {
   const base = await mkdtemp(path.join(os.tmpdir(), 'yufeng-agent-path-'))
   try {
-    const bin = path.join(base, '.local', 'bin')
+    const bin = process.platform === 'win32'
+      ? path.join(base, 'AppData', 'Local', 'pnpm')
+      : path.join(base, '.local', 'bin')
     const pnpmHome = path.join(base, 'pnpm-home')
     await mkdir(bin, { recursive: true })
     await mkdir(pnpmHome, { recursive: true })
