@@ -28,6 +28,7 @@ const {
   sameWorkspaceIdentity
 } = require('./agent-tools/full-access.cjs')
 const imageGeneration = require('./imageGeneration.cjs')
+const { OpenCodeRuntime } = require('./opencode-runtime.cjs')
 
 const rendererUrl = process.env.ELECTRON_RENDERER_URL
 const repo = 'cyf1124906008-ai/yufeng-canvas'
@@ -73,6 +74,11 @@ let updateCheckMode = 'auto'
 let updateSourceIndex = 0
 let localApiServer = null
 let desktopAgentTools = null
+// OpenCode is an optional, explicitly started sidecar.  Keep the runtime in
+// the main process so a renderer can never spawn arbitrary commands or carry
+// provider credentials across the context bridge.
+let openCodeRuntime = null
+let openCodeWorkspaceIdentity = null
 const fullAccessGrants = new FullAccessGrantManager()
 let keepAwakeBlockerId = null
 let backgroundModeEnabled = true
@@ -231,6 +237,182 @@ const optionalCurrentWorkspaceIdentity = async () => {
   return {
     workspaceRoot: identity.workspaceRoot,
     workspaceGeneration: Number(identity.workspaceGeneration)
+  }
+}
+
+const OPEN_CODE_SECRET_ENV_PATTERN = /(api[_-]?key|token|secret|password|authorization|cookie|credential)/i
+const OPEN_CODE_ALLOWED_ENV_KEYS = new Set([
+  'PATH', 'HOME', 'USER', 'LOGNAME', 'SHELL', 'TMPDIR', 'TMP', 'TEMP',
+  'USERPROFILE', 'APPDATA', 'LOCALAPPDATA', 'PROGRAMDATA', 'SYSTEMROOT',
+  'WINDIR', 'COMSPEC', 'PATHEXT', 'LANG', 'LC_ALL', 'TERM', 'NO_COLOR',
+  'CI', 'XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'XDG_CACHE_HOME',
+  'OPENCODE_BIN', 'YUFENG_OPENCODE_BIN', 'OPENCODE_CONFIG', 'OPENCODE_CONFIG_DIR'
+])
+
+/**
+ * OpenCode reads provider credentials from its own config/keychain.  Do not
+ * copy YUFENG/DataEyes/API secrets from the Electron process environment into
+ * the sidecar.  This intentionally keeps only process/bootstrap variables and
+ * explicit non-secret OpenCode paths.
+ */
+const buildOpenCodeEnvironment = (source = process.env) => {
+  const result = {}
+  for (const [key, value] of Object.entries(source || {})) {
+    if (!key || OPEN_CODE_SECRET_ENV_PATTERN.test(key)) continue
+    if (!OPEN_CODE_ALLOWED_ENV_KEYS.has(key) && !/^OPENCODE_(?:BIN|CONFIG|CONFIG_DIR)$/i.test(key)) continue
+    if (value == null) continue
+    result[key] = String(value)
+  }
+  return result
+}
+
+const openCodeBaseUrl = () => {
+  const configured = String(process.env.YUFENG_OPENCODE_URL || '').trim()
+  if (!configured) return ''
+  let parsed
+  try {
+    parsed = new URL(configured)
+  } catch {
+    const error = new TypeError('YUFENG_OPENCODE_URL 必须是有效的 http(s) 地址')
+    error.code = 'OPENCODE_URL_INVALID'
+    throw error
+  }
+  if (!['http:', 'https:'].includes(parsed.protocol)) {
+    const error = new TypeError('YUFENG_OPENCODE_URL 必须使用 http(s) 协议')
+    error.code = 'OPENCODE_URL_INVALID'
+    throw error
+  }
+  if (parsed.username || parsed.password) {
+    const error = new TypeError('YUFENG_OPENCODE_URL 不允许在地址中携带凭据')
+    error.code = 'OPENCODE_URL_CREDENTIALS_UNSUPPORTED'
+    throw error
+  }
+  if (parsed.search || parsed.hash) {
+    const error = new TypeError('YUFENG_OPENCODE_URL 不允许携带 query 或 hash')
+    error.code = 'OPENCODE_URL_QUERY_UNSUPPORTED'
+    throw error
+  }
+  // The URL is never accepted from renderer input.  It is an explicit
+  // process-level opt-in for a user-managed `opencode serve` instance.
+  return parsed.toString().replace(/\/+$/, '')
+}
+
+const redactOpenCodeUrl = (value) => {
+  const source = String(value || '').trim()
+  if (!source) return ''
+  try {
+    const parsed = new URL(source)
+    parsed.username = ''
+    parsed.password = ''
+    parsed.search = ''
+    parsed.hash = ''
+    return parsed.toString().replace(/\/+$/, '')
+  } catch {
+    return '[本地 OpenCode 地址]'
+  }
+}
+
+const openCodeStatus = (identity = null) => {
+  const status = openCodeRuntime?.status?.() || {
+    state: 'stopped',
+    pid: 0,
+    url: '',
+    binaryPath: '',
+    directory: '',
+    startedAt: 0,
+    lastError: null
+  }
+  return {
+    ...status,
+    url: redactOpenCodeUrl(status.url),
+    workspace: identity,
+    workspaceRequired: !identity,
+    autoStart: false,
+    credentialsForwarded: false
+  }
+}
+
+const discardOpenCodeRuntimeIfWorkspaceChanged = async (identity) => {
+  if (!openCodeRuntime) return
+  if (sameWorkspaceIdentity(openCodeWorkspaceIdentity, identity)) return
+  await openCodeRuntime.stop()
+  openCodeRuntime = null
+  openCodeWorkspaceIdentity = null
+}
+
+const requireOpenCodeRuntime = async () => {
+  const identity = await currentWorkspaceIdentity()
+  await discardOpenCodeRuntimeIfWorkspaceChanged(identity)
+  if (!openCodeRuntime) {
+    openCodeRuntime = new OpenCodeRuntime({
+      // The sidecar starts in the selected workspace. Every HTTP request also
+      // carries this directory so sessions cannot silently cross projects.
+      directory: identity.workspaceRoot,
+      baseUrl: openCodeBaseUrl(),
+      appPath: typeof app.getAppPath === 'function' ? app.getAppPath() : '',
+      resourcesPath: process.resourcesPath || '',
+      env: buildOpenCodeEnvironment(process.env)
+    })
+    openCodeWorkspaceIdentity = identity
+  }
+  return { runtime: openCodeRuntime, identity }
+}
+
+const normalizeOpenCodeObject = (input, label) => {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    const error = new TypeError(`${label} 必须是对象`)
+    error.code = 'OPENCODE_INPUT_INVALID'
+    throw error
+  }
+  return input
+}
+
+const boundedOpenCodeString = (value, label, maxLength = 256, { required = false } = {}) => {
+  const normalized = String(value == null ? '' : value).trim()
+  if (required && !normalized) {
+    const error = new TypeError(`${label} 不能为空`)
+    error.code = 'OPENCODE_INPUT_INVALID'
+    throw error
+  }
+  if (normalized.length > maxLength) {
+    const error = new RangeError(`${label} 超出长度限制`)
+    error.code = 'OPENCODE_INPUT_TOO_LARGE'
+    throw error
+  }
+  return normalized
+}
+
+const normalizeOpenCodeSessionInput = (input = {}) => {
+  const source = normalizeOpenCodeObject(input, 'OpenCode session 参数')
+  const title = boundedOpenCodeString(source.title, 'title', 256)
+  const parentID = boundedOpenCodeString(source.parentID || source.parentId, 'parentID', 256)
+  return {
+    ...(title ? { title } : {}),
+    ...(parentID ? { parentID } : {})
+  }
+}
+
+const normalizeOpenCodeSessionId = (input = {}) => {
+  const source = normalizeOpenCodeObject(input, 'OpenCode session 参数')
+  return boundedOpenCodeString(source.sessionId || source.id, 'sessionId', 256, { required: true })
+}
+
+const normalizeOpenCodePromptInput = (input = {}) => {
+  const source = normalizeOpenCodeObject(input, 'OpenCode prompt 参数')
+  const sessionId = boundedOpenCodeString(source.sessionId || source.id, 'sessionId', 256, { required: true })
+  const text = boundedOpenCodeString(source.text, 'text', 128 * 1024, { required: true })
+  const model = typeof source.model === 'object' && source.model !== null
+    ? {
+        providerID: boundedOpenCodeString(source.model.providerID || source.model.provider || source.model.providerId, 'model.providerID', 128, { required: true }),
+        modelID: boundedOpenCodeString(source.model.modelID || source.model.model || source.model.id, 'model.modelID', 256, { required: true })
+      }
+    : boundedOpenCodeString(source.model, 'model', 384)
+  const agent = boundedOpenCodeString(source.agent, 'agent', 128)
+  return {
+    sessionId,
+    text,
+    ...(model ? { model } : {}),
+    ...(agent ? { agent } : {})
   }
 }
 
@@ -1311,6 +1493,52 @@ app.whenReady().then(async () => {
     }
   })
 
+  // OpenCode sidecar IPC. The sidecar is deliberately opt-in: registering
+  // these handlers does not start a process. The current workspace is bound
+  // in Main for every operation that can create or mutate a remote session.
+  ipcMain.handle('app:opencode:get-status', async (event) => {
+    requireTrustedRenderer(event)
+    const identity = await optionalCurrentWorkspaceIdentity()
+    await discardOpenCodeRuntimeIfWorkspaceChanged(identity)
+    return openCodeStatus(identity)
+  })
+  ipcMain.handle('app:opencode:start', async (event) => {
+    requireTrustedRenderer(event)
+    const { runtime } = await requireOpenCodeRuntime()
+    await runtime.start()
+    return openCodeStatus(openCodeWorkspaceIdentity)
+  })
+  ipcMain.handle('app:opencode:stop', async (event) => {
+    requireTrustedRenderer(event)
+    if (openCodeRuntime) await openCodeRuntime.stop()
+    return openCodeStatus(await optionalCurrentWorkspaceIdentity())
+  })
+  ipcMain.handle('app:opencode:health', async (event) => {
+    requireTrustedRenderer(event)
+    const { runtime } = await requireOpenCodeRuntime()
+    return runtime.health()
+  })
+  ipcMain.handle('app:opencode:create-session', async (event, input) => {
+    requireTrustedRenderer(event)
+    const { runtime } = await requireOpenCodeRuntime()
+    return runtime.createSession(normalizeOpenCodeSessionInput(input))
+  })
+  ipcMain.handle('app:opencode:session-status', async (event, input) => {
+    requireTrustedRenderer(event)
+    const { runtime } = await requireOpenCodeRuntime()
+    return runtime.sessionStatus({ sessionId: normalizeOpenCodeSessionId(input) })
+  })
+  ipcMain.handle('app:opencode:prompt', async (event, input) => {
+    requireTrustedRenderer(event)
+    const { runtime } = await requireOpenCodeRuntime()
+    return runtime.prompt(normalizeOpenCodePromptInput(input))
+  })
+  ipcMain.handle('app:opencode:abort', async (event, input) => {
+    requireTrustedRenderer(event)
+    const { runtime } = await requireOpenCodeRuntime()
+    return runtime.abort({ sessionId: normalizeOpenCodeSessionId(input) })
+  })
+
   // Comfy Engine IPC
   ipcMain.handle('app:comfy:get-status', () => comfyManager.getStatus())
   ipcMain.handle('app:comfy:set-config', (_event, config) => comfyManager.setConfig(config))
@@ -1504,5 +1732,11 @@ app.on('before-quit', () => {
   appIsQuitting = true
   fullAccessGrants.clear()
   stopKeepAwake()
+  // Do not leave a sidecar orphaned after the desktop app exits. This only
+  // stops a process started by this runtime; an externally managed server is
+  // merely detached by OpenCodeRuntime.stop().
+  openCodeRuntime?.stop?.()
+  openCodeRuntime = null
+  openCodeWorkspaceIdentity = null
   desktopAgentTools?.shutdown?.()
 })

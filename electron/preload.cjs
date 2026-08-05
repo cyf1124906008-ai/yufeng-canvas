@@ -26,6 +26,18 @@ contextBridge.exposeInMainWorld('desktopApp', {
     return () => ipcRenderer.removeListener('app:update-status', listener)
   },
   openExternal: (url) => ipcRenderer.invoke('app:open-external', url),
+  // OpenCode runs in the Electron main process. No executable path,
+  // environment, or provider credential crosses this bridge.
+  openCode: {
+    getStatus: () => ipcRenderer.invoke('app:opencode:get-status'),
+    start: () => ipcRenderer.invoke('app:opencode:start'),
+    stop: () => ipcRenderer.invoke('app:opencode:stop'),
+    health: () => ipcRenderer.invoke('app:opencode:health'),
+    createSession: (input) => ipcRenderer.invoke('app:opencode:create-session', input),
+    sessionStatus: (input) => ipcRenderer.invoke('app:opencode:session-status', input),
+    prompt: (input) => ipcRenderer.invoke('app:opencode:prompt', input),
+    abort: (input) => ipcRenderer.invoke('app:opencode:abort', input)
+  },
   comfy: {
     getStatus: () => ipcRenderer.invoke('app:comfy:get-status'),
     setConfig: (config) => ipcRenderer.invoke('app:comfy:set-config', config),
