@@ -22,28 +22,103 @@ const TERMINATION_GUARANTEE = Object.freeze({
   descendantsGuaranteed: false
 })
 
-function safeEnvironment() {
-  const blocked = /(?:KEY|TOKEN|SECRET|PASSWORD|AUTH|COOKIE|CREDENTIAL|SESSION)/i
-  return Object.fromEntries(Object.entries(process.env).filter(([key]) => !blocked.test(key) && !['NODE_OPTIONS', 'ELECTRON_RUN_AS_NODE'].includes(key)))
+/**
+ * GUI-launched Electron apps do not inherit the user's login-shell PATH.
+ * Finder/LaunchServices commonly leaves only /usr/bin:/bin, which makes
+ * node/npm/pnpm (and user-installed CLIs) appear to be missing even though
+ * they work in Terminal. Keep the command contract executable+args (no shell)
+ * while adding only conventional, user-owned executable directories.
+ */
+function executionPath({ env = process.env, platform = process.platform } = {}) {
+  const delimiter = platform === 'win32' ? ';' : ':'
+  const home = String(env.HOME || env.USERPROFILE || '').trim()
+  const localAppData = String(env.LOCALAPPDATA || '').trim()
+  const programFiles = String(env.ProgramW6432 || env.ProgramFiles || '').trim()
+  const programFilesX86 = String(env['ProgramFiles(x86)'] || '').trim()
+  const pnpmHome = String(env.PNPM_HOME || '').trim()
+  const nvmBin = String(env.NVM_BIN || '').trim()
+  const fnmPath = String(env.FNM_MULTISHELL_PATH || '').trim()
+  const miseBin = String(env.MISE_BIN_PATH || '').trim()
+  const bunInstall = String(env.BUN_INSTALL || '').trim()
+  const denoInstall = String(env.DENO_INSTALL || '').trim()
+  const voltaHome = String(env.VOLTA_HOME || '').trim()
+  const extras = platform === 'win32'
+    ? [
+        pnpmHome,
+        home && path.join(home, 'AppData', 'Roaming', 'npm'),
+        home && path.join(home, 'AppData', 'Local', 'pnpm'),
+        home && path.join(home, 'AppData', 'Roaming', 'pnpm'),
+        localAppData && path.join(localAppData, 'Programs', 'nodejs'),
+        programFiles && path.join(programFiles, 'nodejs'),
+        programFilesX86 && path.join(programFilesX86, 'nodejs'),
+        home && path.join(home, '.volta', 'bin'),
+        voltaHome && path.join(voltaHome, 'bin'),
+        home && path.join(home, 'scoop', 'shims')
+      ]
+    : [
+        pnpmHome,
+        home && path.join(home, '.local', 'bin'),
+        home && path.join(home, 'Library', 'pnpm'),
+        home && path.join(home, '.local', 'share', 'pnpm'),
+        home && path.join(home, '.pnpm'),
+        home && path.join(home, '.npm-global', 'bin'),
+        home && path.join(home, '.volta', 'bin'),
+        voltaHome && path.join(voltaHome, 'bin'),
+        home && path.join(home, '.asdf', 'shims'),
+        nvmBin,
+        fnmPath,
+        fnmPath && path.join(fnmPath, 'bin'),
+        miseBin,
+        home && path.join(home, '.local', 'share', 'mise', 'shims'),
+        home && path.join(home, '.cargo', 'bin'),
+        bunInstall && path.join(bunInstall, 'bin'),
+        denoInstall && path.join(denoInstall, 'bin'),
+        home && path.join(home, '.bun', 'bin'),
+        home && path.join(home, '.deno', 'bin'),
+        '/opt/homebrew/bin',
+        '/usr/local/bin',
+        '/opt/local/bin',
+        '/usr/bin',
+        '/bin',
+        '/usr/sbin',
+        '/sbin'
+      ]
+  const entries = String(env.PATH || '')
+    .split(delimiter)
+    .concat(extras)
+    .map(value => String(value || '').trim())
+    .filter(Boolean)
+  return [...new Set(entries)].join(delimiter)
 }
 
-async function resolveExecutable(command) {
+function safeEnvironment({ env = process.env, platform = process.platform } = {}) {
+  const blocked = /(?:KEY|TOKEN|SECRET|PASSWORD|AUTH|COOKIE|CREDENTIAL|SESSION)/i
+  const safe = Object.fromEntries(Object.entries(env).filter(([key]) => !blocked.test(key) && !['NODE_OPTIONS', 'ELECTRON_RUN_AS_NODE'].includes(key)))
+  safe.PATH = executionPath({ env, platform })
+  return safe
+}
+
+async function resolveExecutable(command, { env = process.env, platform = process.platform } = {}) {
   const name = boundedString(command, { name: 'command', maxLength: 128 })
   if (name !== path.basename(name) || /[\\/]/.test(name) || name.startsWith('.')) {
     throw toolError('INVALID_COMMAND', 'command 只能是 executable name，不能包含路径分隔符')
   }
-  const pathEntries = String(process.env.PATH || '').split(path.delimiter).filter(Boolean)
-  const extensions = process.platform === 'win32'
-    ? String(process.env.PATHEXT || '.EXE;.CMD;.BAT;.COM').split(';')
+  const delimiter = platform === 'win32' ? ';' : ':'
+  const pathEntries = executionPath({ env, platform }).split(delimiter).filter(Boolean)
+  const extensions = platform === 'win32'
+    ? String(env.PATHEXT || '.EXE;.CMD;.BAT;.COM').split(';')
     : ['']
   for (const directory of pathEntries.slice(0, 128)) {
     if (!path.isAbsolute(directory)) continue
-    for (const extension of extensions) {
-      const candidate = path.resolve(directory, process.platform === 'win32' ? `${name}${extension}` : name)
+    const names = platform === 'win32' && path.extname(name)
+      ? [name]
+      : extensions.map(extension => platform === 'win32' ? `${name}${extension}` : name)
+    for (const candidateName of names) {
+      const candidate = path.resolve(directory, candidateName)
       try {
         const stat = await fs.promises.stat(candidate)
         if (!stat.isFile()) continue
-        if (process.platform !== 'win32') await fs.promises.access(candidate, fs.constants.X_OK)
+        if (platform !== 'win32') await fs.promises.access(candidate, fs.constants.X_OK)
         return await fs.promises.realpath(candidate)
       } catch {
         // Continue searching the bounded PATH list.
@@ -79,6 +154,7 @@ class TerminalManager {
     workspace,
     spawnProcess = spawn,
     platform = process.platform,
+    environment = process.env,
     killProcess = process.kill,
     killGraceMs = 1_000,
     terminationGraceMs = 2_000,
@@ -87,6 +163,7 @@ class TerminalManager {
     this.workspace = workspace
     this.spawnProcess = spawnProcess
     this.platform = platform
+    this.environment = environment
     this.killProcess = killProcess
     this.killGraceMs = killGraceMs
     this.terminationGraceMs = terminationGraceMs
@@ -126,7 +203,7 @@ class TerminalManager {
     try {
       ;[cwd, executable] = await Promise.all([
         this.workspace.resolveBound(cwdInput, { type: 'directory' }, input),
-        resolveExecutable(command)
+        resolveExecutable(command, { env: this.environment, platform: this.platform })
       ])
       this.#assertStartAllowed(reservationId, startGeneration)
       this.workspace.assertBinding(input)
@@ -182,7 +259,7 @@ class TerminalManager {
         shell: false,
         detached: this.platform !== 'win32',
         windowsHide: true,
-        env: safeEnvironment(),
+        env: safeEnvironment({ env: this.environment, platform: this.platform }),
         stdio: ['ignore', 'pipe', 'pipe']
       })
       job.child = child
@@ -362,4 +439,10 @@ class TerminalManager {
   }
 }
 
-module.exports = { TERMINATION_GUARANTEE, TerminalManager, resolveExecutable }
+module.exports = {
+  TERMINATION_GUARANTEE,
+  TerminalManager,
+  executionPath,
+  resolveExecutable,
+  safeEnvironment
+}

@@ -7,9 +7,11 @@ import { EventEmitter } from 'node:events'
 import { createRequire } from 'node:module'
 import { PassThrough } from 'node:stream'
 import {
+  chmod,
   mkdtemp,
   mkdir,
   readFile,
+  realpath,
   rm,
   symlink,
   writeFile
@@ -17,7 +19,12 @@ import {
 
 const require = createRequire(import.meta.url)
 const { WorkspaceManager } = require('../electron/agent-tools/workspace.cjs')
-const { TerminalManager } = require('../electron/agent-tools/terminal.cjs')
+const {
+  TerminalManager,
+  executionPath,
+  resolveExecutable,
+  safeEnvironment
+} = require('../electron/agent-tools/terminal.cjs')
 const {
   MacOSComputerTools,
   CLICK_SCRIPT,
@@ -464,6 +471,36 @@ test('terminal requires approval, resolves an executable name, bounds output, an
     assert.equal((await waitForTerminal(terminal, cancellable.jobId)).status, 'cancelled')
   } finally {
     await rm(files.base, { recursive: true, force: true })
+  }
+})
+
+test('terminal resolves user-installed CLIs when the desktop app starts without a login-shell PATH', async () => {
+  const base = await mkdtemp(path.join(os.tmpdir(), 'yufeng-agent-path-'))
+  try {
+    const bin = path.join(base, '.local', 'bin')
+    const pnpmHome = path.join(base, 'pnpm-home')
+    await mkdir(bin, { recursive: true })
+    await mkdir(pnpmHome, { recursive: true })
+    const command = 'yufeng-path-probe'
+    const fileName = process.platform === 'win32' ? `${command}.CMD` : command
+    const executable = path.join(bin, fileName)
+    await writeFile(executable, process.platform === 'win32' ? '@echo off\r\necho ok\r\n' : '#!/bin/sh\nprintf ok\n')
+    if (process.platform !== 'win32') await chmod(executable, 0o755)
+    const env = {
+      HOME: base,
+      USERPROFILE: base,
+      PNPM_HOME: pnpmHome,
+      PATH: process.platform === 'win32' ? 'C:\\Windows\\System32' : '/usr/bin',
+      ...(process.platform === 'win32' ? { PATHEXT: '.CMD' } : {})
+    }
+    const resolved = await resolveExecutable(command, { env, platform: process.platform })
+    assert.equal(resolved, await realpath(executable))
+    const augmentedPath = executionPath({ env, platform: process.platform })
+    assert.match(augmentedPath, new RegExp(bin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
+    assert.match(augmentedPath, new RegExp(pnpmHome.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
+    assert.equal(safeEnvironment({ env, platform: process.platform }).PATH, augmentedPath)
+  } finally {
+    await rm(base, { recursive: true, force: true })
   }
 })
 
