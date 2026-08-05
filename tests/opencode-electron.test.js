@@ -10,6 +10,7 @@ const channels = [
   'start',
   'stop',
   'health',
+  'list-providers',
   'create-session',
   'session-status',
   'prompt',
@@ -40,6 +41,7 @@ test('OpenCode IPC is opt-in, workspace-bound, and does not forward secrets', ()
   assert.match(mainSource, /WORKSPACE_NOT_SET/)
   assert.match(mainSource, /OPEN_CODE_SECRET_ENV_PATTERN/)
   assert.match(mainSource, /buildOpenCodeEnvironment\(process\.env\)/)
+  assert.match(mainSource, /sanitizeOpenCodeProviderCatalog/)
   assert.match(mainSource, /OPENCODE_URL_CREDENTIALS_UNSUPPORTED/)
   assert.match(mainSource, /OPENCODE_URL_QUERY_UNSUPPORTED/)
 

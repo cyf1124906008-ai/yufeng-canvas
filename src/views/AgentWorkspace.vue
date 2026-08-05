@@ -117,8 +117,13 @@
       :approval-mode="workbench.approvalMode.value"
       :provider-label="providerLabel"
       :provider-configured="providerConfigured"
+      :agent-engine="settings.agentEngine.value"
+      :opencode-status="openCodeStatus"
       @open-api-settings="showApiSettings = true"
       @update-approval-mode="setApprovalMode"
+      @update-agent-engine="setAgentEngine"
+      @start-opencode="startOpenCode"
+      @stop-opencode="stopOpenCode"
     >
       <template #automations>
         <automation-panel
@@ -168,6 +173,12 @@ import WorkbenchSidebar from '../components/workbench/WorkbenchSidebar.vue'
 import { WORKBENCH_TOOL_SHORTCUTS } from '../components/workbench/workbenchView.js'
 import { useAgentWorkbench } from '../agent/runtime/useAgentWorkbench.js'
 import { WORKBENCH_MESSAGE_CONTEXT_CHARACTERS } from '../agent/runtime/workbenchPlanner.js'
+import {
+  createOpenCodeAdapter,
+  createOpenCodeBridgeAdapter,
+  createOpenCodePlanner,
+  selectOpenCodeModel
+} from '../agent/runtime/openCodeAdapter.js'
 import { useAgentAutomations } from '../agent/automation/index.js'
 import { useModelStore } from '../stores/pinia/index.js'
 import { useAgentSettings } from '../stores/settings.js'
@@ -176,12 +187,78 @@ defineOptions({ name: 'AgentWorkspace' })
 
 const modelStore = useModelStore()
 const settings = useAgentSettings()
+const openCodeStatus = ref({ state: 'unknown', url: '', version: '' })
+const openCodeLastError = ref(null)
+
+const createOpenCodePlannerForSession = async () => {
+  const status = openCodeStatus.value || {}
+  if (status.state !== 'running' && status.healthy !== true) {
+    const error = new Error('OpenCode 本地 sidecar 尚未运行，请先在设置中启动')
+    error.code = 'OPENCODE_NOT_RUNNING'
+    throw error
+  }
+  const bridge = desktopBridge()
+  let adapter
+  if (typeof bridge?.openCode?.createSession === 'function' && typeof bridge?.openCode?.prompt === 'function') {
+    // Keep packaged Desktop traffic on the Main-process proxy. The renderer
+    // never supplies a directory or URL to OpenCode, so file:// origins do
+    // not hit CORS and sessions remain bound to Electron's workspace check.
+    adapter = createOpenCodeBridgeAdapter({
+      bridge: bridge.openCode,
+      directory: String(workbench.workspaceRoot.value || '')
+    })
+  } else if (status.url) {
+    // Web preview can still connect to a user-managed server when its origin
+    // is explicitly allowed by `opencode serve --cors`.
+    adapter = createOpenCodeAdapter({
+      baseUrl: status.url,
+      directory: String(workbench.workspaceRoot.value || '')
+    })
+  } else {
+    const error = new Error('桌面 OpenCode IPC 不可用，请重启 YUFENG Desktop')
+    error.code = 'OPENCODE_IPC_UNAVAILABLE'
+    throw error
+  }
+
+  let model
+  const preferred = String(modelStore.selectedChatModel || '').trim()
+  if (preferred.includes('/')) {
+    try {
+      const catalog = await adapter.listModels()
+      model = selectOpenCodeModel(preferred, catalog)
+    } catch {
+      // Catalog inspection is advisory. If OpenCode is healthy but its
+      // provider endpoint is temporarily unavailable, let it use its own
+      // configured default instead of forwarding an unverified YUFENG key.
+      model = undefined
+    }
+  }
+  return createOpenCodePlanner({
+    adapter,
+    model
+  })
+}
+
 const workbench = useAgentWorkbench({
   modelStore,
   approvalMode: settings.approvalMode,
   toolGroups: settings.tools,
   maxActionsPerTurn: settings.maxActionsPerTurn,
-  reasoningEffort: settings.reasoningEffort
+  reasoningEffort: settings.reasoningEffort,
+  plannerOptions: {
+    engine: () => settings.agentEngine.value,
+    openCodePlannerFactory: createOpenCodePlannerForSession,
+    // Once the user explicitly selects OpenCode, do not silently execute the
+    // task on a different backend. A failed sidecar is surfaced so the user
+    // can repair it or switch back to Native deliberately.
+    fallbackToNative: false,
+    onOpenCodeFallback: error => {
+      openCodeLastError.value = {
+        code: error?.code || 'OPENCODE_PLANNER_FAILED',
+        message: error?.message || String(error || 'OpenCode planner failed')
+      }
+    }
+  }
 })
 
 const workspace = computed(() => ({
@@ -313,7 +390,8 @@ const selectedModels = computed(() => ({
 const selectedModelLabel = computed(() => {
   const key = String(modelStore.selectedChatModel || '').trim()
   if (!key) return '自动路由'
-  return modelOptions.value.chat.find(model => model.key === key)?.label || key
+  const label = modelOptions.value.chat.find(model => model.key === key)?.label || key
+  return modelStore.isModelLocked?.('chat') ? `${label} · 锁定` : label
 })
 const approvalMessage = computed(() => {
   const call = workbench.pendingToolCall.value
@@ -353,6 +431,10 @@ const sessionContext = computed(() => ({
   模式: workbench.desktopReady.value ? '桌面 App' : 'Web 预览',
   Provider: `${providerLabel.value}${providerConfigured.value ? '（已配置）' : '（未配置）'}`,
   模型: selectedModelLabel.value,
+  引擎: settings.agentEngine.value === 'opencode' ? 'OpenCode Local' : 'YUFENG Native',
+  OpenCode: openCodeStatus.value?.state === 'running'
+    ? (openCodeStatus.value.url || '已连接')
+    : (openCodeLastError.value?.message || '未运行'),
   工具数量: workbench.toolRegistry.list().length,
   电脑权限: workbench.capabilities.value?.computer ? JSON.stringify(workbench.capabilities.value.computer) : '不可用'
 }))
@@ -801,7 +883,11 @@ const selectModel = payload => {
   }
   const field = fields[capability]
   if (!field) return
-  modelStore[field] = model
+  if (typeof modelStore.setSelectedModel === 'function') {
+    modelStore.setSelectedModel(capability, model, { mode: model ? 'locked' : 'auto' })
+  } else {
+    modelStore[field] = model
+  }
   const label = model
     ? (modelOptions.value[capability] || []).find(option => option.key === model)?.label || model
     : '自动路由'
@@ -819,6 +905,7 @@ const selectWorkspace = async workspaceId => {
       settings.setApprovalMode('ask')
       window.$message?.warning('工作区已变化，完全访问权限已撤销')
     }
+    await refreshOpenCode()
   } catch (error) {
     window.$message?.warning(error?.message || '无法选择工作区')
   }
@@ -878,6 +965,84 @@ const desktopBridge = () => {
   }
 }
 
+const refreshOpenCode = async () => {
+  const bridge = desktopBridge()
+  if (typeof bridge?.openCode?.getStatus !== 'function') {
+    openCodeStatus.value = { state: 'unavailable', url: '', version: '' }
+    return openCodeStatus.value
+  }
+  try {
+    openCodeStatus.value = await bridge.openCode.getStatus()
+    return openCodeStatus.value
+  } catch (error) {
+    openCodeLastError.value = {
+      code: error?.code || 'OPENCODE_STATUS_FAILED',
+      message: error?.message || String(error || 'OpenCode 状态读取失败')
+    }
+    openCodeStatus.value = { state: 'error', url: '', version: '' }
+    return openCodeStatus.value
+  }
+}
+
+const startOpenCode = async () => {
+  const bridge = desktopBridge()
+  if (typeof bridge?.openCode?.start !== 'function') {
+    window.$message?.warning('OpenCode 本地引擎只在桌面 App 中可用；请先打开 YUFENG Desktop')
+    return false
+  }
+  const directory = String(workbench.workspaceRoot.value || '').trim()
+  if (!directory) {
+    window.$message?.warning('请先选择本地工作区，再启动 OpenCode')
+    return false
+  }
+  try {
+    openCodeLastError.value = null
+    openCodeStatus.value = await bridge.openCode.start({ directory })
+    if (openCodeStatus.value?.state !== 'running') {
+      throw Object.assign(new Error('OpenCode sidecar 未进入运行状态'), { code: 'OPENCODE_START_INCOMPLETE' })
+    }
+    window.$message?.success('OpenCode 本地引擎已连接；新任务会使用它规划下一步')
+    if (settings.agentEngine.value !== 'opencode') settings.setAgentEngine('opencode')
+    return true
+  } catch (error) {
+    openCodeLastError.value = {
+      code: error?.code || 'OPENCODE_START_FAILED',
+      message: error?.message || String(error || 'OpenCode 启动失败')
+    }
+    await refreshOpenCode()
+    window.$message?.error(openCodeLastError.value.message)
+    return false
+  }
+}
+
+const stopOpenCode = async () => {
+  const bridge = desktopBridge()
+  try {
+    if (typeof bridge?.openCode?.stop === 'function') await bridge.openCode.stop()
+    openCodeStatus.value = { state: 'stopped', url: '', version: '' }
+    if (settings.agentEngine.value === 'opencode') settings.setAgentEngine('native')
+    window.$message?.info('OpenCode 本地引擎已停止，已切回 YUFENG Native')
+    return true
+  } catch (error) {
+    window.$message?.error(error?.message || 'OpenCode 停止失败')
+    return false
+  }
+}
+
+const setAgentEngine = async engine => {
+  const next = String(engine || '').trim()
+  if (!['native', 'opencode'].includes(next) || workbench.isRunning.value || workbench.isAwaitingApproval.value) return false
+  if (next === 'opencode') {
+    if (openCodeStatus.value?.state !== 'running') {
+      const started = await startOpenCode()
+      if (!started) return false
+    }
+  }
+  settings.setAgentEngine(next)
+  window.$message?.success(next === 'opencode' ? '已切换到 OpenCode Local' : '已切换到 YUFENG Native')
+  return true
+}
+
 const applyDesktopPreference = async (method, value) => {
   const bridge = desktopBridge()
   if (typeof bridge?.[method] !== 'function') return null
@@ -911,6 +1076,11 @@ watch(settings.tools, groups => {
   }
 }, { deep: true })
 
+watch(openCodeLastError, error => {
+  if (!error?.message) return
+  window.$message?.warning(`OpenCode：${error.message}`)
+})
+
 watch(workbench.approvalMode, (nextMode, previousMode) => {
   if (previousMode === 'full_access' && nextMode !== 'full_access') void revokeFullAccess()
 })
@@ -937,6 +1107,7 @@ watch(
 onMounted(() => {
   window.addEventListener('keydown', onGlobalKeydown)
   automations.start()
+  void refreshOpenCode()
 })
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onGlobalKeydown)

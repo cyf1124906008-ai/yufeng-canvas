@@ -397,6 +397,68 @@ const normalizeOpenCodeSessionId = (input = {}) => {
   return boundedOpenCodeString(source.sessionId || source.id, 'sessionId', 256, { required: true })
 }
 
+const normalizeOpenCodeTools = value => {
+  if (value == null) return undefined
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    const error = new TypeError('tools 必须是布尔值映射')
+    error.code = 'OPENCODE_INPUT_INVALID'
+    throw error
+  }
+  const entries = Object.entries(value)
+  if (entries.length > 128) {
+    const error = new RangeError('tools 超出数量限制')
+    error.code = 'OPENCODE_INPUT_TOO_LARGE'
+    throw error
+  }
+  return Object.fromEntries(entries.map(([name, enabled]) => {
+    const key = boundedOpenCodeString(name, 'tool name', 128, { required: true })
+    if (typeof enabled !== 'boolean') {
+      const error = new TypeError(`tool ${key} 必须是布尔值`)
+      error.code = 'OPENCODE_INPUT_INVALID'
+      throw error
+    }
+    return [key, enabled]
+  }))
+}
+
+// `/provider` is useful for resolving a model key, but its full OpenCode
+// payload may contain provider options, environment hints, or custom fields
+// that must not cross the context bridge. Return only the bounded catalog
+// fields the renderer needs for model matching/display.
+const sanitizeOpenCodeProviderCatalog = payload => {
+  const source = payload && typeof payload === 'object' ? payload : {}
+  const all = Array.isArray(source.all) ? source.all.slice(0, 512).map(provider => {
+    const id = boundedOpenCodeString(provider?.id, 'provider id', 128)
+    const name = boundedOpenCodeString(provider?.name || id, 'provider name', 256)
+    const rawModels = provider?.models && typeof provider.models === 'object' && !Array.isArray(provider.models)
+      ? Object.entries(provider.models).slice(0, 2048)
+      : []
+    const models = Object.fromEntries(rawModels.map(([modelId, model]) => {
+      const safeModel = model && typeof model === 'object' ? model : {}
+      const normalized = {
+        name: boundedOpenCodeString(safeModel.name || modelId, 'model name', 256),
+        ...(safeModel.capabilities && typeof safeModel.capabilities === 'object' && !Array.isArray(safeModel.capabilities)
+          ? { capabilities: Object.fromEntries(Object.entries(safeModel.capabilities).slice(0, 64).map(([key, value]) => [boundedOpenCodeString(key, 'capability name', 128), value === true])) }
+          : {}),
+        ...(safeModel.status != null ? { status: boundedOpenCodeString(safeModel.status, 'model status', 64) } : {}),
+        ...(safeModel.enabled != null ? { enabled: safeModel.enabled === true } : {})
+      }
+      return [boundedOpenCodeString(modelId, 'model id', 256, { required: true }), normalized]
+    }))
+    return { id, name, models }
+  }) : []
+  const connected = Array.isArray(source.connected)
+    ? source.connected.slice(0, 512).map(value => boundedOpenCodeString(value, 'connected provider', 128)).filter(Boolean)
+    : []
+  const defaults = source.default && typeof source.default === 'object' && !Array.isArray(source.default)
+    ? Object.fromEntries(Object.entries(source.default).slice(0, 512).map(([providerId, modelId]) => [
+        boundedOpenCodeString(providerId, 'default provider', 128),
+        boundedOpenCodeString(modelId, 'default model', 256)
+      ]))
+    : {}
+  return { all, connected, default: defaults }
+}
+
 const normalizeOpenCodePromptInput = (input = {}) => {
   const source = normalizeOpenCodeObject(input, 'OpenCode prompt 参数')
   const sessionId = boundedOpenCodeString(source.sessionId || source.id, 'sessionId', 256, { required: true })
@@ -408,11 +470,17 @@ const normalizeOpenCodePromptInput = (input = {}) => {
       }
     : boundedOpenCodeString(source.model, 'model', 384)
   const agent = boundedOpenCodeString(source.agent, 'agent', 128)
+  const system = boundedOpenCodeString(source.system, 'system', 32 * 1024)
+  const variant = boundedOpenCodeString(source.variant, 'variant', 128)
+  const tools = normalizeOpenCodeTools(source.tools)
   return {
     sessionId,
     text,
     ...(model ? { model } : {}),
-    ...(agent ? { agent } : {})
+    ...(agent ? { agent } : {}),
+    ...(system ? { system } : {}),
+    ...(variant ? { variant } : {}),
+    ...(tools ? { tools } : {})
   }
 }
 
@@ -1517,6 +1585,11 @@ app.whenReady().then(async () => {
     requireTrustedRenderer(event)
     const { runtime } = await requireOpenCodeRuntime()
     return runtime.health()
+  })
+  ipcMain.handle('app:opencode:list-providers', async (event) => {
+    requireTrustedRenderer(event)
+    const { runtime } = await requireOpenCodeRuntime()
+    return sanitizeOpenCodeProviderCatalog(await runtime.listProviders())
   })
   ipcMain.handle('app:opencode:create-session', async (event, input) => {
     requireTrustedRenderer(event)

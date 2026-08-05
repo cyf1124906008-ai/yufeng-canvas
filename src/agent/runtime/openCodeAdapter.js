@@ -222,6 +222,33 @@ function flattenProviderModels(payload) {
   })))
 }
 
+/**
+ * Keep a YUFENG model selection only when it is an actual, connected
+ * OpenCode model.  Provider keys in YUFENG's catalog are not automatically
+ * valid in OpenCode (the sidecar owns its own credentials/config), so an
+ * unknown or plain model name deliberately yields `undefined` and lets
+ * OpenCode choose its configured default.
+ */
+export function selectOpenCodeModel(preferred, catalog = {}) {
+  const reference = modelReference(preferred)
+  if (!reference) return undefined
+  const key = `${reference.providerID}/${reference.modelID}`
+  const models = Array.isArray(catalog?.models) ? catalog.models : flattenProviderModels(catalog)
+  const candidate = models.find(model => {
+    const candidateKey = cleanString(model?.key || (
+      model?.providerID && model?.modelID ? `${model.providerID}/${model.modelID}` : ''
+    ))
+    return candidateKey === key
+  })
+  if (!candidate) return undefined
+  const connected = Array.isArray(catalog?.connected) ? catalog.connected.filter(Boolean) : []
+  if (connected.length && !connected.includes(reference.providerID)) return undefined
+  if (candidate.enabled === false || ['deprecated', 'disabled'].includes(String(candidate.status || '').toLowerCase())) {
+    return undefined
+  }
+  return key
+}
+
 function textParts(response) {
   const parts = Array.isArray(response?.parts) ? response.parts : []
   return parts
@@ -547,6 +574,115 @@ export function createOpenCodeAdapter({
     subscribeEvents,
     events: subscribeEvents
   }
+}
+
+/**
+ * Build the same small adapter contract on top of the Electron preload
+ * bridge.  Packaged YUFENG uses a `file://` (or app-owned) renderer origin;
+ * calling `http://127.0.0.1:4096` directly from that renderer is subject to
+ * CORS and would also move more of the sidecar surface into the browser
+ * context.  This wrapper keeps the planner transport identical while making
+ * every operation cross the trusted Main-process IPC boundary.
+ *
+ * The bridge intentionally exposes only the operations currently needed by a
+ * Workbench planner.  Optional methods are forwarded when a newer preload
+ * provides them; unsupported calls fail with a stable, inspectable code.
+ */
+export function createOpenCodeBridgeAdapter({ bridge, directory = '' } = {}) {
+  if (!bridge || typeof bridge !== 'object') {
+    throw new TypeError('OpenCode bridge adapter 需要 desktopApp.openCode')
+  }
+
+  const unsupported = name => {
+    const error = new Error(`OpenCode IPC 尚未提供 ${name}`)
+    error.code = 'OPENCODE_BRIDGE_UNSUPPORTED'
+    error.operation = name
+    throw error
+  }
+
+  const ensureAvailable = (name, signal) => {
+    if (signal?.aborted) {
+      const error = new Error('OpenCode IPC 请求已取消')
+      error.name = 'AbortError'
+      error.code = 'OPENCODE_ABORTED'
+      throw error
+    }
+    if (typeof bridge[name] !== 'function') unsupported(name)
+  }
+
+  const call = (name, input = {}, signal) => {
+    ensureAvailable(name, signal)
+    // AbortSignal objects are not structured-cloneable across Electron's
+    // context bridge.  Main validates and bounds the remaining fields; a
+    // caller can still invoke `abort()` at the next UI cancellation boundary.
+    return bridge[name](input)
+  }
+
+  const sessionInput = options => ({
+    ...(cleanString(options?.title) ? { title: cleanString(options.title) } : {}),
+    ...(cleanString(options?.parentID || options?.parentId)
+      ? { parentID: cleanString(options.parentID || options.parentId) }
+      : {})
+  })
+
+  const promptInput = options => {
+    const sessionId = options?.sessionId || options?.id
+    const text = options?.text ?? options?.content
+    const input = {
+      sessionId,
+      text,
+      ...(modelReference(options?.model) ? { model: modelReference(options.model) } : {}),
+      ...(cleanString(options?.agent) ? { agent: cleanString(options.agent) } : {}),
+      ...(cleanString(options?.system) ? { system: String(options.system) } : {}),
+      ...(cleanString(options?.variant) ? { variant: cleanString(options.variant) } : {}),
+      ...(options?.tools && typeof options.tools === 'object' && !Array.isArray(options.tools)
+        ? { tools: Object.fromEntries(Object.entries(options.tools).map(([key, value]) => [String(key), value === true])) }
+        : {})
+    }
+    return input
+  }
+
+  const adapter = {
+    baseUrl: 'ipc://opencode',
+    directory: cleanString(directory),
+    protocol: OPENCODE_PROTOCOL,
+    health: ({ signal } = {}) => call('health', {}, signal),
+    createSession: (options = {}) => call('createSession', sessionInput(options), options.signal),
+    prompt: (options = {}) => call('prompt', promptInput(options), options.signal),
+    abort: (options = {}) => call('abort', {
+      sessionId: options.sessionId || options.id
+    }, options.signal),
+    sessionStatus: (options = {}) => call('sessionStatus', {
+      sessionId: options.sessionId || options.id
+    }, options.signal),
+    listProviders: (options = {}) => call('listProviders', {}, options.signal),
+    messages: (options = {}) => call('messages', {
+      sessionId: options.sessionId || options.id
+    }, options.signal),
+    listPermissions: (options = {}) => call('listPermissions', {}, options.signal),
+    replyPermission: (options = {}) => call('replyPermission', options, options.signal)
+  }
+
+  adapter.subscribeEvents = options => {
+    const signal = options?.signal
+    ensureAvailable('subscribeEvents', signal)
+    return bridge.subscribeEvents({
+      scope: options?.scope,
+      onEvent: options?.onEvent
+    })
+  }
+  adapter.listModels = async (options = {}) => {
+    if (typeof bridge.listModels === 'function') return bridge.listModels()
+    const payload = await adapter.listProviders(options)
+    return {
+      models: flattenProviderModels(payload),
+      providers: Array.isArray(payload?.all) ? payload.all : [],
+      connected: Array.isArray(payload?.connected) ? payload.connected : [],
+      defaults: payload?.default || {}
+    }
+  }
+  adapter.events = adapter.subscribeEvents
+  return adapter
 }
 
 /**

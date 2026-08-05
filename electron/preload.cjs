@@ -30,9 +30,10 @@ contextBridge.exposeInMainWorld('desktopApp', {
   // environment, or provider credential crosses this bridge.
   openCode: {
     getStatus: () => ipcRenderer.invoke('app:opencode:get-status'),
-    start: () => ipcRenderer.invoke('app:opencode:start'),
+    start: (input) => ipcRenderer.invoke('app:opencode:start', input),
     stop: () => ipcRenderer.invoke('app:opencode:stop'),
     health: () => ipcRenderer.invoke('app:opencode:health'),
+    listProviders: () => ipcRenderer.invoke('app:opencode:list-providers'),
     createSession: (input) => ipcRenderer.invoke('app:opencode:create-session', input),
     sessionStatus: (input) => ipcRenderer.invoke('app:opencode:session-status', input),
     prompt: (input) => ipcRenderer.invoke('app:opencode:prompt', input),
