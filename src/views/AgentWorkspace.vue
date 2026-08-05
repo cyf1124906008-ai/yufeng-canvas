@@ -65,6 +65,8 @@
         :tools="toolShortcuts"
         :selected-tool="selectedTool"
         :model-label="selectedModelLabel"
+        :model-options="modelOptions"
+        :selected-models="selectedModels"
         :approval-mode="workbench.approvalMode.value"
         :reasoning-effort="settings.reasoningEffort.value"
         :guidance-pending="workbench.guidancePending.value"
@@ -76,6 +78,7 @@
         @resume="resumeTask"
         @stop="cancel"
         @select-tool="selectTool"
+        @select-model="selectModel"
         @files-selected="addAttachments"
         @remove-attachment="removeAttachment"
         @open-settings="openSettings('api')"
@@ -297,7 +300,21 @@ const workbenchActivities = computed(() => [
 ])
 const providerLabel = computed(() => String(modelStore.providerLabel || modelStore.currentProvider || '未选择'))
 const providerConfigured = computed(() => Boolean(modelStore.hasAnyApiKey))
-const selectedModelLabel = computed(() => String(modelStore.selectedChatModel || '自动路由'))
+const modelOptions = computed(() => ({
+  chat: modelStore.chatModelOptions || [],
+  image: modelStore.imageModelOptions || [],
+  video: modelStore.videoModelOptions || []
+}))
+const selectedModels = computed(() => ({
+  chat: String(modelStore.selectedChatModel || ''),
+  image: String(modelStore.selectedImageModel || ''),
+  video: String(modelStore.selectedVideoModel || '')
+}))
+const selectedModelLabel = computed(() => {
+  const key = String(modelStore.selectedChatModel || '').trim()
+  if (!key) return '自动路由'
+  return modelOptions.value.chat.find(model => model.key === key)?.label || key
+})
 const approvalMessage = computed(() => {
   const call = workbench.pendingToolCall.value
   if (!call) return ''
@@ -771,6 +788,24 @@ const selectTool = tool => {
   selectedTool.value = tool.id
   if (!goal.value.trim() || goal.value.trim() === '/') goal.value = tool.hint || ''
   focusComposer()
+}
+
+const selectModel = payload => {
+  if (workbench.isRunning.value || workbench.isAwaitingApproval.value || workbench.isHistorySelection.value) return
+  const capability = String(payload?.capability || '').trim()
+  const model = String(payload?.model || '').trim()
+  const fields = {
+    chat: 'selectedChatModel',
+    image: 'selectedImageModel',
+    video: 'selectedVideoModel'
+  }
+  const field = fields[capability]
+  if (!field) return
+  modelStore[field] = model
+  const label = model
+    ? (modelOptions.value[capability] || []).find(option => option.key === model)?.label || model
+    : '自动路由'
+  window.$message?.success(`${capability === 'chat' ? '对话' : capability === 'image' ? '图片' : '视频'}模型已切换为 ${label}`)
 }
 
 const selectWorkspace = async workspaceId => {

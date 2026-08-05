@@ -240,6 +240,16 @@
                   {{ model.isCustom ? '自定义' : '内置' }}
                 </n-tag>
                 <button
+                  type="button"
+                  class="select-model"
+                  :class="{ 'is-selected': isActiveModel(model.key) }"
+                  :aria-pressed="isActiveModel(model.key)"
+                  :title="isActiveModel(model.key) ? '当前使用中' : '切换为当前模型'"
+                  @click="handleSelectActiveModel(model.key)"
+                >
+                  {{ isActiveModel(model.key) ? '当前' : '使用' }}
+                </button>
+                <button
                   v-if="model.isCustom"
                   type="button"
                   class="remove-model"
@@ -901,6 +911,26 @@ const handleUpdateImageProtocol = (modelKey, protocol = 'auto') => {
   const models = modelStore.customImageModelsByProvider[formData.provider] || []
   const model = models.find(item => item.key === modelKey)
   if (model) model.protocol = normalized
+}
+
+const isActiveModel = modelKey => {
+  const selectedByCatalog = {
+    chat: modelStore.selectedChatModel,
+    image: modelStore.selectedImageModel,
+    video: modelStore.selectedVideoModel
+  }
+  return selectedByCatalog[activeCatalog.value] === modelKey
+}
+
+const handleSelectActiveModel = modelKey => {
+  const selectedField = {
+    chat: 'selectedChatModel',
+    image: 'selectedImageModel',
+    video: 'selectedVideoModel'
+  }[activeCatalog.value]
+  if (!selectedField || !modelKey) return
+  modelStore[selectedField] = modelKey
+  window.$message?.success(`${getCapabilityLabel(activeCatalog.value)}模型已切换`)
 }
 
 const persistFormConfig = () => {
@@ -1578,7 +1608,7 @@ const openAssetsFolder = async () => {
 
 .catalog-row {
   display: grid;
-  grid-template-columns: 29px minmax(0, 1fr) auto 26px;
+  grid-template-columns: 29px minmax(0, 1fr) auto auto 26px;
   align-items: center;
   gap: 9px;
   min-height: 47px;
@@ -1593,6 +1623,9 @@ const openAssetsFolder = async () => {
 .model-copy code { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .model-copy strong { font-size: 13px; }
 .model-copy code { margin-top: 2px; color: var(--faint); font-size: 11px; }
+.select-model { min-width: 38px; height: 25px; border: 1px solid var(--line); border-radius: 6px; padding: 0 7px; color: var(--muted); background: transparent; font-size: 10px; cursor: pointer; }
+.select-model:hover { color: var(--text); border-color: var(--accent); background: var(--panel-subtle); }
+.select-model.is-selected { border-color: rgba(34, 197, 94, .34); color: #16834a; background: rgba(34, 197, 94, .08); }
 .remove-model { width: 25px; height: 25px; border-radius: 6px; font-size: 16px; }
 
 .catalog-empty {
@@ -1718,12 +1751,14 @@ const openAssetsFolder = async () => {
   .settings-heading h2 { font-size: 14px; }
   .catalog-add-row { grid-template-columns: minmax(0, 1fr) auto; }
   .catalog-add-row .protocol-select { grid-column: 1 / -1; width: 100%; }
-  .catalog-row { grid-template-columns: 29px minmax(0, 1fr) 25px; align-items: start; }
+  .catalog-row { grid-template-columns: 29px minmax(0, 1fr) auto 25px; align-items: start; }
   .catalog-row .model-icon { grid-column: 1; grid-row: 1; }
   .catalog-row .model-copy { grid-column: 2; grid-row: 1; }
-  .catalog-row .remove-model { grid-column: 3; grid-row: 1; }
+  .catalog-row .select-model { grid-column: 3; grid-row: 1; }
+  .catalog-row .remove-model { grid-column: 4; grid-row: 1; }
   .catalog-row .protocol-select,
   .catalog-row :deep(.n-tag) { grid-column: 2 / 4; grid-row: 2; width: 100%; justify-self: stretch; }
+  .catalog-row :deep(.n-tag) { grid-column: 2 / 5; }
   .settings-footer { align-items: stretch; flex-direction: column; }
   .footer-actions { width: 100%; flex-wrap: wrap; }
   .footer-actions .n-button:first-child { margin-right: auto; }

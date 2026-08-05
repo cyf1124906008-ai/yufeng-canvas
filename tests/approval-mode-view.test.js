@@ -40,3 +40,20 @@ test('workspace binds the selected approval mode to the real runtime interface',
   assert.match(workspace, /workbench\.setApprovalMode\(mode\)/)
   assert.match(workspace, /workbench\.isRunning\.value \|\| workbench\.isAwaitingApproval\.value \|\| workbench\.isHistorySelection\.value/)
 })
+
+test('composer exposes direct capability model switching and Workspace persists it', async () => {
+  const [composer, workspace, settings] = await Promise.all([
+    readFile(new URL('../src/components/workbench/WorkbenchComposer.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../src/views/AgentWorkspace.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../src/components/ApiSettings.vue', import.meta.url), 'utf8')
+  ])
+
+  assert.match(composer, /class="model-menu" role="listbox"/)
+  assert.match(composer, /'select-model': payload/)
+  assert.match(composer, /modelGroups = computed/)
+  assert.match(workspace, /:model-options="modelOptions"/)
+  assert.match(workspace, /@select-model="selectModel"/)
+  assert.match(workspace, /modelStore\[field\] = model/)
+  assert.match(settings, /handleSelectActiveModel/)
+  assert.match(settings, /selectedField = \{[\s\S]*selectedChatModel/)
+})

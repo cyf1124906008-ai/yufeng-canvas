@@ -81,11 +81,57 @@
               <workbench-icon name="slash" :size="15" />
             </button>
             <span class="toolbar-divider"></span>
-            <button type="button" class="model-control" :disabled="active" @click="emit('open-settings')">
-              <workbench-icon name="brain" :size="14" />
-              <span>{{ modelLabel || '自动路由' }}</span>
-              <workbench-icon name="chevron-down" :size="12" />
-            </button>
+            <div class="model-picker">
+              <button
+                type="button"
+                class="model-control"
+                :disabled="active"
+                aria-haspopup="listbox"
+                :aria-expanded="showModelMenu"
+                title="选择当前任务使用的模型"
+                @click="toggleModelMenu"
+              >
+                <workbench-icon name="brain" :size="14" />
+                <span>{{ modelLabel || '自动路由' }}</span>
+                <workbench-icon name="chevron-down" :size="12" />
+              </button>
+              <div v-if="showModelMenu" class="model-menu" role="listbox" aria-label="选择模型">
+                <header>
+                  <span><workbench-icon name="brain" :size="14" />模型</span>
+                  <small>下一次任务生效</small>
+                </header>
+                <section v-for="group in modelGroups" :key="group.id" class="model-menu-group">
+                  <div class="model-menu-label">{{ group.label }}</div>
+                  <button
+                    type="button"
+                    role="option"
+                    :aria-selected="selectedModels[group.id] === ''"
+                    :class="{ 'is-selected': selectedModels[group.id] === '' }"
+                    @click="selectModel(group.id, '')"
+                  >
+                    <span class="model-option-copy"><strong>自动路由</strong><small>由 Agent 根据任务选择</small></span>
+                    <workbench-icon v-if="selectedModels[group.id] === ''" name="check" :size="14" />
+                  </button>
+                  <button
+                    v-for="option in group.options"
+                    :key="option.key"
+                    type="button"
+                    role="option"
+                    :aria-selected="selectedModels[group.id] === option.key"
+                    :class="{ 'is-selected': selectedModels[group.id] === option.key }"
+                    @click="selectModel(group.id, option.key)"
+                  >
+                    <span class="model-option-copy"><strong>{{ option.label || option.key }}</strong><small>{{ option.key }}</small></span>
+                    <workbench-icon v-if="selectedModels[group.id] === option.key" name="check" :size="14" />
+                  </button>
+                  <p v-if="!group.options.length" class="model-menu-empty">尚未配置模型</p>
+                </section>
+                <button type="button" class="model-settings-link" @click="openModelSettings">
+                  管理 Provider 与模型目录
+                  <workbench-icon name="chevron-right" :size="13" />
+                </button>
+              </div>
+            </div>
             <reasoning-effort-selector
               :model-value="reasoningEffort"
               :disabled="running || awaitingApproval || history"
@@ -153,6 +199,14 @@ const props = defineProps({
   tools: { type: Array, default: () => [] },
   selectedTool: { type: String, default: 'auto' },
   modelLabel: { type: String, default: '' },
+  modelOptions: {
+    type: Object,
+    default: () => ({ chat: [], image: [], video: [] })
+  },
+  selectedModels: {
+    type: Object,
+    default: () => ({ chat: '', image: '', video: '' })
+  },
   approvalMode: { type: String, default: 'ask' },
   reasoningEffort: { type: String, default: 'auto' },
   guidancePending: { type: Boolean, default: false },
@@ -171,6 +225,7 @@ const emit = defineEmits({
   'files-selected': files => Array.isArray(files),
   'remove-attachment': id => typeof id === 'string',
   'open-settings': () => true,
+  'select-model': payload => Boolean(payload && typeof payload === 'object' && typeof payload.capability === 'string' && typeof payload.model === 'string'),
   'update-approval-mode': mode => WORKBENCH_APPROVAL_MODES.some(item => item.id === mode),
   'update-reasoning-effort': value => typeof value === 'string' && !!value
 })
@@ -179,10 +234,21 @@ const input = ref(null)
 const fileInput = ref(null)
 const showCommands = ref(false)
 const showApprovalModes = ref(false)
+const showModelMenu = ref(false)
 const acceptedFiles = '.txt,.md,.json,.jsonl,.js,.mjs,.cjs,.ts,.tsx,.jsx,.vue,.css,.scss,.html,.xml,.yml,.yaml,.toml,.py,.go,.rs,.java,.c,.h,.cpp,.hpp,.sh,.zsh,.sql,.log,.csv'
 const canSubmit = computed(() => !!props.modelValue.trim())
 const active = computed(() => props.running || props.awaitingApproval)
 const commandTools = computed(() => props.tools.filter(tool => tool.id !== 'auto'))
+const modelGroups = computed(() => [
+  { id: 'chat', label: '对话模型', options: props.modelOptions?.chat || [] },
+  { id: 'image', label: '图片模型', options: props.modelOptions?.image || [] },
+  { id: 'video', label: '视频模型', options: props.modelOptions?.video || [] }
+])
+const selectedModels = computed(() => ({
+  chat: props.selectedModels?.chat || '',
+  image: props.selectedModels?.image || '',
+  video: props.selectedModels?.video || ''
+}))
 const approvalModes = WORKBENCH_APPROVAL_MODES
 const currentApprovalMode = computed(() => workbenchApprovalMode(props.approvalMode))
 const approvalModeLocked = computed(() => props.running || props.awaitingApproval || props.history)
@@ -223,7 +289,26 @@ const selectCommand = (tool) => {
 const toggleApprovalModes = () => {
   if (approvalModeLocked.value) return
   showCommands.value = false
+  showModelMenu.value = false
   showApprovalModes.value = !showApprovalModes.value
+}
+
+const toggleModelMenu = () => {
+  if (active.value) return
+  showApprovalModes.value = false
+  showCommands.value = false
+  showModelMenu.value = !showModelMenu.value
+}
+
+const selectModel = (capability, model) => {
+  if (active.value) return
+  emit('select-model', { capability, model })
+  showModelMenu.value = false
+}
+
+const openModelSettings = () => {
+  showModelMenu.value = false
+  emit('open-settings')
 }
 
 const selectApprovalMode = mode => {
@@ -235,6 +320,7 @@ const selectApprovalMode = mode => {
 const closeFloatingMenus = event => {
   if (!event.target?.closest?.('.approval-menu, .permission-mode')) showApprovalModes.value = false
   if (!event.target?.closest?.('.command-menu, [aria-label="打开快捷命令"]')) showCommands.value = false
+  if (!event.target?.closest?.('.model-menu, .model-control')) showModelMenu.value = false
 }
 
 const onFilesSelected = (event) => {
@@ -271,6 +357,10 @@ watch(approvalModeLocked, locked => {
   if (locked) showApprovalModes.value = false
 })
 
+watch(active, activeNow => {
+  if (activeNow) showModelMenu.value = false
+})
+
 onMounted(() => document.addEventListener('pointerdown', closeFloatingMenus))
 onBeforeUnmount(() => document.removeEventListener('pointerdown', closeFloatingMenus))
 </script>
@@ -300,10 +390,28 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', closeFloatingM
 .tool-button.is-active { color: #d8dcda; background: #2a2d2f; }
 .tool-button:disabled { cursor: not-allowed; opacity: .38; }
 .toolbar-divider { width: 1px; height: 15px; margin: 0 3px; background: #343739; }
+.model-picker { position: relative; min-width: 0; }
 .model-control { display: flex; min-width: 0; max-width: 200px; height: 30px; align-items: center; gap: 6px; border-radius: 7px; padding: 0 8px; color: #9ba09f; font-size: 12px; }
 .model-control:hover { color: #d8dcda; background: #292c2e; }
 .model-control:disabled { opacity: .5; }
 .model-control span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.model-menu { position: absolute; z-index: 24; bottom: calc(100% + 7px); left: 0; width: min(360px, calc(100vw - 30px)); max-height: min(520px, 70vh); overflow-y: auto; border: 1px solid #404546; border-radius: 11px; padding: 6px; background: #1b1d1f; box-shadow: 0 24px 78px rgba(0,0,0,.48); }
+.model-menu header { display: flex; align-items: center; justify-content: space-between; padding: 7px 8px 8px; }
+.model-menu header > span { display: flex; align-items: center; gap: 6px; color: #d4d8d6; font-size: 12px; font-weight: 700; }
+.model-menu header small { color: #666c6c; font-size: 10px; font-weight: 500; }
+.model-menu-group { border-top: 1px solid #2d3032; padding: 7px 0 3px; }
+.model-menu-label { padding: 0 8px 4px; color: #777e7c; font-size: 10px; font-weight: 700; letter-spacing: .03em; }
+.model-menu-group > button { display: grid; grid-template-columns: minmax(0, 1fr) 18px; width: 100%; align-items: center; gap: 8px; border: 1px solid transparent; border-radius: 8px; padding: 7px 8px; color: #9ca2a0; text-align: left; }
+.model-menu-group > button:hover { color: #e5e9e7; background: #25282a; }
+.model-menu-group > button.is-selected { border-color: #3d4642; color: #e5e9e7; background: #242826; }
+.model-option-copy, .model-option-copy strong, .model-option-copy small { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.model-option-copy strong { font-size: 11.5px; font-weight: 700; }
+.model-option-copy small { margin-top: 2px; color: #707776; font-size: 10px; }
+.model-menu-group > button.is-selected .model-option-copy small { color: #929997; }
+.model-menu-group > button > .wb-icon { color: #83cea6; }
+.model-menu-empty { margin: 2px 8px 5px; color: #666c6c; font-size: 10px; }
+.model-settings-link { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 6px; border-top: 1px solid #2d3032; margin-top: 5px; padding: 9px 8px 5px; color: #83cea6; font-size: 11px; text-align: left; }
+.model-settings-link:hover { color: #b1efd0; }
 .permission-mode { display: flex; height: 30px; align-items: center; gap: 5px; border-left: 1px solid #333638; margin-left: 2px; border-radius: 0 7px 7px 0; padding: 0 7px 0 8px; color: #858b89; font-size: 11px; white-space: nowrap; }
 .permission-mode:hover,
 .permission-mode.is-active { color: #d8dcda; background: #292c2e; }
@@ -379,6 +487,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', closeFloatingM
   .model-control { display: grid; width: 29px; min-width: 29px; max-width: 29px; place-items: center; padding: 0; }
   .model-control span,
   .model-control > svg:last-child { display: none; }
+  .model-menu { right: 0; left: auto; width: min(340px, calc(100vw - 16px)); }
   .permission-mode { max-width: 82px; padding-right: 6px; }
   .approval-menu { right: 0; left: 0; width: auto; }
   .approval-menu header small { display: none; }
