@@ -115,6 +115,22 @@
                 <section class="settings-group">
                   <header><strong>执行边界</strong><small>任务规划与工具调用</small></header>
                   <div class="setting-stack">
+                    <div><strong>执行引擎</strong><p>选择负责拆解任务的规划器。无论选择哪一个，文件、终端和电脑操作都继续经过 YUFENG ToolRegistry 与审批边界。</p></div>
+                    <div class="choice-grid is-two engine-choice" role="radiogroup" aria-label="Agent 执行引擎">
+                      <button type="button" role="radio" :aria-checked="agentEngine === 'native'" :class="{ 'is-selected': agentEngine === 'native' }" :disabled="runtimeLocked" @click="emit('update-agent-engine', 'native')">
+                        <workbench-icon name="brain" :size="17" /><strong>YUFENG Native</strong><small>直接使用当前 Provider 的聊天模型</small>
+                      </button>
+                      <button type="button" role="radio" :aria-checked="agentEngine === 'opencode'" :class="{ 'is-selected': agentEngine === 'opencode' }" :disabled="runtimeLocked || !desktopReady" @click="emit('update-agent-engine', 'opencode')">
+                        <workbench-icon name="terminal" :size="17" /><strong>OpenCode Local</strong><small>{{ opencodeStatus?.state === 'running' ? '本地 sidecar 已连接' : (desktopReady ? '启动本地 sidecar 后使用' : '仅桌面 App 可用') }}</small>
+                      </button>
+                    </div>
+                    <div class="engine-status" :class="{ 'is-ready': opencodeStatus?.state === 'running' }">
+                      <span><i></i>{{ opencodeStatus?.state === 'running' ? `OpenCode ${opencodeStatus?.version || ''} · ${opencodeStatus?.url || '本机'}` : 'OpenCode 尚未运行' }}</span>
+                      <button v-if="opencodeStatus?.state === 'running'" type="button" class="secondary-action" :disabled="runtimeLocked" @click="emit('stop-opencode')">停止</button>
+                      <button v-else type="button" class="secondary-action" :disabled="runtimeLocked || !desktopReady" @click="emit('start-opencode')">启动</button>
+                    </div>
+                  </div>
+                  <div class="setting-stack">
                     <div><strong>默认审批模式</strong><p>只控制工具门，不会阻止 Planner 使用当前聊天模型。</p></div>
                     <div class="approval-grid" role="radiogroup" aria-label="默认审批模式">
                       <button
@@ -249,13 +265,18 @@ const props = defineProps({
   toolChangesLocked: { type: Boolean, default: false },
   approvalMode: { type: String, default: 'ask' },
   providerLabel: { type: String, default: '' },
-  providerConfigured: { type: Boolean, default: false }
+  providerConfigured: { type: Boolean, default: false },
+  agentEngine: { type: String, default: 'native' },
+  opencodeStatus: { type: Object, default: () => ({ state: 'unknown' }) }
 })
 
 const emit = defineEmits({
   'update:show': value => typeof value === 'boolean',
   'open-api-settings': () => true,
-  'update-approval-mode': mode => WORKBENCH_APPROVAL_MODES.some(item => item.id === mode)
+  'update-approval-mode': mode => WORKBENCH_APPROVAL_MODES.some(item => item.id === mode),
+  'update-agent-engine': value => ['native', 'opencode'].includes(value),
+  'start-opencode': () => true,
+  'stop-opencode': () => true
 })
 
 const settings = useAgentSettings()
@@ -303,7 +324,7 @@ const densityOptions = [
   { id: 'compact', label: '紧凑', description: '显示更多内容', icon: 'list' }
 ]
 const toolOptions = [
-  { id: 'workspaceRead', label: '读取项目', icon: 'folder', description: '查看工作区根目录、列出文件、读取文本与搜索内容。', scope: '只读工具；限制在用户选择的 workspace root 内' },
+  { id: 'workspaceRead', label: '读取项目', icon: 'folder', description: '查看当前工作区根目录、列出文件、读取文本与搜索内容。', scope: '只读工具；限制在默认或用户选择的 workspace root 内' },
   { id: 'workspaceWrite', label: '修改项目', icon: 'git-diff', description: '新建或覆盖文件、应用精确补丁与条件回滚。', scope: '高风险工具；受审批模式和文件校验双重约束' },
   { id: 'terminal', label: '终端命令', icon: 'terminal', description: '以 executable + 参数数组运行受控进程。', scope: '不使用 shell 字符串拼接；高风险操作仍需确认' },
   { id: 'computer', label: '电脑控制', icon: 'monitor', description: '查看屏幕、打开应用、点击和输入文字。', scope: '依赖操作系统屏幕录制与辅助功能权限' },
@@ -463,6 +484,12 @@ onMounted(async () => {
 .choice-grid button svg { grid-row: 1 / 3; }
 .choice-grid button strong { color: inherit; }
 .choice-grid button small { color: var(--sc-faint); font-size: 9.5px; }
+.engine-choice button { min-height: 72px; }
+.engine-status { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 9px; border: 1px solid var(--sc-border); border-radius: 8px; padding: 8px 10px; color: var(--sc-faint); background: var(--sc-subtle); font-size: 9.5px; }
+.engine-status > span { display: inline-flex; min-width: 0; align-items: center; gap: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.engine-status i { width: 6px; height: 6px; flex: 0 0 auto; border-radius: 50%; background: #a4aaa6; }
+.engine-status.is-ready { color: #4d9e71; }
+.engine-status.is-ready i { background: #5fc28a; }
 .approval-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 7px; margin-top: 12px; }
 .approval-grid button { min-height: 105px; border: 1px solid var(--sc-border); border-radius: 8px; padding: 10px; color: var(--sc-muted); text-align: left; }
 .approval-grid button:hover { background: var(--sc-hover); }

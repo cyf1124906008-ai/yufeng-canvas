@@ -4,9 +4,11 @@ const { TERMINATION_GUARANTEE, TerminalManager } = require('./terminal.cjs')
 const { MacOSComputerTools } = require('./macos.cjs')
 const { assertBoundedInput, requireApproval } = require('./security.cjs')
 
-function createAgentTools({ userDataPath, tempPath, systemPreferences, platform = process.platform } = {}) {
+function createAgentTools({ userDataPath, tempPath, systemPreferences, defaultRoot = '', fallbackRoot = '', platform = process.platform } = {}) {
   const workspace = new WorkspaceManager({
-    settingsPath: path.join(userDataPath, 'agent-tools', 'settings.json')
+    settingsPath: path.join(userDataPath, 'agent-tools', 'settings.json'),
+    defaultRoot,
+    fallbackRoot
   })
   const terminal = new TerminalManager({ workspace })
   const computer = new MacOSComputerTools({ platform, systemPreferences, tempPath })

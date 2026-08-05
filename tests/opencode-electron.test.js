@@ -44,6 +44,9 @@ test('OpenCode IPC is opt-in, workspace-bound, and does not forward secrets', ()
   assert.match(mainSource, /sanitizeOpenCodeProviderCatalog/)
   assert.match(mainSource, /OPENCODE_URL_CREDENTIALS_UNSUPPORTED/)
   assert.match(mainSource, /OPENCODE_URL_QUERY_UNSUPPORTED/)
+  assert.match(mainSource, /OPENCODE_REMOTE_UNSUPPORTED/)
+  assert.match(mainSource, /defaultRoot: defaultWorkspaceRoot/)
+  assert.match(mainSource, /fallbackRoot: path\.join\(app\.getPath\('userData'\), 'agent-tools', 'workspace'\)/)
 
   // The preload API accepts only structured operation inputs. It must never
   // expose process.env, shell commands, or an authorization header surface.

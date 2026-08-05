@@ -27,6 +27,7 @@ const STORAGE_KEYS = {
   SELECTED_CHAT_MODEL: 'selected-chat-model',
   SELECTED_IMAGE_MODEL: 'selected-image-model',
   SELECTED_VIDEO_MODEL: 'selected-video-model',
+  MODEL_ROUTING_MODES: 'model-routing-modes-v1',
   CUSTOM_CHAT_MODELS_BY_PROVIDER: 'custom-chat-models-by-provider',
   CUSTOM_IMAGE_MODELS_BY_PROVIDER: 'custom-image-models-by-provider',
   CUSTOM_VIDEO_MODELS_BY_PROVIDER: 'custom-video-models-by-provider',
@@ -36,6 +37,7 @@ const STORAGE_KEYS = {
 
 const API_KEY_CAPABILITIES = ['default', 'chat', 'image', 'video']
 const API_BASE_URL_CAPABILITIES = ['default', 'chat', 'image', 'video']
+const MODEL_ROUTING_GROUPS = ['chat', 'image', 'video']
 const REQUIRE_USER_MODELS = DISTRIBUTION_CONFIG.models?.requireUserModels === true
 const MODEL_INTELLIGENCE_FIELDS = [
   'capabilities',
@@ -322,6 +324,14 @@ const normalizeBaseUrlsByProvider = (baseUrlsByProvider = {}) =>
     return result
   }, {})
 
+const normalizeModelRoutingModes = (value = {}) => {
+  const source = value && typeof value === 'object' ? value : {}
+  return Object.fromEntries(MODEL_ROUTING_GROUPS.map((group) => [
+    group,
+    source[group] === 'locked' ? 'locked' : 'auto'
+  ]))
+}
+
 const joinApiEndpoint = (baseUrl = '', endpoint = '') => {
   const base = String(baseUrl || '').replace(/\/+$/, '')
   let path = String(endpoint || '')
@@ -463,6 +473,9 @@ export const useModelStore = defineStore('model', () => {
   const selectedVideoModel = ref(
     getStored(STORAGE_KEYS.SELECTED_VIDEO_MODEL, getProviderVideoFallback(currentProvider.value))
   )
+  const modelRoutingModes = ref(normalizeModelRoutingModes(
+    getStoredJson(STORAGE_KEYS.MODEL_ROUTING_MODES, {})
+  ))
 
   const apiKeysByProvider = ref(normalizeApiKeysByProvider(getStoredJson(STORAGE_KEYS.API_KEYS_BY_PROVIDER, {})))
   const baseUrlsByProvider = ref(normalizeBaseUrlsByProvider(getStoredJson(STORAGE_KEYS.BASE_URLS_BY_PROVIDER, {})))
@@ -537,6 +550,7 @@ export const useModelStore = defineStore('model', () => {
     selectedChatModel: selectedChatModel.value,
     selectedImageModel: selectedImageModel.value,
     selectedVideoModel: selectedVideoModel.value,
+    modelRoutingModes: modelRoutingModes.value,
     customChatModels: customChatModels.value,
     customImageModels: customImageModels.value,
     customVideoModels: customVideoModels.value,
@@ -561,6 +575,7 @@ export const useModelStore = defineStore('model', () => {
     selectedChatModel.value = String(snapshot.selectedChatModel || '')
     selectedImageModel.value = String(snapshot.selectedImageModel || '')
     selectedVideoModel.value = String(snapshot.selectedVideoModel || '')
+    modelRoutingModes.value = normalizeModelRoutingModes(snapshot.modelRoutingModes)
     return true
   }
 
@@ -648,7 +663,7 @@ export const useModelStore = defineStore('model', () => {
     }
 
     customChatModels.value.push({ key: modelKey, label: label || modelKey })
-    selectedChatModel.value = modelKey
+    setSelectedModel('chat', modelKey)
     return true
   }
 
@@ -658,7 +673,7 @@ export const useModelStore = defineStore('model', () => {
     }
 
     customImageModels.value.push({ key: modelKey, label: label || modelKey, protocol: options.protocol || 'auto' })
-    selectedImageModel.value = modelKey
+    setSelectedModel('image', modelKey)
     return true
   }
 
@@ -668,7 +683,7 @@ export const useModelStore = defineStore('model', () => {
     }
 
     customVideoModels.value.push({ key: modelKey, label: label || modelKey })
-    selectedVideoModel.value = modelKey
+    setSelectedModel('video', modelKey)
     return true
   }
 
@@ -680,7 +695,7 @@ export const useModelStore = defineStore('model', () => {
 
     customChatModels.value.splice(index, 1)
     if (selectedChatModel.value === modelKey) {
-      selectedChatModel.value = availableChatModels.value[0]?.key || getProviderChatFallback()
+      setSelectedModel('chat', availableChatModels.value[0]?.key || getProviderChatFallback(), { mode: 'auto' })
     }
     return true
   }
@@ -693,7 +708,7 @@ export const useModelStore = defineStore('model', () => {
 
     customImageModels.value.splice(index, 1)
     if (selectedImageModel.value === modelKey) {
-      selectedImageModel.value = availableImageModels.value[0]?.key || (REQUIRE_USER_MODELS ? '' : DEFAULT_IMAGE_MODEL)
+      setSelectedModel('image', availableImageModels.value[0]?.key || (REQUIRE_USER_MODELS ? '' : DEFAULT_IMAGE_MODEL), { mode: 'auto' })
     }
     return true
   }
@@ -706,7 +721,7 @@ export const useModelStore = defineStore('model', () => {
 
     customVideoModels.value.splice(index, 1)
     if (selectedVideoModel.value === modelKey) {
-      selectedVideoModel.value = availableVideoModels.value[0]?.key || getProviderVideoFallback()
+      setSelectedModel('video', availableVideoModels.value[0]?.key || getProviderVideoFallback(), { mode: 'auto' })
     }
     return true
   }
@@ -714,6 +729,28 @@ export const useModelStore = defineStore('model', () => {
   const getChatModel = (key) => allChatModels.value.find((model) => model.key === key)
   const getImageModel = (key) => allImageModels.value.find((model) => model.key === key)
   const getVideoModel = (key) => allVideoModels.value.find((model) => model.key === key)
+
+  const setModelRoutingMode = (group, mode) => {
+    const normalizedGroup = MODEL_ROUTING_GROUPS.includes(group) ? group : ''
+    if (!normalizedGroup || !['auto', 'locked'].includes(mode)) return false
+    modelRoutingModes.value[normalizedGroup] = mode
+    return true
+  }
+
+  const setSelectedModel = (group, modelKey, { mode = 'locked' } = {}) => {
+    const normalizedGroup = MODEL_ROUTING_GROUPS.includes(group) ? group : ''
+    if (!normalizedGroup) return false
+    const fields = {
+      chat: selectedChatModel,
+      image: selectedImageModel,
+      video: selectedVideoModel
+    }
+    fields[normalizedGroup].value = String(modelKey || '').trim()
+    setModelRoutingMode(normalizedGroup, fields[normalizedGroup].value ? mode : 'auto')
+    return true
+  }
+
+  const isModelLocked = group => modelRoutingModes.value[group] === 'locked'
 
   const getImageModelProtocol = (key) => getImageModel(key)?.resolvedProtocol || inferImageProtocol(key)
 
@@ -800,7 +837,7 @@ export const useModelStore = defineStore('model', () => {
     }
 
     customChatModelsByProvider.value[provider].push({ key: modelKey, label: label || modelKey })
-    if (provider === currentProvider.value) selectedChatModel.value = modelKey
+    if (provider === currentProvider.value) setSelectedModel('chat', modelKey)
     return true
   }
 
@@ -818,7 +855,7 @@ export const useModelStore = defineStore('model', () => {
     }
 
     customImageModelsByProvider.value[provider].push({ key: modelKey, label: label || modelKey, protocol: options.protocol || 'auto' })
-    if (provider === currentProvider.value) selectedImageModel.value = modelKey
+    if (provider === currentProvider.value) setSelectedModel('image', modelKey)
     return true
   }
 
@@ -836,7 +873,7 @@ export const useModelStore = defineStore('model', () => {
     }
 
     customVideoModelsByProvider.value[provider].push({ key: modelKey, label: label || modelKey })
-    if (provider === currentProvider.value) selectedVideoModel.value = modelKey
+    if (provider === currentProvider.value) setSelectedModel('video', modelKey)
     return true
   }
 
@@ -924,15 +961,15 @@ export const useModelStore = defineStore('model', () => {
       stats.skipped += 1
     })
 
-    selectedChatModel.value = availableChatModels.value.some((model) => model.key === selectedChatModel.value)
-      ? selectedChatModel.value
-      : availableChatModels.value[0]?.key || getProviderChatFallback(provider)
-    selectedImageModel.value = availableImageModels.value.some((model) => model.key === selectedImageModel.value)
-      ? selectedImageModel.value
-      : availableImageModels.value[0]?.key || (REQUIRE_USER_MODELS ? '' : DEFAULT_IMAGE_MODEL)
-    selectedVideoModel.value = availableVideoModels.value.some((model) => model.key === selectedVideoModel.value)
-      ? selectedVideoModel.value
-      : availableVideoModels.value[0]?.key || getProviderVideoFallback(provider)
+    if (!availableChatModels.value.some((model) => model.key === selectedChatModel.value)) {
+      setSelectedModel('chat', availableChatModels.value[0]?.key || getProviderChatFallback(provider), { mode: 'auto' })
+    }
+    if (!availableImageModels.value.some((model) => model.key === selectedImageModel.value)) {
+      setSelectedModel('image', availableImageModels.value[0]?.key || (REQUIRE_USER_MODELS ? '' : DEFAULT_IMAGE_MODEL), { mode: 'auto' })
+    }
+    if (!availableVideoModels.value.some((model) => model.key === selectedVideoModel.value)) {
+      setSelectedModel('video', availableVideoModels.value[0]?.key || getProviderVideoFallback(provider), { mode: 'auto' })
+    }
 
     return stats
   }
@@ -950,7 +987,7 @@ export const useModelStore = defineStore('model', () => {
 
     models.splice(index, 1)
     if (provider === currentProvider.value && selectedChatModel.value === modelKey) {
-      selectedChatModel.value = availableChatModels.value[0]?.key || getProviderChatFallback(provider)
+      setSelectedModel('chat', availableChatModels.value[0]?.key || getProviderChatFallback(provider), { mode: 'auto' })
     }
     return true
   }
@@ -968,7 +1005,7 @@ export const useModelStore = defineStore('model', () => {
 
     models.splice(index, 1)
     if (provider === currentProvider.value && selectedImageModel.value === modelKey) {
-      selectedImageModel.value = availableImageModels.value[0]?.key || (REQUIRE_USER_MODELS ? '' : DEFAULT_IMAGE_MODEL)
+      setSelectedModel('image', availableImageModels.value[0]?.key || (REQUIRE_USER_MODELS ? '' : DEFAULT_IMAGE_MODEL), { mode: 'auto' })
     }
     return true
   }
@@ -986,7 +1023,7 @@ export const useModelStore = defineStore('model', () => {
 
     models.splice(index, 1)
     if (provider === currentProvider.value && selectedVideoModel.value === modelKey) {
-      selectedVideoModel.value = availableVideoModels.value[0]?.key || getProviderVideoFallback(provider)
+      setSelectedModel('video', availableVideoModels.value[0]?.key || getProviderVideoFallback(provider), { mode: 'auto' })
     }
     return true
   }
@@ -995,9 +1032,10 @@ export const useModelStore = defineStore('model', () => {
     customChatModels.value = []
     customImageModels.value = []
     customVideoModels.value = []
-    selectedChatModel.value = getProviderChatFallback()
-    selectedImageModel.value = REQUIRE_USER_MODELS ? '' : DEFAULT_IMAGE_MODEL
-    selectedVideoModel.value = getProviderVideoFallback()
+    setSelectedModel('chat', getProviderChatFallback(), { mode: 'auto' })
+    setSelectedModel('image', REQUIRE_USER_MODELS ? '' : DEFAULT_IMAGE_MODEL, { mode: 'auto' })
+    setSelectedModel('video', getProviderVideoFallback(), { mode: 'auto' })
+    modelRoutingModes.value = normalizeModelRoutingModes({})
   }
 
   watch(customChatModels, (value) => setStoredJson(STORAGE_KEYS.CUSTOM_CHAT_MODELS, value), { deep: true })
@@ -1017,6 +1055,7 @@ export const useModelStore = defineStore('model', () => {
   watch(selectedChatModel, (value) => setStored(STORAGE_KEYS.SELECTED_CHAT_MODEL, value))
   watch(selectedImageModel, (value) => setStored(STORAGE_KEYS.SELECTED_IMAGE_MODEL, value))
   watch(selectedVideoModel, (value) => setStored(STORAGE_KEYS.SELECTED_VIDEO_MODEL, value))
+  watch(modelRoutingModes, (value) => setStoredJson(STORAGE_KEYS.MODEL_ROUTING_MODES, value), { deep: true })
 
   watch(apiKeysByProvider, (value) => setStoredJson(STORAGE_KEYS.API_KEYS_BY_PROVIDER, value), { deep: true })
   watch(baseUrlsByProvider, (value) => setStoredJson(STORAGE_KEYS.BASE_URLS_BY_PROVIDER, value), { deep: true })
@@ -1024,19 +1063,19 @@ export const useModelStore = defineStore('model', () => {
   watch(currentProvider, (provider) => {
     const isSelectedModelSupported = availableChatModels.value.some((model) => model.key === selectedChatModel.value)
     if (!isSelectedModelSupported) {
-      selectedChatModel.value = availableChatModels.value[0]?.key || getProviderChatFallback(provider)
+      setSelectedModel('chat', availableChatModels.value[0]?.key || getProviderChatFallback(provider), { mode: 'auto' })
     }
   }, { immediate: true })
   watch(currentProvider, () => {
     const isSelectedModelSupported = availableImageModels.value.some((model) => model.key === selectedImageModel.value)
     if (!isSelectedModelSupported) {
-      selectedImageModel.value = availableImageModels.value[0]?.key || (REQUIRE_USER_MODELS ? '' : DEFAULT_IMAGE_MODEL)
+      setSelectedModel('image', availableImageModels.value[0]?.key || (REQUIRE_USER_MODELS ? '' : DEFAULT_IMAGE_MODEL), { mode: 'auto' })
     }
   }, { immediate: true })
   watch(currentProvider, (provider) => {
     const isSelectedModelSupported = availableVideoModels.value.some((model) => model.key === selectedVideoModel.value)
     if (!isSelectedModelSupported) {
-      selectedVideoModel.value = availableVideoModels.value[0]?.key || getProviderVideoFallback(provider)
+      setSelectedModel('video', availableVideoModels.value[0]?.key || getProviderVideoFallback(provider), { mode: 'auto' })
     }
   }, { immediate: true })
 
@@ -1064,6 +1103,10 @@ export const useModelStore = defineStore('model', () => {
     selectedChatModel,
     selectedImageModel,
     selectedVideoModel,
+    modelRoutingModes,
+    setModelRoutingMode,
+    setSelectedModel,
+    isModelLocked,
     customChatModels,
     customImageModels,
     customVideoModels,

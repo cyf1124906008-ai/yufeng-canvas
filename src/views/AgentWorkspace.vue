@@ -265,7 +265,7 @@ const workspace = computed(() => ({
   id: 'local-workspace',
   label: workbench.workspaceRoot.value
     ? workbench.workspaceRoot.value.split(/[\\/]/).filter(Boolean).at(-1) || '本地工作区'
-    : '选择本地工作区'
+    : (workbench.desktopReady.value ? '默认工作区' : '本地工作区')
 }))
 const usage = ref({})
 const goal = ref('')
@@ -298,7 +298,7 @@ const utf8Bytes = value => new TextEncoder().encode(String(value || '')).length
 const workspaces = computed(() => [{
   id: 'local-workspace',
   label: workspace.value.label,
-  description: workbench.workspaceRoot.value || (workbench.desktopReady.value ? '点击选择项目目录' : '桌面 App 中可用'),
+  description: workbench.workspaceRoot.value || (workbench.desktopReady.value ? '已自动创建，可点击切换项目' : '桌面 App 中可用'),
   iconName: 'folder',
   badge: workbench.desktopReady.value ? '本地' : '预览'
 }])
@@ -427,7 +427,7 @@ const composerPlaceholder = computed(() => {
 })
 const sessionContext = computed(() => ({
   工作区: workspace.value.label,
-  根目录: workbench.workspaceRoot.value || '未选择',
+  根目录: workbench.workspaceRoot.value || (workbench.desktopReady.value ? '默认工作区正在初始化' : 'Web 预览不可用'),
   模式: workbench.desktopReady.value ? '桌面 App' : 'Web 预览',
   Provider: `${providerLabel.value}${providerConfigured.value ? '（已配置）' : '（未配置）'}`,
   模型: selectedModelLabel.value,
@@ -992,7 +992,7 @@ const startOpenCode = async () => {
   }
   const directory = String(workbench.workspaceRoot.value || '').trim()
   if (!directory) {
-    window.$message?.warning('请先选择本地工作区，再启动 OpenCode')
+    window.$message?.warning('默认工作区仍在初始化，请稍后重试')
     return false
   }
   try {

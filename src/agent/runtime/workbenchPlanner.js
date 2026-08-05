@@ -6,6 +6,14 @@ function read(value) {
   return value && typeof value === 'object' && 'value' in value ? value.value : value
 }
 
+function readSetting(value) {
+  try {
+    return read(typeof value === 'function' ? value() : value)
+  } catch {
+    return undefined
+  }
+}
+
 function extractText(response) {
   if (typeof response === 'string') return response
   if (typeof response?.output_text === 'string') return response.output_text
@@ -151,30 +159,101 @@ function plannerPrompt({ session, tools }) {
   ].join('\n\n')
 }
 
-export function createWorkbenchPlanner({ sendChat, modelStore } = {}) {
+/**
+ * Create the Workbench planner.  The native DataEyes-compatible planner is
+ * always available; an optional OpenCode planner can be selected explicitly
+ * per session.  OpenCode is a planner transport only: tool execution still
+ * goes through the existing Workbench ToolRegistry and Electron approvals.
+ */
+export function createWorkbenchPlanner({
+  sendChat,
+  modelStore,
+  engine = 'native',
+  openCodePlannerFactory = null,
+  fallbackToNative = true,
+  onOpenCodeFallback = null
+} = {}) {
   if (typeof sendChat !== 'function') throw new TypeError('Workbench planner 需要 sendChat')
 
-  return {
-    async nextAction({ session, tools, signal } = {}) {
-      const response = await sendChat(plannerPrompt({ session, tools }), false, {
-        model: read(modelStore?.selectedChatModel),
-        isolated: true,
-        signal,
-        systemPrompt: '你是桌面 Agent 的单步调度器。严格返回一个 JSON next action。'
+  const nativeNextAction = async ({ session, tools, signal } = {}) => {
+    const response = await sendChat(plannerPrompt({ session, tools }), false, {
+      model: read(modelStore?.selectedChatModel),
+      isolated: true,
+      signal,
+      systemPrompt: '你是桌面 Agent 的单步调度器。严格返回一个 JSON next action。'
+    })
+    const text = extractText(response)
+    if (!text.trim()) {
+      const error = new Error('Workbench Planner 返回为空')
+      error.code = 'EMPTY_WORKBENCH_PLAN'
+      throw error
+    }
+    try {
+      return parseAction(text)
+    } catch (error) {
+      const invalid = new Error(`Workbench Planner 返回了无效动作：${error?.message || error}`)
+      invalid.code = 'INVALID_WORKBENCH_PLAN'
+      throw invalid
+    }
+  }
+
+  let remotePlanner = null
+  let remotePlannerPromise = null
+
+  const getRemotePlanner = async context => {
+    if (remotePlanner) return remotePlanner
+    if (typeof openCodePlannerFactory !== 'function') {
+      const error = new Error('OpenCode 本地引擎尚未连接；请在桌面设置中启动 OpenCode')
+      error.code = 'OPENCODE_ENGINE_UNAVAILABLE'
+      throw error
+    }
+    if (!remotePlannerPromise) {
+      remotePlannerPromise = Promise.resolve(openCodePlannerFactory({
+        modelStore,
+        session: context?.session
+      })).then(value => {
+        if (!value || typeof value.nextAction !== 'function') {
+          const error = new TypeError('OpenCode planner 工厂没有返回 nextAction')
+          error.code = 'OPENCODE_PLANNER_INVALID'
+          throw error
+        }
+        remotePlanner = value
+        return value
+      }).finally(() => {
+        remotePlannerPromise = null
       })
-      const text = extractText(response)
-      if (!text.trim()) {
-        const error = new Error('Workbench Planner 返回为空')
-        error.code = 'EMPTY_WORKBENCH_PLAN'
-        throw error
-      }
-      try {
-        return parseAction(text)
-      } catch (error) {
-        const invalid = new Error(`Workbench Planner 返回了无效动作：${error?.message || error}`)
-        invalid.code = 'INVALID_WORKBENCH_PLAN'
-        throw invalid
-      }
+    }
+    return remotePlannerPromise
+  }
+
+  const nextAction = async context => {
+    const selectedEngine = String(readSetting(engine) || 'native').trim().toLowerCase()
+    if (selectedEngine !== 'opencode') return nativeNextAction(context)
+    try {
+      const planner = await getRemotePlanner(context)
+      return await planner.nextAction(context)
+    } catch (error) {
+      try { onOpenCodeFallback?.(error) } catch { /* observability only */ }
+      if (!fallbackToNative) throw error
+      return nativeNextAction(context)
+    }
+  }
+
+  const reset = async () => {
+    try { await remotePlanner?.reset?.() } finally {
+      remotePlanner = null
+      remotePlannerPromise = null
+    }
+  }
+
+  return {
+    nextAction,
+    reset,
+    get engine() {
+      return String(readSetting(engine) || 'native').trim().toLowerCase()
+    },
+    get remoteSessionId() {
+      return remotePlanner?.sessionId || ''
     }
   }
 }

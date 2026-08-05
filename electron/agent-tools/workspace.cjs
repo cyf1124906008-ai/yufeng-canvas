@@ -191,11 +191,17 @@ function applyReverseLineHunks(document, reverseHunks, finalNewline) {
 }
 
 class WorkspaceManager {
-  constructor({ settingsPath = '' } = {}) {
+  constructor({ settingsPath = '', defaultRoot = '', fallbackRoot = '' } = {}) {
     this.settingsPath = settingsPath
+    // The default root is supplied by the desktop host. It is intentionally
+    // kept separate from the persisted/user-selected root so an existing
+    // workspace always wins during startup.
+    this.defaultRoot = typeof defaultRoot === 'string' ? defaultRoot : ''
+    this.fallbackRoot = typeof fallbackRoot === 'string' ? fallbackRoot : ''
     this.root = ''
     this.generation = 0
     this.initialized = false
+    this.initializationPromise = null
     // Raw rollback hunks are intentionally memory-only. Persisted Workbench
     // events receive a sanitized diff plus this opaque token.
     this.rollbackRecords = new Map()
@@ -232,16 +238,53 @@ class WorkspaceManager {
   }
 
   async initialize() {
+    if (this.initializationPromise) return this.initializationPromise
     if (this.initialized) return this.root
     this.initialized = true
-    if (!this.settingsPath) return this.root
+    this.initializationPromise = (async () => {
+      // Preserve a valid user-selected workspace. A stale/deleted persisted
+      // path is treated like a missing path and falls back to the host default.
+      let persistedRoot = ''
+      if (this.settingsPath) {
+        try {
+          const parsed = JSON.parse(await fs.promises.readFile(this.settingsPath, 'utf8'))
+          if (typeof parsed?.workspaceRoot === 'string' && parsed.workspaceRoot.trim()) {
+            persistedRoot = parsed.workspaceRoot
+          }
+        } catch {
+          persistedRoot = ''
+        }
+      }
+      if (persistedRoot) {
+        try {
+          await this.setRoot(persistedRoot, { persist: false })
+          return this.root
+        } catch {
+          this.root = ''
+        }
+      }
+
+      // Keep the least-privilege boundary: only dedicated app folders are
+      // created automatically, never the user's entire Documents/Home folder.
+      // The app-data fallback covers locked-down or unavailable Documents
+      // locations (for example, a macOS privacy denial).
+      const automaticRoots = [...new Set([this.defaultRoot, this.fallbackRoot].filter(Boolean))]
+      for (const automaticRoot of automaticRoots) {
+        try {
+          await fs.promises.mkdir(automaticRoot, { recursive: true })
+          await this.setRoot(automaticRoot, { persist: true })
+          break
+        } catch {
+          this.root = ''
+        }
+      }
+      return this.root
+    })()
     try {
-      const parsed = JSON.parse(await fs.promises.readFile(this.settingsPath, 'utf8'))
-      if (typeof parsed?.workspaceRoot === 'string') await this.setRoot(parsed.workspaceRoot, { persist: false })
-    } catch {
-      this.root = ''
+      return await this.initializationPromise
+    } finally {
+      this.initializationPromise = null
     }
-    return this.root
   }
 
   async getRoot() {

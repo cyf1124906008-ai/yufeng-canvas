@@ -10,6 +10,10 @@ export const DEFAULT_AGENT_SETTINGS = Object.freeze({
   launchAtLogin: false,
   preventSleepDuringRuns: true,
   approvalMode: 'ask',
+  // The native planner remains the safe default. OpenCode is an explicit,
+  // user-selected local sidecar and never becomes an authority by restoring
+  // a persisted permission or API credential.
+  agentEngine: 'native',
   reasoningEffort: 'auto',
   maxActionsPerTurn: 24,
   tools: Object.freeze({
@@ -24,6 +28,7 @@ export const DEFAULT_AGENT_SETTINGS = Object.freeze({
 const THEMES = new Set(['system', 'light', 'dark'])
 const DENSITIES = new Set(['comfortable', 'compact'])
 const APPROVAL_MODES = new Set(['read_only', 'ask', 'auto', 'full_access'])
+const AGENT_ENGINES = new Set(['native', 'opencode'])
 const REASONING_EFFORTS = new Set(['auto', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'])
 const TOOL_GROUPS = new Set(Object.keys(DEFAULT_AGENT_SETTINGS.tools))
 
@@ -62,6 +67,7 @@ export function normalizeAgentSettings(value = {}, { restoring = false, legacyTh
     ? source.theme
     : (THEMES.has(legacyTheme) && legacyTheme !== 'system' ? legacyTheme : DEFAULT_AGENT_SETTINGS.theme)
   const storedApproval = APPROVAL_MODES.has(source.approvalMode) ? source.approvalMode : DEFAULT_AGENT_SETTINGS.approvalMode
+  const storedEngine = AGENT_ENGINES.has(source.agentEngine) ? source.agentEngine : DEFAULT_AGENT_SETTINGS.agentEngine
   const tools = source.tools && typeof source.tools === 'object' ? source.tools : {}
 
   return {
@@ -76,6 +82,7 @@ export function normalizeAgentSettings(value = {}, { restoring = false, legacyTh
     // Automatic and full access execution are intentionally session-only. A
     // restarted application always falls back to explicit approval.
     approvalMode: restoring && ['auto', 'full_access'].includes(storedApproval) ? 'ask' : storedApproval,
+    agentEngine: storedEngine,
     reasoningEffort: REASONING_EFFORTS.has(source.reasoningEffort)
       ? source.reasoningEffort
       : DEFAULT_AGENT_SETTINGS.reasoningEffort,
@@ -173,6 +180,11 @@ export function createAgentSettingsStore({
     state.approvalMode = value
     return true
   }
+  const setAgentEngine = value => {
+    if (!AGENT_ENGINES.has(value)) return false
+    state.agentEngine = value
+    return true
+  }
   const setReasoningEffort = value => {
     if (!REASONING_EFFORTS.has(value)) return false
     state.reasoningEffort = value
@@ -212,6 +224,7 @@ export function createAgentSettingsStore({
     setTheme,
     setDensity,
     setApprovalMode,
+    setAgentEngine,
     setReasoningEffort,
     setMaxActionsPerTurn,
     setToolEnabled,

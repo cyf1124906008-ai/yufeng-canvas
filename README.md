@@ -48,15 +48,16 @@ Observation → 继续 / 改道 / 请求批准 / 最终答复
 | --- | --- |
 | Codex-style Agent Workbench | 新三栏命令中心：工作区与任务历史、对话和实时工具轨迹、计划 / 文件变更 / 产物检查器；支持多轮补充和文本附件。 |
 | Generic Agent Session | Planner 每轮只返回 `message`、`tool_call` 或 `finish`；工具失败与拒绝都会作为 observation 继续决策。 |
+| OpenCode Local Planner | 桌面端可选用本机 `opencode serve` 负责任务拆解；真正的文件、终端和电脑操作仍由 YUFENG ToolRegistry、审批和 Electron 主进程执行。OpenCode 的 Provider 凭据不从 YUFENG 转发。 |
 | Task Plan | Agent 可建立并更新结构化步骤，最多一个步骤处于 `in_progress`；计划状态通过事件流实时投影，不展示隐藏思维链。 |
-| Local Workspace Tools | 在用户选择的根目录内列文件、读文本、搜索和新建文件；现有文件优先使用 SHA 绑定的行级补丁，产生可审查 diff。 |
+| Local Workspace Tools | 首次启动自动使用专用的 `YUFENG Agent Workspace`，也可在侧栏切换到用户选择的项目目录；在根目录内列文件、读文本、搜索和新建文件，现有文件优先使用 SHA 绑定的行级补丁，产生可审查 diff。 |
 | Conditional File Rollback | 每次结构化补丁生成当前 App 会话内的一次性回滚记录；只有记录仍存在且当前文件 SHA 与原变更一致时，才可经再次审批原子回滚。 |
 | Controlled Terminal | 使用 executable + args 运行，不拼接 shell；支持超时、输出上限、实时阶段与输出长度、停止，以及结束后的统一脱敏输出。每次执行都要批准。 |
 | macOS Computer Tools | 检查系统权限、截屏并用 Vision 分析、打开应用、坐标点击和输入文本；副作用逐项批准。 |
 | Provider Console | 统一管理 Provider、默认与能力专用 Base URL / API Key、连接测试、接口映射、模型同步、DataEyes 实测目录导入与手动模型目录。 |
 | Headless Provider Runtime | Agent 工具直接调用图片、Vision 与视频 Provider，不依赖 Canvas 组件挂载或节点点击。 |
 | Result Observation | 图片生成后自动做技术检查与视觉评价；未达标时改进提示词并有限重做。 |
-| Model Intelligence Router | 按能力、质量、速度、成本、可靠性与可用性排序，安全处理临时失败与 fallback。 |
+| Model Intelligence Router | 按能力、质量、速度、成本、可靠性与可用性排序，安全处理临时失败与 fallback；在 Composer 或 Provider Console 选定模型后可锁定该能力，选择“自动路由”才恢复智能排序。 |
 | Artifact Store | Planner 只接触稳定作品引用；媒体内容、API Key 和完整响应不进入 Agent 上下文。 |
 | Local Task History | 最多保留 30 条本地事件流；截图字节、凭据和裸媒体内容不会写入任务历史。 |
 | Live Task Intervention | 运行中可随时停止、发送引导或修改要求；引导在安全检查点进入下一轮规划，取消完全落定后可在同一会话中继续。 |
@@ -71,13 +72,14 @@ Observation → 继续 / 改道 / 请求批准 / 最终答复
 
 - 默认“每次审批”模式下，`workspace.write`、`workspace.patch`、`workspace.revert_patch`、`terminal.run`、截屏、打开应用、点击、输入文本和 Creative 模型调用都会先暂停，必须由用户在界面中明确批准；桌面副作用还会由 Electron 主进程弹出一次绑定实际参数的原生确认。
 - “完全访问”不会持久化，也不会授予无限制系统权限：它只绑定当前 Electron 窗口、当前工作区身份和当前 App 会话，切换工作区、刷新、崩溃或退出即撤销；工作区 realpath、文件 SHA、工具参数校验和 macOS 系统权限始终有效。
-- 文件访问限制在用户选择的 workspace root 内，并校验 realpath、父目录与符号链接。
+- 文件访问限制在当前 workspace root 内（首次启动为专用默认目录，也可切换到用户选择的项目），并校验 realpath、父目录与符号链接。
 - 结构化补丁以 `workspace.read` 返回的 SHA-256 绑定基线，并精确校验旧行；文件变化或补丁上下文不一致时拒绝写入。回滚是条件能力，不是永久撤销：原始补丁只在当前 App 内存中保留，切换工作区、记录过期或重启后会拒绝。
 - `.env`、私钥、credentials 等敏感文件不会被自动读取或搜索；普通文件内容中的常见 Key、Bearer Token 和私钥片段会在离开主进程前脱敏。
 - 终端不是完整 OS 沙箱：批准后启动的程序仍拥有当前 macOS 用户权限，所以批准卡会显示完整命令与参数。
 - 终端取消采用 best-effort 边界：macOS/Linux 会终止受控进程组，Windows 会终止直接子进程；程序若主动脱离进程组或另建后台服务，系统无法保证后代全部退出，此时任务会明确显示 `termination_unconfirmed`，不会伪装成已完全终止。
 - 屏幕截图只保留在当前 App 内存中，用于预览与 Vision 分析；任务历史不会保存截图 base64。
 - Web 调试页可以查看 Workbench 界面，但真实本地工具只在 Electron App 中启用。
+- OpenCode Local 只在 Electron App 中启动；sidecar 固定绑定当前 workspace，并通过 Main-process IPC 访问。Web 预览不会假装拥有本机文件或终端权限。
 
 ## 快速开始
 
@@ -89,6 +91,8 @@ pnpm dev
 ```
 
 打开“模型与 API”进入 Provider Console，配置自己的 Provider、Base URL、API Key 和模型名，也可以测试连接、同步模型或导入 DataEyes 实测目录。YUFENG Agent 不内置或上传用户的 Key。
+
+桌面端如果要使用 OpenCode 作为 Planner：先在本机安装并登录 OpenCode，然后在设置的“Agent”页选择“OpenCode Local”并启动 sidecar。YUFENG 首次启动会自动创建专用的 `YUFENG Agent Workspace`，需要时仍可从侧栏切换工作区。YUFENG 只读取 OpenCode 自己的模型目录；只有目录中已连接的 `provider/model` 才会传给 OpenCode，否则使用它配置的默认模型。官方服务端接口说明见 [OpenCode Server 文档](https://dev.opencode.ai/docs/server/)。
 
 推荐的 DataEyes 地址：
 

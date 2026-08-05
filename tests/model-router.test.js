@@ -100,6 +100,21 @@ test('V0.3 applies hard capability and supported-parameter constraints before pr
   assert.equal(route.candidates.length, 1)
 })
 
+test('an explicit Workbench model lock wins over quality scoring without bypassing capability filters', () => {
+  const router = new ModelRouter(createStore({
+    modelRoutingModes: { image: 'locked' },
+    selectedImageModel: ref('economy-lite'),
+    availableImageModels: ref([
+      { key: 'economy-lite', quality: 40, speed: 90 },
+      { key: 'quality-pro', quality: 100, speed: 30 }
+    ])
+  }))
+
+  const route = router.route('text_to_image', { policy: 'quality' })
+  assert.equal(route.model, 'economy-lite')
+  assert.deepEqual(route.candidates.map(candidate => candidate.model), ['economy-lite'])
+})
+
 test('V0.3 infers bounded routing policies from the creative goal', () => {
   assert.equal(inferRoutingPolicy('请用最高质量做电影级产品广告'), 'quality')
   assert.equal(inferRoutingPolicy('赶时间，尽快给我一张图'), 'speed')

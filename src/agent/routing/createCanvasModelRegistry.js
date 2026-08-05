@@ -234,14 +234,15 @@ function resolveGroup(groupOrCapability) {
 }
 
 /**
- * Convert the current Canvas model store into a provider-neutral registry.
- * Selected models are annotations only: all available candidates remain in
- * their original order so a router can trade preference against capability,
- * price, speed, reliability and availability.
+ * Convert the current model store into a provider-neutral registry.
+ * Selected models remain preference annotations in `auto` mode; an explicit
+ * `locked` routing mode is carried separately so the router can honor a
+ * deliberate user choice without weakening capability/availability filters.
  */
 export function createCanvasModelRegistry(modelStore = {}) {
   const provider = String(read(modelStore.currentProvider ?? modelStore.provider) || '').trim()
   const preferences = {}
+  const routingModes = {}
   const byGroup = {}
 
   for (const group of Object.keys(GROUP_CONFIG)) {
@@ -251,6 +252,11 @@ export function createCanvasModelRegistry(modelStore = {}) {
     const seen = new Set()
 
     preferences[group] = selectedKey
+    const configuredModes = read(modelStore.modelRoutingModes ?? modelStore.routingModes)
+    const configuredMode = configuredModes && typeof configuredModes === 'object'
+      ? read(configuredModes[group])
+      : ''
+    routingModes[group] = configuredMode === 'locked' ? 'locked' : 'auto'
     byGroup[group] = values
       .map((model) => createCandidate(model, { group, provider, selectedKey }))
       .filter((candidate) => {
@@ -277,13 +283,19 @@ export function createCanvasModelRegistry(modelStore = {}) {
     return group ? preferences[group] : ''
   }
 
+  const getRoutingMode = (groupOrCapability) => {
+    const group = resolveGroup(groupOrCapability)
+    return group ? routingModes[group] : 'auto'
+  }
+
   return {
     provider,
     preferences,
     candidates,
     byGroup,
     getCandidates,
-    getPreference
+    getPreference,
+    getRoutingMode
   }
 }
 

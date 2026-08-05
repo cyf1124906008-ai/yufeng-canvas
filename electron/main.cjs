@@ -292,6 +292,17 @@ const openCodeBaseUrl = () => {
     error.code = 'OPENCODE_URL_QUERY_UNSUPPORTED'
     throw error
   }
+  // Every request carries the absolute workspace directory so OpenCode can
+  // scope its project context. Keep that path on this machine; a remote URL
+  // would otherwise turn an environment-only opt-in into an accidental
+  // workspace disclosure. Remote OpenCode can be added later with an
+  // explicit authenticated transport and a separate privacy confirmation.
+  const loopbackHosts = new Set(['localhost', '127.0.0.1', '::1', '[::1]'])
+  if (!loopbackHosts.has(String(parsed.hostname || '').toLowerCase())) {
+    const error = new TypeError('YUFENG_OPENCODE_URL 目前只允许本机地址')
+    error.code = 'OPENCODE_REMOTE_UNSUPPORTED'
+    throw error
+  }
   // The URL is never accepted from renderer input.  It is an explicit
   // process-level opt-in for a user-managed `opencode serve` instance.
   return parsed.toString().replace(/\/+$/, '')
@@ -1428,9 +1439,18 @@ function createWindow() {
 
 app.whenReady().then(async () => {
   migrateLegacyUserDataStorage()
+  // Source/dev runs are intentionally bound to the checked-out project so a
+  // developer can ask the Agent to inspect and repair this repository without
+  // seeing a folder picker. Packaged builds use a dedicated user-owned folder
+  // instead; the app data path remains a permission-safe fallback.
+  const defaultWorkspaceRoot = app.isPackaged
+    ? path.join(app.getPath('documents'), 'YUFENG Agent Workspace')
+    : app.getAppPath()
   const agentTools = createAgentTools({
     userDataPath: app.getPath('userData'),
     tempPath: app.getPath('temp'),
+    defaultRoot: defaultWorkspaceRoot,
+    fallbackRoot: path.join(app.getPath('userData'), 'agent-tools', 'workspace'),
     systemPreferences
   })
   desktopAgentTools = agentTools

@@ -15,7 +15,7 @@
       <workbench-icon name="monitor" :size="14" />自动化需要 YUFENG Desktop App；Web 预览只能查看界面。
     </p>
     <p v-else-if="!workspaceRoot" class="desktop-notice is-warning">
-      <workbench-icon name="alert" :size="14" />尚未选择项目目录。你仍可创建不绑定工作区的自动化。
+      <workbench-icon name="alert" :size="14" />当前没有可用工作区。桌面 App 会自动创建默认工作区；你仍可创建不绑定工作区的自动化。
     </p>
 
     <form v-if="formOpen" class="automation-form" @submit.prevent="submitForm">
@@ -82,7 +82,7 @@
 
         <section class="form-section behavior-section">
           <div class="form-toggle-row">
-            <div><strong>绑定当前工作区</strong><p>{{ draft.bindWorkspace ? (draft.workspaceRoot || '尚未选择项目目录') : '不向任务提供工作区目录' }}</p></div>
+            <div><strong>绑定当前工作区</strong><p>{{ draft.bindWorkspace ? (draft.workspaceRoot || '默认工作区正在初始化') : '不向任务提供工作区目录' }}</p></div>
             <button type="button" class="switch" role="switch" :aria-checked="draft.bindWorkspace" :class="{ 'is-on': draft.bindWorkspace }" :disabled="formLocked || !workspaceRoot" @click="toggleWorkspaceBinding"><i></i></button>
           </div>
           <small v-if="validation.errors.workspaceRoot" class="field-error">{{ validation.errors.workspaceRoot }}</small>

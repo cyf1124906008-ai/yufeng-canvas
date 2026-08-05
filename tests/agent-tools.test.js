@@ -201,6 +201,82 @@ test('workspace tools stay inside the canonical root and reject symlinks', async
   }
 })
 
+test('workspace auto-binds the dedicated default root, persists it, and restores it', async () => {
+  const base = await mkdtemp(path.join(os.tmpdir(), 'yufeng-default-workspace-'))
+  const settingsPath = path.join(base, 'agent-tools', 'settings.json')
+  const defaultRoot = path.join(base, 'Documents', 'YUFENG Agent Workspace')
+  try {
+    const workspace = new WorkspaceManager({ settingsPath, defaultRoot })
+    const [rootResult, identityResult] = await Promise.all([
+      workspace.getRoot(),
+      workspace.getIdentity()
+    ])
+    const canonicalRoot = await realpath(defaultRoot)
+    assert.equal(rootResult.workspaceRoot, canonicalRoot)
+    assert.equal(identityResult.workspaceRoot, canonicalRoot)
+    assert.equal(identityResult.workspaceGeneration, 1)
+    assert.deepEqual(JSON.parse(await readFile(settingsPath, 'utf8')), { workspaceRoot: canonicalRoot })
+
+    const restored = new WorkspaceManager({
+      settingsPath,
+      defaultRoot: path.join(base, 'Documents', 'a-different-default')
+    })
+    const [restoredRoot, restoredIdentity] = await Promise.all([
+      restored.getRoot(),
+      restored.getIdentity()
+    ])
+    assert.equal(restoredRoot.workspaceRoot, canonicalRoot)
+    assert.equal(restoredIdentity.workspaceRoot, canonicalRoot)
+    assert.equal(restoredIdentity.workspaceGeneration, 1)
+  } finally {
+    await rm(base, { recursive: true, force: true })
+  }
+})
+
+test('workspace initialization falls back when the preferred default root cannot be created', async () => {
+  const base = await mkdtemp(path.join(os.tmpdir(), 'yufeng-default-workspace-fallback-'))
+  const settingsPath = path.join(base, 'settings.json')
+  const blockedRoot = path.join(base, 'blocked-root')
+  const fallbackRoot = path.join(base, 'agent-data', 'workspace')
+  try {
+    await writeFile(blockedRoot, 'not a directory')
+    await writeFile(settingsPath, JSON.stringify({ workspaceRoot: path.join(base, 'deleted-workspace') }))
+    const workspace = new WorkspaceManager({ settingsPath, defaultRoot: blockedRoot, fallbackRoot })
+    const identity = await workspace.getIdentity()
+    assert.equal(identity.workspaceRoot, await realpath(fallbackRoot))
+    assert.equal(identity.workspaceGeneration, 1)
+    assert.deepEqual(JSON.parse(await readFile(settingsPath, 'utf8')), { workspaceRoot: identity.workspaceRoot })
+  } finally {
+    await rm(base, { recursive: true, force: true })
+  }
+})
+
+test('agent tools facade exposes the automatically selected default workspace', async () => {
+  const base = await mkdtemp(path.join(os.tmpdir(), 'yufeng-agent-default-facade-'))
+  const defaultRoot = path.join(base, 'YUFENG Agent Workspace')
+  try {
+    const tools = createAgentTools({
+      userDataPath: base,
+      tempPath: base,
+      defaultRoot,
+      fallbackRoot: path.join(base, 'fallback'),
+      platform: 'win32'
+    })
+    const [root, identity, capabilities] = await Promise.all([
+      tools.getWorkspaceRoot(),
+      tools.getWorkspaceIdentity(),
+      tools.getCapabilities()
+    ])
+    const canonicalRoot = await realpath(defaultRoot)
+    assert.equal(root.workspaceRoot, canonicalRoot)
+    assert.equal(identity.workspaceRoot, canonicalRoot)
+    assert.equal(identity.workspaceGeneration, 1)
+    assert.equal(capabilities.workspaceRoot, canonicalRoot)
+  } finally {
+    await rm(base, { recursive: true, force: true })
+  }
+})
+
 test('workspace patch applies exact line hunks against a SHA-bound base', async () => {
   const files = await fixture()
   try {

@@ -70,7 +70,7 @@ Workbench UI 只消费事件投影，不直接执行文件、终端或电脑操�
 
 补丁的行号基于同一个原文件。执行前后会检查：
 
-1. 路径仍位于用户选择的 workspace root，且不经过符号链接。
+1. 路径仍位于当前 workspace root（桌面 App 首次启动自动绑定专用默认目录），且不经过符号链接。
 2. 文件是有效 UTF-8 文本，大小与补丁输入均在上限内。
 3. 当前 SHA-256 与 `beforeSha256` 完全一致。
 4. 每个 `oldLines` 与指定位置完全一致，hunk 不重叠。
@@ -152,7 +152,7 @@ V0.7 新增三类 append-only Workbench 事件：
 V0.7 不包含以下能力：
 
 1. **真正 PTY**：没有交互式 shell、stdin 会话、终端 resize 或 TUI 支持。
-2. **任务级多并发隔离 / Git worktree**：没有为每个任务自动创建独立工作树、容器或文件系统；任务仍操作用户明确选择的同一个 workspace root。
+2. **任务级多并发隔离 / Git worktree**：没有为每个任务自动创建独立工作树、容器或文件系统；任务仍操作当前绑定的同一个 workspace root，用户可以显式切换目录。
 3. **可配置权限模式**：没有 `read-only`、`ask`、`full-access` 等策略档位，也没有持久命令 allowlist。当前策略仍是安全读取直接执行，危险副作用逐项审批并由 Electron 原生确认。
 4. **Checkpoint 续跑**：任务历史可恢复查看，但不会自动续跑中断的命令、补丁或 Provider 任务。
 

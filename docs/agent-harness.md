@@ -26,17 +26,20 @@ WorkbenchEventStream → Projector → Workbench UI
 WorkbenchSessionRepository → 本地任务历史
 ```
 
+Planner 可以使用两种执行引擎：默认的 YUFENG Native，或桌面端显式启动的 OpenCode Local。OpenCode 只负责拆解下一步；它通过 Electron Main 的受限 IPC 读取当前工作区并返回结构化动作，动作仍回到同一个 ToolRegistry 和审批链路，不会让 OpenCode 直接取得 YUFENG 的 API Key 或系统控制权。
+
 关键边界：
 
 - 通用 Planner 只看到注册工具的名称、描述、schema、风险和审批策略，不直接接触 Electron IPC。
 - Creative 工具内部仍只调用 `generate_image`、`analyze_image`、`generate_video` 等能力，不直接点名供应商模型。
 - 写文件、运行命令和 macOS 控制在执行前必须进入 `awaiting_approval`；模型不能自行设置 approval。
-- 文件工具只访问用户选择的真实工作区根目录；终端使用 executable + args，不使用 shell 字符串拼接。
+- 文件工具只访问当前真实工作区根目录；桌面 App 首次启动自动绑定专用的 `YUFENG Agent Workspace`（源码开发模式绑定当前 checkout），用户仍可从侧栏切换项目；终端使用 executable + args，不使用 shell 字符串拼接。
 - 终端超时和取消是 best-effort：Unix 终止受控进程组，Windows 终止直接子进程。主动脱离该边界的后代进程不承诺被终止，未观察到直接进程退出时返回 `termination_unconfirmed`。
 - Provider 工具不导入 Canvas store，不创建节点，也不要求 Vue Flow 组件处于挂载状态。
 - 图片和视频的真实 URL 只保存在 ArtifactStore 与展示层；Planner 看到稳定 artifact ID。
 - API Key、裸 base64、完整 Provider 响应和媒体 URL不会进入 Planner 上下文或运行快照。
 - Workbench UI 只投影事件和提交用户决定，不直接承担工具执行职责；桌面 App 和 Web 调试页复用同一套界面。
+- 模型选择有明确的 `auto` 与 `locked` 两种模式：自动模式按能力和任务约束路由，用户在 Composer / Provider Console 选中的模型会锁定为首选；遇到硬能力不兼容时才允许安全 fallback。
 - 运行历史只在本地展示，不回灌 Planner 上下文；凭据、data URL、blob URL 和裸 base64 不进入持久化记录。
 
 ## 已完成阶段

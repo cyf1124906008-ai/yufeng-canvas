@@ -134,9 +134,10 @@ export class ModelRouter {
     const scored = scorer.rank(candidates, requirements, policy)
     const originals = new Map(candidates.map((candidate) => [modelKey(candidate), candidate]))
     const selectedPreference = registry.getPreference?.(group) || ''
+    const selectedLocked = options.lockSelected === true || registry.getRoutingMode?.(group) === 'locked'
     const bonus = preferenceBonus(options)
 
-    return scored
+    const ranked = scored
       .map((entry) => {
         const candidate = originals.get(entry.profile.key) || entry.profile
         const preferred = candidate.preferred === true || entry.profile.key === selectedPreference
@@ -169,6 +170,17 @@ export class ModelRouter {
         left.baseRank - right.baseRank ||
         left.model.localeCompare(right.model)
       )
+    // A concrete model chosen in the Workbench can be locked explicitly.
+    // Keep the intelligent scorer as the default, but do not silently replace
+    // a user's deliberate model choice when the selected candidate satisfies
+    // the task constraints. If it is incompatible, retain the safe ranked
+    // fallback instead of fabricating an impossible route.
+    const selected = selectedLocked && selectedPreference
+      ? ranked.filter(entry => entry.model === selectedPreference)
+      : []
+    const ordered = selected.length ? selected : ranked
+
+    return ordered
       .map((entry, index) => ({ ...entry, rank: index + 1 }))
   }
 

@@ -52,7 +52,7 @@ attempt #1 ── retryable failure ──→ attempt #2
 规则：
 
 - 未知数据保持未知，不把缺失价格宣传成免费，也不伪造成功率。
-- 旧模型对象继续可用。适配器从现有 `availableChatModels`、`availableImageModels`、`availableVideoModels` 补充能力组；当前用户选择只作为 preference，不再成为硬锁。
+- 旧模型对象继续可用。适配器从现有 `availableChatModels`、`availableImageModels`、`availableVideoModels` 补充能力组；历史配置默认仍按 preference 参与排序，但用户在 Composer / Provider Console 明确选定模型后会写入 `locked` 模式。
 - Registry 和 Planner 上下文中不出现 API Key、Base URL 或媒体地址。
 - Provider `/models` 响应如果携带 `capabilities`、`quality`、`speed`、`cost/pricing`、`reliability`、`availability`、`supported`，本地模型 Store 应保留这些安全元数据。
 

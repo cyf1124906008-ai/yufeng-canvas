@@ -99,7 +99,7 @@ export function validateAutomationDraft(draft = {}) {
     errors.approvalMode = '请选择有效的执行模式'
   }
   if (draft.bindWorkspace && !String(draft.workspaceRoot || '').trim()) {
-    errors.workspaceRoot = '请先在工作台选择项目目录'
+    errors.workspaceRoot = '当前没有可用工作区；桌面 App 会自动创建默认工作区'
   }
 
   return { valid: Object.keys(errors).length === 0, errors }

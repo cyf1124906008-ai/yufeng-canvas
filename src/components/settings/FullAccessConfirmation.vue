@@ -127,7 +127,7 @@ const riskItems = FULL_ACCESS_RISK_ITEMS
 const guardrails = FULL_ACCESS_GUARDRAILS
 
 const normalizedWorkspace = computed(() => normalizeFullAccessWorkspace(props.workspaceRoot))
-const workspaceCopy = computed(() => normalizedWorkspace.value || '尚未选择工作区')
+const workspaceCopy = computed(() => normalizedWorkspace.value || '默认工作区正在初始化')
 const confirmEnabled = computed(() => canConfirmFullAccess({
   show: props.show,
   busy: props.busy,

@@ -101,7 +101,10 @@ export function useAgentWorkbench({
   approvalMode: initialApprovalMode = 'ask',
   toolGroups: initialToolGroups = null,
   maxActionsPerTurn = 24,
-  reasoningEffort = 'auto'
+  reasoningEffort = 'auto',
+  planner: injectedPlanner = null,
+  plannerFactory: injectedPlannerFactory = null,
+  plannerOptions = {}
 } = {}) {
   if (!modelStore) throw new TypeError('useAgentWorkbench 需要 modelStore')
 
@@ -131,7 +134,14 @@ export function useAgentWorkbench({
   for (const [group, enabled] of Object.entries(toolGroupState.value)) {
     setWorkbenchToolGroupEnabled(toolRegistry, group, enabled)
   }
-  const planner = createWorkbenchPlanner({ sendChat, modelStore })
+  const createPlanner = () => {
+    if (typeof injectedPlannerFactory === 'function') {
+      return injectedPlannerFactory({ sendChat, modelStore, ...plannerOptions })
+    }
+    if (injectedPlanner) return injectedPlanner
+    return createWorkbenchPlanner({ sendChat, modelStore, ...plannerOptions })
+  }
+  let planner = null
   const repository = injectedHistoryRepository === undefined
     ? createHistoryRepository(historyStorage === undefined ? defaultStorage() : historyStorage)
     : injectedHistoryRepository
@@ -226,14 +236,17 @@ export function useAgentWorkbench({
     return nextSession
   }
 
-  const createSession = ({ sessionId, events = [] } = {}) => attachSession(new WorkbenchSession({
+  const createSession = ({ sessionId, events = [] } = {}) => {
+    planner = createPlanner()
+    return attachSession(new WorkbenchSession({
     sessionId,
     events,
     planner,
     toolRegistry,
     approvalMode: selectedApprovalMode.value,
     maxActionsPerTurn: resolveMaxActionsPerTurn(maxActionsPerTurn)
-  }), { history: false })
+    }), { history: false })
+  }
 
   const newTask = () => {
     if (session.value && ACTIVE_STATUSES.has(projection.value.status)) {
@@ -341,7 +354,7 @@ export function useAgentWorkbench({
       return attachSession(new WorkbenchSession({
         sessionId: record.sessionId,
         events: interruptedEvents(record),
-        planner,
+        planner: (planner = createPlanner()),
         toolRegistry,
         maxActionsPerTurn: resolveMaxActionsPerTurn(maxActionsPerTurn)
       }), { persist: true, history: true })

@@ -929,7 +929,11 @@ const handleSelectActiveModel = modelKey => {
     video: 'selectedVideoModel'
   }[activeCatalog.value]
   if (!selectedField || !modelKey) return
-  modelStore[selectedField] = modelKey
+  if (typeof modelStore.setSelectedModel === 'function') {
+    modelStore.setSelectedModel(activeCatalog.value, modelKey, { mode: 'locked' })
+  } else {
+    modelStore[selectedField] = modelKey
+  }
   window.$message?.success(`${getCapabilityLabel(activeCatalog.value)}模型已切换`)
 }
 
