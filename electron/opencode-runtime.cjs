@@ -1,11 +1,11 @@
 /**
  * Optional OpenCode sidecar manager for the Electron main process.
  *
- * This module is intentionally not wired into IPC yet.  It gives the app a
- * safe, testable boundary for starting a user-installed/bundled `opencode`
- * server and for talking to its stable v1-compatible HTTP endpoints.  The
- * renderer can opt in later without duplicating process discovery or leaking
- * provider credentials into the browser bundle.
+ * Electron Main owns this safe, testable boundary for starting a
+ * user-installed/bundled `opencode` server and for talking to its stable
+ * v1-compatible HTTP endpoints. The renderer opts in through narrowly scoped
+ * IPC methods; process discovery and provider credentials never cross the
+ * context bridge.
  */
 
 const fs = require('node:fs')
@@ -74,6 +74,17 @@ function pathCandidates({ env = process.env, cwd = process.cwd(), appPath = '', 
     clean(path.join(cwd, 'node_modules')),
     clean(path.join(cwd, '..'))
   ].filter(Boolean)
+  // GUI-launched Electron does not always inherit the shell PATH. Include
+  // the official per-user install location used by `opencode` on macOS/Linux
+  // (and harmlessly probe the analogous user bin directories on Windows).
+  const home = clean(env.HOME || env.USERPROFILE)
+  if (home) {
+    for (const executable of executables) {
+      add(path.join(home, '.opencode', 'bin', executable))
+      add(path.join(home, '.local', 'bin', executable))
+      add(path.join(home, 'bin', executable))
+    }
+  }
   for (const root of roots) {
     for (const executable of executables) {
       add(path.join(root, executable))
@@ -212,6 +223,14 @@ class OpenCodeRuntimeError extends Error {
   }
 }
 
+// Keep connection failures stable and intentionally URL-free. Electron
+// surfaces only the error code/message to the renderer, so a fetch error must
+// never echo a local path, remote URL, or provider credential.
+const openCodeUnavailableError = (status = 0) => new OpenCodeRuntimeError(
+  'OpenCode 服务不可用',
+  { code: 'OPENCODE_UNAVAILABLE', status, payload: null }
+)
+
 class OpenCodeRuntime {
   constructor({
     binaryPath = '',
@@ -254,6 +273,7 @@ class OpenCodeRuntime {
     this.state = 'stopped'
     this.startedAt = 0
     this.lastError = null
+    this.healthInfo = null
     this._startPromise = null
   }
 
@@ -265,6 +285,12 @@ class OpenCodeRuntime {
       binaryPath: this.resolvedBinaryPath || this.options.binaryPath || '',
       directory: this.options.directory || '',
       startedAt: this.startedAt || 0,
+      ...(this.healthInfo && typeof this.healthInfo === 'object'
+        ? {
+            healthy: this.healthInfo.healthy === true,
+            version: clean(this.healthInfo.version)
+          }
+        : {}),
       lastError: this.lastError
         ? { code: this.lastError.code || 'OPENCODE_RUNTIME_ERROR', message: this.lastError.message }
         : null
@@ -283,16 +309,35 @@ class OpenCodeRuntime {
 
   async health({ signal } = {}) {
     const url = this.url || normalizeBaseUrl(this.options.baseUrl, this.options.hostname, this.options.port)
-    const response = await this.options.fetchImpl(`${url}/global/health`, { signal })
-    const payload = await readPayload(response)
-    if (!response.ok) throw new OpenCodeRuntimeError('OpenCode health 请求失败', { status: response.status, payload })
+    let response
+    let payload
+    try {
+      response = await this.options.fetchImpl(`${url}/global/health`, { signal })
+      payload = await readPayload(response)
+    } catch (error) {
+      if (signal?.aborted) throw abortError(signal.reason)
+      const unavailable = openCodeUnavailableError()
+      this.lastError = unavailable
+      this.healthInfo = null
+      if (this.state === 'running') this.state = 'error'
+      throw unavailable
+    }
+    if (!response.ok || payload?.healthy !== true) {
+      const unavailable = openCodeUnavailableError(response.status)
+      this.lastError = unavailable
+      this.healthInfo = null
+      if (this.state === 'running') this.state = 'error'
+      throw unavailable
+    }
+    this.lastError = null
+    this.healthInfo = payload
     return payload
   }
 
   async start({ signal } = {}) {
     if (this.state === 'running') {
       try {
-        await this.health({ signal })
+        this.healthInfo = await this.health({ signal })
         return this.status()
       } catch {
         this.state = 'stopped'
@@ -316,9 +361,13 @@ class OpenCodeRuntime {
       const response = await this.options.fetchImpl(`${configuredUrl}/global/health`, { signal })
       if (response.ok) {
         const payload = await readPayload(response)
-        this.url = configuredUrl
-        this.state = 'running'
-        return this.statusWithHealth(payload)
+        if (payload?.healthy === true) {
+          this.url = configuredUrl
+          this.healthInfo = payload
+          this.lastError = null
+          this.state = 'running'
+          return this.statusWithHealth(payload)
+        }
       }
     } catch (error) {
       if (signal?.aborted) throw abortError(signal.reason)
@@ -396,9 +445,13 @@ class OpenCodeRuntime {
         const response = await this.options.fetchImpl(`${candidateUrl}/global/health`, { signal })
         if (response.ok) {
           const payload = await readPayload(response)
-          this.url = candidateUrl
-          this.state = 'running'
-          return this.statusWithHealth(payload)
+          if (payload?.healthy === true) {
+            this.url = candidateUrl
+            this.healthInfo = payload
+            this.lastError = null
+            this.state = 'running'
+            return this.statusWithHealth(payload)
+          }
         }
       } catch (error) {
         if (signal?.aborted) throw abortError(signal.reason)
@@ -407,6 +460,7 @@ class OpenCodeRuntime {
     }
     const timeout = new OpenCodeRuntimeError('等待 OpenCode 服务就绪超时', { code: 'OPENCODE_START_TIMEOUT' })
     this.lastError = timeout
+    this.healthInfo = null
     this.state = 'error'
     await this.stop()
     throw timeout
@@ -420,6 +474,7 @@ class OpenCodeRuntime {
     const child = this.child
     this.child = null
     this.state = 'stopped'
+    this.healthInfo = null
     if (!child) return this.status()
     try {
       if (typeof child.kill === 'function') child.kill('SIGTERM')
@@ -457,6 +512,10 @@ class OpenCodeRuntime {
     return payload
   }
 
+  listProviders({ signal } = {}) {
+    return this.request('/provider', { signal })
+  }
+
   createSession({ title = '', parentID = '', signal } = {}) {
     return this.request('/session', {
       method: 'POST',
@@ -483,7 +542,7 @@ class OpenCodeRuntime {
     })
   }
 
-  prompt({ sessionId, text, model, agent = '', signal } = {}) {
+  prompt({ sessionId, text, model, agent = '', system = '', variant = '', tools, signal } = {}) {
     const id = clean(sessionId)
     const content = clean(text)
     if (!id || !content) throw new TypeError('prompt 需要 sessionId 和 text')
@@ -492,7 +551,10 @@ class OpenCodeRuntime {
       body: {
         parts: [{ type: 'text', text: content }],
         ...(parseModel(model) ? { model: parseModel(model) } : {}),
-        ...(clean(agent) ? { agent: clean(agent) } : {})
+        ...(clean(agent) ? { agent: clean(agent) } : {}),
+        ...(clean(system) ? { system: clean(system) } : {}),
+        ...(clean(variant) ? { variant: clean(variant) } : {}),
+        ...(tools && typeof tools === 'object' ? { tools } : {})
       },
       signal
     })
