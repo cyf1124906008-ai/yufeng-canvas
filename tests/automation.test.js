@@ -224,6 +224,40 @@ test('queue claims are idempotent and do not append duplicate runs', () => {
   assert.deepEqual(repository.get('dedupe').runs.map(run => run.id), ['run-one'])
 })
 
+test('scheduler uses browser timers without detached Web IDL invocation', () => {
+  const repository = new AutomationRepository({ storage: memoryStorage(), now: () => 1_800_000_000_000 })
+  const timerState = {}
+  const browserSetInterval = function (callback, delay) {
+      assert.equal(this, globalThis)
+      timerState.callback = callback
+      timerState.delay = delay
+      return 41
+    }
+  const browserClearInterval = function (id) {
+      assert.equal(this, globalThis)
+      timerState.cleared = id
+    }
+  const originalSetInterval = globalThis.setInterval
+  const originalClearInterval = globalThis.clearInterval
+  globalThis.setInterval = browserSetInterval
+  globalThis.clearInterval = browserClearInterval
+  try {
+    const scheduler = new AutomationScheduler({
+      repository,
+      onRun: async () => ({ deferred: true })
+    })
+
+    assert.equal(scheduler.start(), true)
+    assert.equal(timerState.delay, 15_000)
+    assert.equal(scheduler.stop(), true)
+    assert.equal(timerState.cleared, 41)
+    scheduler.dispose()
+  } finally {
+    globalThis.setInterval = originalSetInterval
+    globalThis.clearInterval = originalClearInterval
+  }
+})
+
 test('busy deferred restores the same run to the durable queue even after an optimistic running mark', async () => {
   const now = new Date(2026, 0, 5, 8, 0, 0, 0).getTime()
   const repository = new AutomationRepository({ storage: memoryStorage(), now: () => now })

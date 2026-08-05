@@ -17,8 +17,8 @@ export class AutomationScheduler {
     onRun,
     now = Date.now,
     tickMs = DEFAULT_TICK_MS,
-    setInterval: scheduleInterval = globalThis.setInterval,
-    clearInterval: cancelInterval = globalThis.clearInterval
+    setInterval: scheduleInterval,
+    clearInterval: cancelInterval
   } = {}) {
     if (!repository?.list || !repository?.queue) {
       throw new TypeError('AutomationScheduler 需要 AutomationRepository')
@@ -28,8 +28,17 @@ export class AutomationScheduler {
     this.onRun = onRun
     this.now = now
     this.tickMs = Math.max(1_000, Math.trunc(Number(tickMs) || DEFAULT_TICK_MS))
-    this.scheduleInterval = scheduleInterval
-    this.cancelInterval = cancelInterval
+    // Browser timer functions are Web IDL methods. Passing
+    // `window.setInterval` around and invoking it as a detached function
+    // throws `TypeError: Illegal invocation` in Chromium/Electron. Keep the
+    // default bound to its global object while still allowing deterministic
+    // timer fakes in tests and embedders.
+    this.scheduleInterval = typeof scheduleInterval === 'function'
+      ? scheduleInterval
+      : (...args) => globalThis.setInterval(...args)
+    this.cancelInterval = typeof cancelInterval === 'function'
+      ? cancelInterval
+      : (...args) => globalThis.clearInterval(...args)
     this.timer = null
     this.draining = null
     this.disposed = false
