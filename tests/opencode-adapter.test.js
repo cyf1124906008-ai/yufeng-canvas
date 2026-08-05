@@ -206,6 +206,26 @@ test('OpenCode bridge adapter keeps packaged renderer traffic inside Main IPC', 
   )
 })
 
+test('OpenCode bridge cancellation aborts the matching remote session', async () => {
+  const controller = new AbortController()
+  let abortInput = null
+  let resolvePrompt
+  const bridge = {
+    prompt: async () => new Promise(resolve => { resolvePrompt = resolve }),
+    abort: async input => {
+      abortInput = input
+      return true
+    }
+  }
+  const adapter = createOpenCodeBridgeAdapter({ bridge })
+  const pending = adapter.prompt({ sessionId: 'ses_cancel', text: 'long task', signal: controller.signal })
+  controller.abort()
+  await assert.rejects(pending, error => error.code === 'OPENCODE_ABORTED')
+  await new Promise(resolve => setTimeout(resolve, 0))
+  assert.deepEqual(abortInput, { sessionId: 'ses_cancel' })
+  resolvePrompt?.({ parts: [] })
+})
+
 test('OpenCode SSE parser handles split frames and ignores heartbeat comments', () => {
   const first = parseOpenCodeSseChunk(': heartbeat\n\ndata: {"type":"server.connected"}\n\n')
   assert.deepEqual(first.events, [{ type: 'server.connected' }])

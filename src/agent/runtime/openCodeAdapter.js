@@ -118,6 +118,13 @@ function combineAbortSignals(signal, controller) {
   return () => signal.removeEventListener('abort', forward)
 }
 
+function openCodeAbortError() {
+  const error = new Error('OpenCode IPC 请求已取消')
+  error.name = 'AbortError'
+  error.code = 'OPENCODE_ABORTED'
+  return error
+}
+
 function parseEventData(data) {
   const source = cleanString(data)
   if (!source) return null
@@ -602,10 +609,7 @@ export function createOpenCodeBridgeAdapter({ bridge, directory = '' } = {}) {
 
   const ensureAvailable = (name, signal) => {
     if (signal?.aborted) {
-      const error = new Error('OpenCode IPC 请求已取消')
-      error.name = 'AbortError'
-      error.code = 'OPENCODE_ABORTED'
-      throw error
+      throw openCodeAbortError()
     }
     if (typeof bridge[name] !== 'function') unsupported(name)
   }
@@ -616,6 +620,44 @@ export function createOpenCodeBridgeAdapter({ bridge, directory = '' } = {}) {
     // context bridge.  Main validates and bounds the remaining fields; a
     // caller can still invoke `abort()` at the next UI cancellation boundary.
     return bridge[name](input)
+  }
+
+  const callWithCancellation = (name, input = {}, signal, sessionId = '') => {
+    ensureAvailable(name, signal)
+    if (!signal) return bridge[name](input)
+    return new Promise((resolve, reject) => {
+      let settled = false
+      const cleanup = () => signal.removeEventListener('abort', onAbort)
+      const onAbort = () => {
+        if (settled) return
+        settled = true
+        cleanup()
+        const error = new Error('OpenCode IPC 请求已取消')
+        error.name = 'AbortError'
+        error.code = 'OPENCODE_ABORTED'
+        reject(error)
+        // The IPC invocation itself cannot be aborted, so ask Main to stop
+        // the matching OpenCode session while the stale promise settles.
+        if (sessionId && typeof bridge.abort === 'function') {
+          Promise.resolve(bridge.abort({ sessionId })).catch(() => {})
+        }
+      }
+      signal.addEventListener('abort', onAbort, { once: true })
+      Promise.resolve(bridge[name](input)).then(
+        value => {
+          if (settled) return
+          settled = true
+          cleanup()
+          resolve(value)
+        },
+        error => {
+          if (settled) return
+          settled = true
+          cleanup()
+          reject(error)
+        }
+      )
+    })
   }
 
   const sessionInput = options => ({
@@ -648,7 +690,10 @@ export function createOpenCodeBridgeAdapter({ bridge, directory = '' } = {}) {
     protocol: OPENCODE_PROTOCOL,
     health: ({ signal } = {}) => call('health', {}, signal),
     createSession: (options = {}) => call('createSession', sessionInput(options), options.signal),
-    prompt: (options = {}) => call('prompt', promptInput(options), options.signal),
+    prompt: (options = {}) => {
+      const input = promptInput(options)
+      return callWithCancellation('prompt', input, options.signal, input.sessionId)
+    },
     abort: (options = {}) => call('abort', {
       sessionId: options.sessionId || options.id
     }, options.signal),
