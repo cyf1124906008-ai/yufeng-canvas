@@ -11,54 +11,58 @@
     <div class="settings-shell">
       <header class="settings-header">
         <div class="settings-heading">
-          <span class="product-mark" aria-hidden="true">Y</span>
+          <span class="product-mark" aria-hidden="true"><b>DE</b><i></i></span>
           <div>
-            <p>YUFENG AGENT</p>
-            <h2>Providers &amp; Models</h2>
-            <span>连接模型服务，并为 Agent 配置可用能力。</span>
+            <p>DATAEYES CODE / CONTROL PLANE</p>
+            <h2>连接与模型</h2>
+            <span>为本地 Agent 选择 Provider、凭据和可用能力。</span>
           </div>
         </div>
         <div class="header-actions">
           <span class="connection-pill" :class="`is-${connectionState.tone}`">
-            <i></i>{{ connectionState.label }}
+            <i aria-hidden="true"></i><span>{{ connectionState.label }}</span>
           </span>
           <button type="button" class="close-button" aria-label="取消并关闭设置" @click="handleCancel">×</button>
         </div>
       </header>
 
       <div class="settings-grid">
-        <aside class="provider-rail" aria-label="Provider 列表">
+        <aside class="provider-rail" aria-label="Provider 选择">
           <div class="rail-heading">
             <div>
-              <span>Providers</span>
-              <small>{{ visibleProviders.length }} 个渠道</small>
+              <span>PROVIDER</span>
+              <small>选择当前连接环境 · {{ visibleProviders.length }} 个可用渠道</small>
             </div>
+            <span class="rail-meta">SELECT / CONNECT</span>
           </div>
 
-          <div class="provider-list">
+          <div class="provider-list" role="tablist" aria-label="可用 Provider">
             <button
               v-for="provider in visibleProviders"
               :key="provider.value"
               type="button"
               class="provider-item"
+              role="tab"
               :class="{ 'is-active': provider.value === formData.provider }"
               :aria-current="provider.value === formData.provider ? 'true' : undefined"
+              :aria-selected="provider.value === formData.provider ? 'true' : 'false'"
               :disabled="DISTRIBUTION_CONFIG.api.lockProvider || providerSwitchLocked"
               @click="selectProvider(provider.value)"
             >
-              <span class="provider-avatar">{{ providerInitial(provider.label) }}</span>
+              <span class="provider-avatar" aria-hidden="true"><b>{{ providerInitial(provider.label) }}</b><i></i></span>
               <span class="provider-copy">
                 <strong>{{ provider.label }}</strong>
                 <small>{{ providerHost(provider.value) }}</small>
               </span>
-              <span class="provider-state" :class="`is-${providerStatus(provider.value).tone}`" :title="providerStatus(provider.value).label"></span>
+              <span class="provider-state" :class="`is-${providerStatus(provider.value).tone}`" :title="providerStatus(provider.value).label" :aria-label="providerStatus(provider.value).label"></span>
+              <span v-if="provider.value === formData.provider" class="provider-active-mark">ACTIVE</span>
             </button>
           </div>
 
           <div class="provider-help">
-            <span>API credentials</span>
-            <p>Key 仅保存在当前设备。分享备份文件前，请确认接收方可信。</p>
-            <a :href="apiKeyHelpUrl" target="_blank" rel="noopener noreferrer">申请 / 查看 API Key ↗</a>
+            <span>KEYCHAIN / LOCAL ONLY</span>
+            <p>凭据只保存在当前设备。导出备份前，请确认接收方可信。</p>
+            <a :href="apiKeyHelpUrl" target="_blank" rel="noopener noreferrer">获取或查看 API Key ↗</a>
           </div>
         </aside>
 
@@ -66,24 +70,27 @@
           <section class="settings-panel connection-panel">
             <div class="panel-heading">
               <div>
-                <p>CONNECTION</p>
+                <p>01 / CONNECTION</p>
                 <h3>{{ currentProviderLabel }}</h3>
-                <span>默认连接会被对话、图片和视频能力继承。</span>
+                <span>默认连接会被对话、图片和视频能力继承；需要时可单独覆盖。</span>
               </div>
-              <n-button
-                size="small"
-                :loading="connectionTesting"
-                :disabled="providerSwitchLocked"
-                :type="connectionTestResult?.ok ? 'success' : connectionTestResult && !connectionTestResult.ok ? 'error' : 'default'"
-                @click="handleTestConnection"
-              >
-                {{ connectionTesting ? '测试中…' : '测试连接' }}
-              </n-button>
+              <div class="panel-actions">
+                <span class="panel-meta">{{ showBaseUrlInput ? 'CUSTOM ROUTE' : 'PRESET ROUTE' }}</span>
+                <n-button
+                  size="small"
+                  :loading="connectionTesting"
+                  :disabled="providerSwitchLocked"
+                  :type="connectionTestResult?.ok ? 'success' : connectionTestResult && !connectionTestResult.ok ? 'error' : 'default'"
+                  @click="handleTestConnection"
+                >
+                  {{ connectionTesting ? '测试中…' : '测试连接' }}
+                </n-button>
+              </div>
             </div>
 
             <n-form :model="formData" label-placement="top" class="connection-form">
               <div class="connection-primary-grid">
-                <n-form-item label="Base URL" path="baseUrl">
+                <n-form-item label="服务地址 / Base URL" path="baseUrl">
                   <div class="field-stack">
                     <n-input
                       v-if="showBaseUrlInput"
@@ -98,7 +105,7 @@
                   </div>
                 </n-form-item>
 
-                <n-form-item label="Default API Key" path="apiKey">
+                <n-form-item label="默认凭据 / API Key" path="apiKey">
                   <div class="field-stack">
                     <n-input
                       v-model:value="formData.apiKey"
@@ -114,12 +121,12 @@
             </n-form>
 
             <n-alert v-if="isProductPresetMode" type="info" class="compact-alert">
-              服务地址已由发行版本预置，只需填写你的 API Key。
+              当前版本已预置服务地址。填写 API Key 后即可测试连接和同步模型目录。
             </n-alert>
 
             <details class="advanced-section">
               <summary>
-                <span><strong>Capability overrides</strong><small>对话 / 图片 / 视频独立地址与 Key</small></span>
+                <span><strong>能力覆盖</strong><small>对话 / 图片 / 视频可使用独立地址与凭据</small></span>
                 <span class="summary-count">{{ overrideCount }} 项覆盖</span>
               </summary>
               <div class="capability-overrides">
@@ -151,7 +158,7 @@
 
             <details class="advanced-section endpoint-section">
               <summary>
-                <span><strong>Endpoint routes</strong><small>当前 Provider 的只读接口映射</small></span>
+                <span><strong>接口路由</strong><small>当前 Provider 的只读能力映射</small></span>
                 <span class="summary-count">{{ endpointRows.length }} 条</span>
               </summary>
               <div class="endpoint-grid">
@@ -165,13 +172,13 @@
           <section class="settings-panel catalog-panel">
             <div class="panel-heading catalog-heading">
               <div>
-                <p>MODEL CATALOG</p>
-                <h3>可用模型</h3>
-                <span>从服务同步，或手动添加后台提供的准确模型名。</span>
+                <p>02 / MODEL CATALOG</p>
+                <h3>模型目录</h3>
+                <span>同步真实目录，或添加 Provider 已确认的模型名；当前模型会用于后续 Agent 任务。</span>
               </div>
               <div class="catalog-actions">
-                <n-button size="small" secondary :loading="modelSyncLoading" :disabled="providerSwitchLocked" @click="handleSyncModels">同步模型</n-button>
-                <n-button size="small" secondary :loading="dataEyesImportLoading" :disabled="providerSwitchLocked" @click="handleImportDataEyesModels">导入 DataEyes 实测目录</n-button>
+                <n-button size="small" secondary :loading="modelSyncLoading" :disabled="providerSwitchLocked" @click="handleSyncModels">同步目录</n-button>
+                <n-button size="small" secondary :loading="dataEyesImportLoading" :disabled="providerSwitchLocked" @click="handleImportDataEyesModels">导入 DataEyes 目录</n-button>
               </div>
             </div>
 
@@ -194,6 +201,7 @@
             </div>
 
             <div class="catalog-add-row">
+              <span class="catalog-add-label" aria-hidden="true">ADD</span>
               <n-input
                 v-if="activeCatalog === 'chat'"
                 v-model:value="newChatModel"
@@ -218,11 +226,11 @@
                 :options="imageProtocolOptions"
                 class="protocol-select"
               />
-              <n-button type="primary" :disabled="!activeNewModel" @click="handleAddActiveModel">添加模型</n-button>
+              <n-button type="primary" :disabled="!activeNewModel" @click="handleAddActiveModel">加入目录</n-button>
             </div>
 
             <div v-if="activeCatalogModels.length" class="catalog-list">
-              <article v-for="model in activeCatalogModels" :key="model.key" class="catalog-row">
+              <article v-for="model in activeCatalogModels" :key="model.key" class="catalog-row" :class="{ 'is-current': isActiveModel(model.key), 'is-custom': model.isCustom }">
                 <span class="model-icon" :class="`is-${activeCatalog}`">{{ modelInitial(model.label) }}</span>
                 <div class="model-copy">
                   <strong>{{ model.label }}</strong>
@@ -244,10 +252,11 @@
                   class="select-model"
                   :class="{ 'is-selected': isActiveModel(model.key) }"
                   :aria-pressed="isActiveModel(model.key)"
+                  :aria-label="isActiveModel(model.key) ? `${model.label} 当前使用中` : `使用 ${model.label}`"
                   :title="isActiveModel(model.key) ? '当前使用中' : '切换为当前模型'"
                   @click="handleSelectActiveModel(model.key)"
                 >
-                  {{ isActiveModel(model.key) ? '当前' : '使用' }}
+                  {{ isActiveModel(model.key) ? 'ACTIVE' : '使用' }}
                 </button>
                 <button
                   v-if="model.isCustom"
@@ -260,9 +269,9 @@
               </article>
             </div>
             <div v-else class="catalog-empty">
-              <span>＋</span>
-              <strong>此能力还没有模型</strong>
-              <p>点击“同步模型”，或在上方输入服务商提供的模型名。</p>
+              <span>—</span>
+              <strong>当前能力还没有模型</strong>
+              <p>先同步 Provider 目录，或在上方加入已确认的模型名。</p>
             </div>
           </section>
 
@@ -274,26 +283,26 @@
 
         <aside class="status-rail" aria-label="连接状态摘要">
           <section class="status-card overview-card">
-            <p>STATUS</p>
+            <p>RUNTIME STATUS</p>
             <div class="status-title">
               <span class="large-status-dot" :class="`is-${connectionState.tone}`"></span>
-              <div><strong>{{ connectionState.label }}</strong><small>{{ currentProviderLabel }}</small></div>
+              <div><strong>{{ connectionState.label }}</strong><small>{{ currentProviderLabel }} · 当前连接</small></div>
             </div>
             <dl>
-              <div><dt>Base URL</dt><dd :title="formData.baseUrl || resolvedBaseUrl">{{ shortUrl(formData.baseUrl || resolvedBaseUrl) }}</dd></div>
-              <div><dt>Credentials</dt><dd>{{ credentialCount }} / 4</dd></div>
-              <div><dt>Models</dt><dd>{{ totalModelCount }}</dd></div>
+              <div><dt>服务地址</dt><dd :title="formData.baseUrl || resolvedBaseUrl">{{ shortUrl(formData.baseUrl || resolvedBaseUrl) }}</dd></div>
+              <div><dt>凭据覆盖</dt><dd>{{ credentialCount }} / 4</dd></div>
+              <div><dt>模型总数</dt><dd>{{ totalModelCount }}</dd></div>
             </dl>
           </section>
 
           <section v-if="connectionTestResult" class="status-card test-result" :class="connectionTestResult.ok ? 'is-success' : 'is-error'">
-            <header><span>{{ connectionTestResult.ok ? '✓' : '!' }}</span><strong>{{ connectionTestResult.ok ? 'Connection verified' : 'Connection failed' }}</strong></header>
-            <p v-if="connectionTestResult.ok">已发现 {{ connectionTestResult.modelCount || connectionTestResult.models?.length || 0 }} 个模型，可继续同步目录。</p>
+            <header><span>{{ connectionTestResult.ok ? '✓' : '!' }}</span><strong>{{ connectionTestResult.ok ? '连接已验证' : '连接失败' }}</strong></header>
+            <p v-if="connectionTestResult.ok">已发现 {{ connectionTestResult.modelCount || connectionTestResult.models?.length || 0 }} 个模型，可以同步到当前 Provider。</p>
             <p v-else>{{ connectionTestResult.chineseError || connectionTestResult.error || '服务未返回可用响应。' }}</p>
           </section>
 
           <section class="status-card coverage-card">
-            <div class="status-section-heading"><strong>Capability coverage</strong><span>{{ configuredCapabilityCount }}/3</span></div>
+            <div class="status-section-heading"><strong>能力覆盖</strong><span>{{ configuredCapabilityCount }}/3</span></div>
             <div class="coverage-list">
               <div v-for="capability in capabilityRows" :key="capability.id">
                 <span class="capability-icon" :class="`is-${capability.id}`">{{ capability.short }}</span>
@@ -304,28 +313,28 @@
           </section>
 
           <details class="status-card data-tools">
-            <summary><span><strong>Data &amp; backup</strong><small>迁移本机配置与任务数据</small></span></summary>
+            <summary><span><strong>数据与备份</strong><small>迁移本机配置与任务数据</small></span></summary>
             <div class="backup-copy">
-              <p>备份包含项目、Agent 任务记录、工作流、Drama 数据、本地资产索引、模型与 API 配置。</p>
-              <p class="backup-warning">数据包包含 API Key。大体积图片和视频请同时备份素材目录。</p>
+              <p>备份包含项目、Agent 任务记录、本地素材索引、模型与 API 配置。</p>
+              <p class="backup-warning">数据包包含 API Key；大体积图片和视频仍需单独备份素材目录。</p>
             </div>
             <div class="backup-actions">
-              <n-button size="small" secondary :loading="dataExporting" @click="handleExportData">导出备份</n-button>
-              <n-button size="small" secondary :loading="dataImporting" @click="handleImportData">导入备份</n-button>
+              <n-button size="small" secondary :loading="dataExporting" @click="handleExportData">导出数据</n-button>
+              <n-button size="small" secondary :loading="dataImporting" @click="handleImportData">导入数据</n-button>
               <n-button v-if="isDesktop" size="small" secondary @click="openAssetsFolder">打开素材目录</n-button>
             </div>
           </details>
 
           <n-alert v-if="!isConfigured" type="warning" class="compact-alert">
-            当前 Provider 尚未配置可用 Key。
+            当前 Provider 尚未配置可用凭据，连接测试和模型同步会被阻止。
           </n-alert>
         </aside>
       </div>
 
       <footer class="settings-footer">
         <div class="footer-context">
-          <span>{{ currentProviderLabel }}</span>
-          <small>取消会撤销本次编辑；同步或导入目录成功后会更新保存基线。</small>
+          <span><i></i>{{ currentProviderLabel }}</span>
+          <small>编辑只在点击“保存设置”后生效；切换 Provider 不会覆盖其他渠道。</small>
         </div>
         <div class="footer-actions">
           <n-button tertiary type="error" :disabled="providerSwitchLocked" @click="handleClear">清除当前配置</n-button>
@@ -1096,7 +1105,7 @@ const openAssetsFolder = async () => {
     await window.desktopApp.comfy.openFolder('root')
   } else if (window.desktopApp?.getUserDataPath) {
     const path = await window.desktopApp.getUserDataPath()
-    window.$message?.info(`YUFENG Agent 素材根目录：${path}`)
+    window.$message?.info(`DataEyes Code 素材根目录：${path}`)
   }
 }
 </script>
@@ -1766,5 +1775,586 @@ const openAssetsFolder = async () => {
   .settings-footer { align-items: stretch; flex-direction: column; }
   .footer-actions { width: 100%; flex-wrap: wrap; }
   .footer-actions .n-button:first-child { margin-right: auto; }
+}
+
+/* DataEyes Code control-plane refresh. Keep the existing Naive UI bindings,
+   but make the information architecture one continuous, readable surface. */
+.settings-shell {
+  --canvas: #eef3f0;
+  --panel: #fbfdfb;
+  --panel-subtle: #f2f7f4;
+  --panel-raised: #ffffff;
+  --line: #d7e3dc;
+  --line-strong: #b8cfc2;
+  --text: #17231d;
+  --muted: #64756c;
+  --faint: #87978e;
+  --accent: #2b9a68;
+  --accent-strong: #187349;
+  --accent-soft: #e0f3e8;
+  --blue: #5575c5;
+  --warning: #a36b19;
+  background: var(--canvas);
+  color: var(--text);
+  font-family: "HarmonyOS Sans SC", "MiSans", "PingFang SC", sans-serif;
+}
+
+:global(.dark) .settings-shell {
+  --canvas: #0c1110;
+  --panel: #121a17;
+  --panel-subtle: #101714;
+  --panel-raised: #18231f;
+  --line: #26372e;
+  --line-strong: #3b594a;
+  --text: #e8f1eb;
+  --muted: #91a59a;
+  --faint: #667b70;
+  --accent: #8fdeb0;
+  --accent-strong: #b7f2cc;
+  --accent-soft: rgba(126, 219, 164, .12);
+  --blue: #9db2f2;
+  --warning: #e1b76f;
+}
+
+:global(.api-settings-modal.n-card) {
+  border: 1px solid var(--line) !important;
+  border-radius: 18px !important;
+  background: var(--canvas) !important;
+  box-shadow: 0 30px 110px rgba(7, 22, 14, .24) !important;
+}
+
+:global(.dark .api-settings-modal.n-card) {
+  border-color: #26372e !important;
+  background: #0c1110 !important;
+  box-shadow: 0 34px 120px rgba(0, 0, 0, .62) !important;
+}
+
+.settings-header,
+.settings-footer {
+  background: var(--panel) !important;
+  border-color: var(--line) !important;
+}
+
+.settings-header {
+  min-height: 82px;
+  padding: 14px 22px;
+}
+
+.settings-heading { gap: 13px; }
+.settings-heading > div { display: block; }
+
+.product-mark {
+  position: relative;
+  width: 42px;
+  height: 42px;
+  flex-basis: 42px;
+  overflow: hidden;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  color: var(--text);
+  background: var(--panel-raised);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .05), 0 7px 18px rgba(17, 54, 34, .08);
+}
+
+.product-mark b {
+  position: relative;
+  z-index: 1;
+  font: 800 11px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  letter-spacing: -.08em;
+}
+
+.product-mark i {
+  position: absolute;
+  right: 8px;
+  bottom: 7px;
+  width: 10px;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--accent);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 48%, transparent);
+}
+
+.settings-heading p,
+.panel-heading p,
+.status-card > p:first-child {
+  color: var(--accent) !important;
+  font: 750 10px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  letter-spacing: .16em;
+}
+
+.settings-heading h2 { margin-top: 6px; color: var(--text); font-size: 20px; letter-spacing: -.025em; }
+.settings-heading span:not(.product-mark) { color: var(--muted); font-size: 12px; }
+.header-actions { gap: 12px; }
+
+.connection-pill {
+  border-color: var(--line) !important;
+  border-radius: 7px;
+  padding: 7px 10px;
+  color: var(--muted) !important;
+  background: var(--panel-subtle) !important;
+  font: 650 10px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  letter-spacing: .04em;
+}
+
+.connection-pill i { width: 6px; height: 6px; }
+.connection-pill.is-ready,
+.connection-pill.is-configured { color: var(--accent-strong) !important; }
+.connection-pill.is-ready i { background: var(--accent) !important; box-shadow: 0 0 0 3px var(--accent-soft); }
+.connection-pill.is-configured i { background: var(--blue) !important; }
+.connection-pill.is-testing i { background: #d7a446 !important; }
+.connection-pill.is-error i { background: #db6670 !important; }
+.connection-pill.is-missing i { background: var(--faint) !important; }
+
+.close-button {
+  width: 32px;
+  height: 32px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 18px;
+}
+
+.close-button:hover { border-color: var(--line); color: var(--text); background: var(--panel-subtle); }
+
+.settings-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr);
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: var(--canvas);
+}
+
+.provider-rail {
+  grid-row: 1;
+  display: block;
+  min-height: auto;
+  overflow: visible;
+  border-right: 0 !important;
+  border-bottom: 1px solid var(--line);
+  padding: 15px 22px 13px;
+  background: var(--panel) !important;
+}
+
+.rail-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 0 0 10px;
+}
+
+.rail-heading span { color: var(--text); font: 750 11px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing: .14em; }
+.rail-heading small { margin-top: 4px; color: var(--muted); font-size: 11px; }
+.rail-meta { color: var(--faint) !important; font-size: 10px !important; letter-spacing: .12em !important; }
+
+.provider-list {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 1px 1px 3px;
+  scrollbar-width: thin;
+}
+
+.provider-item {
+  position: relative;
+  display: grid;
+  grid-template-columns: 32px minmax(130px, 1fr) auto;
+  align-items: center;
+  flex: 0 0 208px;
+  gap: 9px;
+  min-height: 56px;
+  border: 1px solid var(--line) !important;
+  border-radius: 11px;
+  padding: 8px 10px;
+  color: var(--text) !important;
+  background: var(--panel-subtle) !important;
+  box-shadow: none !important;
+  text-align: left;
+  transition: border-color 160ms ease, background-color 160ms ease, transform 160ms ease;
+}
+
+.provider-item:hover { border-color: var(--line-strong) !important; background: var(--panel-raised) !important; transform: translateY(-1px); }
+.provider-item.is-active { border-color: var(--accent) !important; background: var(--accent-soft) !important; box-shadow: inset 3px 0 0 var(--accent) !important; }
+.provider-item:disabled { cursor: default; opacity: .72; }
+.provider-item.is-active:disabled { opacity: 1; }
+
+.provider-avatar {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--line-strong);
+  border-radius: 9px;
+  color: var(--accent-strong);
+  background: var(--panel-raised);
+  font: 800 11px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.provider-avatar i {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.provider-copy strong { color: var(--text); font-size: 12px; }
+.provider-copy small { color: var(--muted); font-size: 10px; }
+.provider-state { width: 7px; height: 7px; box-shadow: 0 0 0 3px var(--panel-subtle); }
+.provider-item.is-active .provider-state { box-shadow: 0 0 0 3px var(--accent-soft); }
+
+.provider-active-mark {
+  position: absolute;
+  z-index: 2;
+  top: 6px;
+  right: 9px;
+  display: block;
+  white-space: nowrap;
+  pointer-events: none;
+  color: var(--accent-strong);
+  font: 800 10px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  letter-spacing: .09em;
+}
+
+.provider-help {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  margin-top: 11px;
+  border-top: 1px solid var(--line);
+  padding: 10px 1px 0;
+}
+
+.provider-help span { color: var(--faint); font: 700 10px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing: .1em; }
+.provider-help p { margin: 0; color: var(--muted); font-size: 11px; }
+.provider-help a { color: var(--accent-strong); font-size: 11px; text-decoration: none; }
+.provider-help a:hover { text-decoration: underline; }
+
+.status-rail {
+  grid-row: 2;
+  display: grid;
+  grid-template-columns: minmax(230px, 1fr) minmax(250px, 1.1fr) minmax(290px, 1.35fr);
+  align-items: stretch;
+  gap: 10px;
+  min-height: auto;
+  overflow: visible;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  border-left: 0 !important;
+  padding: 12px 22px;
+  background: var(--panel-subtle) !important;
+}
+
+.status-card {
+  min-width: 0;
+  border: 1px solid var(--line) !important;
+  border-radius: 11px;
+  padding: 12px 13px;
+  background: var(--panel) !important;
+  box-shadow: none !important;
+}
+
+.status-title { gap: 10px; margin: 9px 0 10px; }
+.large-status-dot { width: 10px; height: 10px; box-shadow: 0 0 0 4px var(--accent-soft); }
+.status-title strong { color: var(--text); font-size: 13px; }
+.status-title small { color: var(--muted); font-size: 10px; }
+.overview-card dl > div { padding: 5px 6px; background: transparent !important; }
+.overview-card dl > div + div { border-top: 1px solid var(--line); }
+.overview-card dt { color: var(--muted); font-size: 10px; }
+.overview-card dd { color: var(--text); font: 600 10px/1.3 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.test-result { border-left: 2px solid var(--accent) !important; }
+.test-result.is-error { border-left-color: #db6670 !important; }
+.test-result header strong { color: var(--text); font-size: 12px; }
+.test-result p { margin-top: 7px; color: var(--muted); font-size: 10px; }
+.status-section-heading { margin-bottom: 7px; }
+.status-section-heading strong { color: var(--text); font-size: 12px; }
+.status-section-heading span { color: var(--accent-strong); font: 700 10px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.coverage-list { gap: 4px; }
+.coverage-list > div { padding: 5px 6px; background: var(--panel-subtle); }
+.coverage-list strong { color: var(--text); font-size: 11px; }
+.coverage-list small { color: var(--muted); font-size: 10px; }
+.data-tools { grid-column: 1 / -1; padding: 0 13px; }
+.data-tools summary { padding: 9px 0 6px; }
+.backup-copy p { color: var(--muted); font-size: 10px; }
+.backup-copy .backup-warning { color: var(--warning); }
+.backup-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; margin: 9px 0 11px; }
+.status-rail > .compact-alert { grid-column: 1 / -1; margin: 0; }
+
+.settings-main {
+  grid-row: 3;
+  min-width: 0;
+  min-height: auto;
+  overflow: visible;
+  padding: 18px 22px 22px;
+  background: var(--canvas);
+}
+
+.settings-panel {
+  border: 1px solid var(--line) !important;
+  border-radius: 14px;
+  background: var(--panel) !important;
+  box-shadow: 0 10px 30px rgba(15, 47, 29, .05) !important;
+}
+
+.connection-panel,
+.catalog-panel { padding: 20px; }
+.settings-panel + .settings-panel { margin-top: 12px; }
+.panel-heading { margin-bottom: 16px; }
+.panel-heading h3 { margin-top: 6px; color: var(--text); font-size: 18px; letter-spacing: -.02em; }
+.panel-heading > div > span { color: var(--muted); font-size: 11px; line-height: 1.5; }
+.panel-actions { display: flex; align-items: center; gap: 10px; }
+.panel-meta { color: var(--faint); font: 700 10px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing: .1em; }
+
+.connection-form :deep(.n-form-item-label),
+.capability-card :deep(.n-form-item-label) { color: var(--muted) !important; font-size: 11px; font-weight: 700; }
+.field-note { color: var(--faint); font-size: 10px; }
+.compact-alert { border-radius: 9px !important; }
+.compact-alert :deep(.n-alert-body) { padding: 9px 11px; color: var(--text); font-size: 11px; }
+
+.advanced-section,
+.data-tools,
+.lab-panel { border-top-color: var(--line); }
+.advanced-section summary,
+.data-tools summary,
+.lab-panel summary { position: relative; padding: 13px 22px 13px 1px; color: var(--text); }
+.advanced-section summary::after,
+.data-tools summary::after,
+.lab-panel summary::after {
+  content: '+';
+  position: absolute;
+  right: 3px;
+  color: var(--muted);
+  font: 400 16px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  transition: transform 160ms ease, color 160ms ease;
+}
+.advanced-section[open] summary::after,
+.data-tools[open] summary::after,
+.lab-panel[open] summary::after { color: var(--accent); transform: rotate(45deg); }
+.advanced-section summary strong,
+.data-tools summary strong,
+.lab-panel summary strong { color: var(--text); font-size: 12px; }
+.advanced-section summary small,
+.data-tools summary small,
+.lab-panel summary small { color: var(--muted); font-size: 10px; }
+.summary-count { color: var(--accent-strong); font: 700 10px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+
+.capability-overrides { gap: 10px; }
+.capability-card { border-color: var(--line); border-radius: 10px; background: var(--panel-subtle); }
+.capability-card header { margin-bottom: 10px; }
+.capability-card header strong { color: var(--text); font-size: 12px; }
+.capability-card header small { color: var(--muted); font-size: 10px; }
+.capability-icon { border: 1px solid transparent; }
+.endpoint-grid > div { border: 1px solid var(--line); background: var(--panel-subtle); }
+.endpoint-grid span { color: var(--muted); }
+.endpoint-grid code { color: var(--text); font: 600 10px/1.3 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+
+.catalog-heading { align-items: flex-start; }
+.catalog-actions { gap: 8px; }
+.catalog-tabs { gap: 0; border-bottom: 1px solid var(--line); border-radius: 0; padding: 0; background: transparent; }
+.catalog-tabs button {
+  position: relative;
+  justify-content: space-between;
+  border-radius: 0;
+  padding: 10px 12px;
+  color: var(--muted);
+  font-size: 12px;
+  transition: color 160ms ease, background-color 160ms ease;
+}
+.catalog-tabs button::after { content: ''; position: absolute; right: 12px; bottom: -1px; left: 12px; height: 2px; background: transparent; transform: scaleX(.2); transition: background-color 160ms ease, transform 160ms ease; }
+.catalog-tabs button:hover { color: var(--text); background: var(--panel-subtle); }
+.catalog-tabs button.is-active { color: var(--text); background: transparent; box-shadow: none; }
+.catalog-tabs button.is-active::after { background: var(--accent); transform: scaleX(1); }
+.catalog-tabs button strong { color: var(--faint); font: 700 10px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.catalog-tabs button.is-active strong { color: var(--accent-strong); }
+
+.catalog-add-row { grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; margin: 13px 0; }
+.catalog-add-label { color: var(--faint); font: 800 10px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing: .1em; }
+.catalog-add-row > .protocol-select { grid-column: 3; }
+.catalog-add-row > .n-button { grid-column: 4; }
+.protocol-select { width: 138px; }
+.catalog-list { border-color: var(--line); border-radius: 10px; background: var(--panel-subtle); }
+.catalog-row { min-height: 58px; border-bottom-color: var(--line); transition: background-color 160ms ease, border-color 160ms ease, transform 160ms ease; }
+.catalog-row:hover { background: var(--panel-raised); }
+.catalog-row.is-current { border-color: color-mix(in srgb, var(--accent) 62%, var(--line)); background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
+.model-icon { border: 1px solid var(--line); }
+.model-copy strong { color: var(--text); font-size: 12px; }
+.model-copy code { color: var(--muted); font: 500 10px/1.3 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.select-model { display: inline-flex; align-items: center; justify-content: center; min-width: 60px; width: max-content; height: 27px; white-space: nowrap; border-color: var(--line-strong); border-radius: 7px; color: var(--muted); font: 700 10px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing: .04em; transition: color 160ms ease, background-color 160ms ease, border-color 160ms ease, transform 160ms ease; }
+.select-model:hover { border-color: var(--accent); color: var(--accent-strong); background: var(--accent-soft); transform: translateY(-1px); }
+.select-model.is-selected { border-color: var(--accent) !important; color: #102219 !important; background: var(--accent) !important; box-shadow: 0 4px 12px color-mix(in srgb, var(--accent) 24%, transparent); }
+:global(.dark) .select-model.is-selected { color: #0c1710 !important; }
+.remove-model { width: 27px; height: 27px; border: 1px solid transparent; border-radius: 7px; }
+.remove-model:hover { border-color: #db6670; color: #db6670; background: rgba(219, 102, 112, .08); }
+.catalog-empty { border-color: var(--line-strong); border-radius: 10px; padding: 26px 14px; background: var(--panel-subtle); }
+.catalog-empty > span { color: var(--accent); font: 400 25px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.catalog-empty strong { color: var(--text); font-size: 12px; }
+.catalog-empty p { color: var(--muted); font-size: 10px; }
+
+.settings-footer { min-height: 66px; padding: 11px 22px; }
+.footer-context span { display: flex; align-items: center; gap: 7px; color: var(--text); font-size: 12px; }
+.footer-context span i { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.footer-context small { color: var(--muted); font-size: 10px; }
+.footer-actions { gap: 8px; }
+
+.settings-shell :deep(.n-input),
+.settings-shell :deep(.n-base-selection) {
+  border-radius: 9px;
+  --n-border: var(--line) !important;
+  --n-border-hover: var(--line-strong) !important;
+  --n-border-focus: var(--accent) !important;
+  --n-color: var(--panel-raised) !important;
+  --n-color-focus: var(--panel-raised) !important;
+  --n-text-color: var(--text) !important;
+  --n-placeholder-color: var(--faint) !important;
+  --n-caret-color: var(--accent) !important;
+}
+.settings-shell :deep(.n-input:focus-within),
+.settings-shell :deep(.n-base-selection:focus-within) { box-shadow: 0 0 0 3px var(--accent-soft); }
+.settings-shell :deep(.n-button) { border-radius: 8px; }
+
+.provider-item:focus-visible,
+.catalog-tabs button:focus-visible,
+.select-model:focus-visible,
+.remove-model:focus-visible,
+.close-button:focus-visible,
+.advanced-section summary:focus-visible,
+.data-tools summary:focus-visible,
+.lab-panel summary:focus-visible,
+.provider-help a:focus-visible {
+  outline: 2px solid var(--accent) !important;
+  outline-offset: 2px;
+}
+
+@media (max-width: 1020px) {
+  .status-rail { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .data-tools { grid-column: 1 / -1; }
+}
+
+@media (max-width: 760px) {
+  .settings-header { min-height: 72px; padding: 12px 14px; }
+  .settings-heading h2 { font-size: 17px; }
+  .settings-grid { display: grid; grid-template-rows: auto auto minmax(0, 1fr); overflow-y: auto; }
+  .provider-rail { padding: 13px 14px 11px; }
+  .provider-item { flex-basis: 188px; }
+  .provider-help { grid-template-columns: 1fr auto; }
+  .provider-help p { display: none; }
+  .status-rail { grid-template-columns: 1fr; padding: 10px 14px; }
+  .status-rail > .compact-alert { grid-column: auto; }
+  .settings-main { padding: 14px; }
+  .connection-panel, .catalog-panel { padding: 16px; }
+  .panel-heading, .catalog-heading { align-items: flex-start; flex-direction: column; }
+  .panel-actions, .catalog-actions { width: 100%; justify-content: space-between; }
+  .catalog-actions { justify-content: flex-start; }
+  .catalog-add-row { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .catalog-add-row > .protocol-select { grid-column: 2 / -1; width: 100%; }
+  .catalog-add-row > .n-button { grid-column: 3; }
+}
+
+@media (max-width: 520px) {
+  .product-mark { width: 36px; height: 36px; flex-basis: 36px; border-radius: 10px; }
+  .settings-heading h2 { font-size: 15px; }
+  .header-actions .connection-pill { display: none; }
+  .rail-heading { align-items: flex-start; flex-direction: column; gap: 5px; }
+  .rail-meta { display: none; }
+  .provider-help { grid-template-columns: 1fr; }
+  .provider-help a { justify-self: start; }
+  .settings-footer { align-items: stretch; flex-direction: column; gap: 10px; }
+  .footer-actions { width: 100%; }
+  .footer-actions :deep(.n-button) { flex: 1 1 auto; }
+  .footer-actions :deep(.n-button:first-child) { flex: 0 0 auto; margin-right: auto; }
+  .catalog-add-row { grid-template-columns: auto minmax(0, 1fr); }
+  .catalog-add-row > .n-button { grid-column: 1 / -1; width: 100%; }
+  .catalog-add-row > .protocol-select { grid-column: 1 / -1; }
+  .catalog-row { grid-template-columns: 29px minmax(0, 1fr) auto 25px; align-items: start; }
+  .catalog-row .model-icon { grid-column: 1; grid-row: 1; }
+  .catalog-row .model-copy { grid-column: 2; grid-row: 1; }
+  .catalog-row .select-model { grid-column: 3; grid-row: 1; }
+  .catalog-row .remove-model { grid-column: 4; grid-row: 1; }
+  .catalog-row .protocol-select,
+  .catalog-row :deep(.n-tag) { grid-column: 2 / 5; grid-row: 2; width: 100%; justify-self: stretch; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-shell *,
+  .settings-shell *::before,
+  .settings-shell *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: .01ms !important;
+  }
+}
+
+/* Desktop control-plane: keep the connection and model catalog in the first
+ * viewport. The compact horizontal provider/status treatment remains the
+ * responsive fallback below 1020px. */
+@media (min-width: 1021px) {
+  .settings-grid {
+    grid-template-columns: 210px minmax(500px, 1fr) 254px;
+    grid-template-rows: minmax(0, 1fr);
+    overflow: hidden;
+  }
+
+  .provider-rail {
+    grid-row: 1;
+    display: flex;
+    min-height: 0;
+    overflow-y: auto;
+    border-right: 1px solid var(--line) !important;
+    border-bottom: 0;
+    padding: 16px 12px;
+  }
+
+  .rail-heading {
+    display: block;
+    padding: 0 6px 11px;
+  }
+
+  .rail-meta { display: none; }
+
+  .provider-list {
+    display: grid;
+    overflow: visible;
+    padding: 0;
+  }
+
+  .provider-item {
+    flex: initial;
+    width: 100%;
+    min-height: 54px;
+    grid-template-columns: 31px minmax(0, 1fr) 7px;
+  }
+
+  .provider-help {
+    display: block;
+    grid-template-columns: none;
+  }
+
+  .settings-main {
+    grid-row: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 16px;
+  }
+
+  .status-rail {
+    grid-row: 1;
+    display: flex;
+    min-height: 0;
+    overflow-y: auto;
+    border-top: 0;
+    border-bottom: 0;
+    border-left: 1px solid var(--line) !important;
+    padding: 16px 12px;
+    background: var(--panel-subtle) !important;
+  }
+
+  .status-card { flex: 0 0 auto; }
+  .data-tools { grid-column: auto; }
+  .status-rail > .compact-alert { grid-column: auto; }
 }
 </style>

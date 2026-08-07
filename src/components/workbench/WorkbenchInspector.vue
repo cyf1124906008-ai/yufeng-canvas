@@ -331,6 +331,85 @@ const rollbackLabel = rollback => ({
 .panel-empty strong { margin-top: 10px; color: #878d8b; font-size: 12px; }
 .panel-empty p { max-width: 220px; margin: 4px 0 0; color: #5e6465; font-size: 11px; line-height: 1.5; }
 
+/* DataEyes Code — context is a calm, inspectable instrument panel. */
+.inspector {
+  border-left-color: rgba(28, 51, 57, .12);
+  background: #f7f9fa;
+  color: #25353a;
+}
+
+.inspector-header {
+  min-height: 61px;
+  border-bottom-color: rgba(30, 55, 61, .1);
+  padding: 9px 15px;
+  background: rgba(247, 249, 250, .88);
+  backdrop-filter: blur(16px);
+}
+
+.inspector-header strong { color: #1c2d32; font-size: 13px; }
+.inspector-header small { color: #7a898e; }
+.inspector-header button { color: #6d7c81; }
+.inspector-header button:hover { border-color: rgba(37, 105, 96, .14); color: #1d6c61; background: rgba(94, 231, 196, .1); }
+.inspector-tabs { border-bottom-color: rgba(30, 55, 61, .1); padding: 6px; background: rgba(238, 243, 245, .72); }
+.inspector-tabs button { height: 35px; color: #77878b; }
+.inspector-tabs button:hover { color: #2c6660; background: rgba(255, 255, 255, .64); }
+.inspector-tabs button.is-active { color: #1b6b61; background: #fff; box-shadow: 0 2px 8px rgba(39, 83, 84, .09), inset 0 0 0 1px rgba(37, 145, 124, .14); }
+.inspector-tabs button i { color: #6f8381; background: #e2efec; }
+.inspector-scroll { scrollbar-color: #c9d4d5 transparent; }
+.inspector-section { border-bottom-color: rgba(30, 55, 61, .09); padding: 13px 14px; }
+.section-title > strong { color: #6b7c80; font-size: 10px; letter-spacing: .12em; }
+.section-title > span:not(.status-chip) { color: #809096; }
+.status-chip { border-color: rgba(41, 102, 96, .15); color: #6e8182; background: #eef6f3; }
+.status-chip.is-running { color: #1b7c70; background: #e2f8f2; }
+.status-chip.is-success { color: #357b59; background: #e6f6ed; }
+.run-section dl > div:nth-child(odd) { background: #eef3f4; }
+.run-section dt { color: #849398; }
+.run-section dd { color: #4c6267; }
+.inspector-plan li { color: #65777b; }
+.inspector-plan li.is-running { background: #e6f5f2; }
+.inspector-plan li.is-completed { color: #6b897d; }
+.inspector-plan small { color: #829296; }
+.inspector-plan li > span:last-child { color: #8d9da0; }
+.compact-empty { border-color: rgba(51, 99, 99, .2); color: #6e8585; background: rgba(226, 245, 241, .42); }
+.context-section summary { color: #75878a; }
+.context-section summary strong { color: #62757a; font-size: 10px; letter-spacing: .12em; }
+.context-list > div,
+.usage-grid > div { background: #eef3f4; }
+.context-list span,
+.usage-grid span { color: #809094; }
+.context-list strong,
+.usage-grid strong { color: #4f6569; }
+.empty-copy { color: #7c8d91; }
+.file-list details,
+.terminal-list details,
+.artifact-list button { border-color: rgba(37, 68, 73, .12); background: #fdfefe; }
+.file-list details:hover,
+.terminal-list details:hover,
+.artifact-list button:not(:disabled):hover { border-color: rgba(38, 150, 130, .32); background: #f7fffc; }
+.file-list strong { color: #4b6267; }
+.file-list small,
+.terminal-list code,
+.artifact-list small { color: #829195; }
+.diff-hunks { border-top-color: #dbe5e5; background: #f4f7f7; }
+.diff-hunks section + section { border-top-color: #dbe5e5; }
+.diff-hunks header { color: #4e8a89; background: #eaf4f3; }
+.diff-hunks pre span.is-removed { color: #a35e67; background: rgba(228, 145, 153, .12); }
+.diff-hunks pre span.is-added { color: #367d62; background: rgba(102, 194, 145, .13); }
+.panel-empty { color: #6e8587; }
+.panel-empty > span { border-color: rgba(45, 102, 100, .16); background: #edf5f4; }
+.panel-empty strong { color: #5b7075; }
+.panel-empty p { color: #819094; }
+
+.inspector :is(button, summary):focus-visible {
+  outline: 2px solid rgba(42, 153, 133, .78);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .inspector-tabs button,
+  .artifact-list button { transition-duration: 0s; }
+}
+
 @media (min-width: 1161px) {
   .inspector:not(.is-open) { display: none; }
 }

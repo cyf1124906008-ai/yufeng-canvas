@@ -1,12 +1,12 @@
 <template>
   <aside class="wb-sidebar" :class="{ 'is-open': open }" aria-label="项目与任务导航">
     <header class="sidebar-brand">
-      <button type="button" class="brand-button" aria-label="YUFENG Agent 首页" :disabled="newTaskDisabled" @click="emit('new-task')">
-        <span>Y</span>
+      <button type="button" class="brand-button" aria-label="DataEyes Code 首页" :disabled="newTaskDisabled" @click="emit('new-task')">
+        <data-eyes-mark :size="31" />
       </button>
       <div class="brand-copy">
-        <strong>YUFENG</strong>
-        <small>Agent Workbench</small>
+        <strong>DATAEYES <b>CODE</b></strong>
+        <small>LOCAL AGENT RUNTIME</small>
       </div>
       <button type="button" class="icon-button mobile-close" aria-label="关闭导航" @click="emit('close')">
         <workbench-icon name="close" :size="17" />
@@ -15,8 +15,8 @@
 
     <div class="primary-actions">
       <button type="button" class="new-task" :disabled="newTaskDisabled" @click="emit('new-task')">
-        <workbench-icon name="plus" :size="15" />
-        <span>新任务</span>
+        <span class="new-task-mark"><workbench-icon name="plus" :size="14" /></span>
+        <span>新建任务</span>
         <kbd>⌘N</kbd>
       </button>
       <label class="task-search" :class="{ 'has-value': query }">
@@ -122,6 +122,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { normalizeAgentRunHistoryRecords } from '../agent/agentRunHistoryView.js'
+import DataEyesMark from '../brand/DataEyesMark.vue'
 import WorkbenchIcon from './WorkbenchIcon.vue'
 
 defineOptions({ name: 'WorkbenchSidebar' })
@@ -275,6 +276,195 @@ input { font: inherit; }
 .connection-state strong { margin-top: 2px; color: #b8bcba; font-size: 12px; font-weight: 620; }
 
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* DataEyes Code — optical navigation rail */
+.wb-sidebar {
+  position: relative;
+  isolation: isolate;
+  border-right-color: rgba(168, 189, 185, .14);
+  background:
+    radial-gradient(circle at 13% 2%, rgba(94, 231, 196, .11), transparent 27%),
+    linear-gradient(180deg, #10141b 0%, #0b0e14 74%);
+  box-shadow: inset -1px 0 rgba(255, 255, 255, .018);
+}
+
+.wb-sidebar::before {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, .018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, .014) 1px, transparent 1px);
+  background-size: 28px 28px;
+  mask-image: linear-gradient(to bottom, #000, transparent 58%);
+  content: '';
+  pointer-events: none;
+}
+
+.sidebar-brand {
+  min-height: 68px;
+  gap: 11px;
+  padding: 13px 14px 11px;
+}
+
+.brand-button {
+  width: 37px;
+  height: 37px;
+  border: 1px solid rgba(111, 233, 204, .2);
+  border-radius: 11px;
+  color: #6fe9cc;
+  background: linear-gradient(145deg, rgba(94, 231, 196, .13), rgba(255, 255, 255, .025));
+  box-shadow: inset 0 1px rgba(255, 255, 255, .07), 0 10px 28px rgba(0, 0, 0, .2);
+}
+
+.brand-button:hover:not(:disabled) {
+  border-color: rgba(111, 233, 204, .42);
+  color: #a1f2df;
+  transform: translateY(-1px);
+}
+
+.brand-copy strong {
+  color: #f1f5f3;
+  font-size: 12px;
+  font-weight: 760;
+  letter-spacing: .13em;
+}
+
+.brand-copy strong b {
+  color: #75e4c9;
+  font-weight: 760;
+}
+
+.brand-copy small {
+  margin-top: 4px;
+  color: #667079;
+  font: 8.5px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  letter-spacing: .12em;
+}
+
+.primary-actions {
+  gap: 9px;
+  padding: 4px 12px 15px;
+}
+
+.new-task {
+  min-height: 42px;
+  gap: 9px;
+  border-color: rgba(126, 224, 200, .22);
+  border-radius: 10px;
+  padding: 0 10px 0 7px;
+  color: #eef6f3;
+  background: linear-gradient(180deg, rgba(45, 63, 63, .78), rgba(27, 36, 40, .86));
+  box-shadow: inset 0 1px rgba(255, 255, 255, .06), 0 8px 22px rgba(0, 0, 0, .16);
+}
+
+.new-task:hover:not(:disabled) {
+  border-color: rgba(126, 224, 200, .42);
+  background: linear-gradient(180deg, rgba(51, 75, 72, .9), rgba(31, 44, 46, .94));
+  transform: translateY(-1px);
+}
+
+.new-task-mark {
+  display: grid;
+  width: 27px;
+  height: 27px;
+  place-items: center;
+  border-radius: 7px;
+  color: #0d1717;
+  background: #6fe4c6;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, .18), 0 5px 16px rgba(71, 208, 175, .15);
+}
+
+.new-task kbd,
+.task-search kbd {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.task-search {
+  height: 37px;
+  border-color: rgba(255, 255, 255, .045);
+  border-radius: 9px;
+  color: #737e85;
+  background: rgba(255, 255, 255, .034);
+}
+
+.task-search:focus-within {
+  border-color: rgba(111, 228, 198, .33);
+  background: rgba(255, 255, 255, .05);
+  box-shadow: 0 0 0 3px rgba(94, 231, 196, .055);
+}
+
+.section-heading {
+  color: #59636c;
+  font-size: 9.5px;
+  letter-spacing: .13em;
+}
+
+.project-list > button {
+  min-height: 52px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  padding-inline: 8px;
+}
+
+.project-list > button:hover,
+.project-list > button.is-active {
+  border-color: rgba(255, 255, 255, .055);
+  background: rgba(255, 255, 255, .045);
+}
+
+.project-list > button.is-active {
+  box-shadow: inset 2px 0 #5ee7c4;
+}
+
+.project-icon {
+  border: 1px solid rgba(255, 255, 255, .045);
+  color: #82a49c;
+  background: rgba(255, 255, 255, .05);
+}
+
+.project-copy strong { color: #d5dcda; }
+.project-copy small { color: #677178; }
+.project-badge { border-color: rgba(112, 229, 199, .14); color: #79aa9e; background: rgba(94, 231, 196, .035); }
+
+.history-section,
+.sidebar-footer { border-color: rgba(255, 255, 255, .07); }
+.history-list article { border: 1px solid transparent; border-radius: 9px; }
+.history-list article:hover,
+.history-list article.is-selected { border-color: rgba(255, 255, 255, .05); background: rgba(255, 255, 255, .04); }
+.history-list article.is-selected { box-shadow: inset 2px 0 #5ee7c4; }
+.history-copy strong { color: #cbd4d1; }
+.history-copy small { color: #626d74; }
+.sidebar-empty strong { color: #7f898e; }
+.sidebar-empty p { color: #565f66; }
+
+.sidebar-footer { min-height: 54px; padding-inline: 13px; background: rgba(4, 6, 10, .22); }
+.connection-dot { background: #5ee7c4; box-shadow: 0 0 0 3px rgba(94, 231, 196, .08), 0 0 14px rgba(94, 231, 196, .25); }
+.connection-state small { color: #566168; }
+.connection-state strong { color: #bdc8c5; }
+
+.brand-button,
+.new-task,
+.project-list > button,
+.history-list article,
+.icon-button,
+.task-search {
+  transition: transform 160ms cubic-bezier(.2, .8, .2, 1), border-color 160ms ease, color 160ms ease, background-color 160ms ease;
+}
+
+.wb-sidebar :is(button, input):focus-visible {
+  outline: 2px solid rgba(94, 231, 196, .85);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .brand-button,
+  .new-task,
+  .project-list > button,
+  .history-list article,
+  .icon-button,
+  .task-search { transition-duration: 0s; }
+}
 
 @media (max-width: 860px) {
   .wb-sidebar { position: fixed; z-index: 70; inset: 0 auto 0 0; width: min(290px, 90vw); visibility: hidden; pointer-events: none; box-shadow: 18px 0 60px rgba(0,0,0,.45); transform: translateX(-103%); transition: transform 170ms ease, visibility 0s linear 170ms; }

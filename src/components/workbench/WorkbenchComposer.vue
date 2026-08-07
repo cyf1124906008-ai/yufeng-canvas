@@ -168,6 +168,7 @@
             </button>
             <button v-else type="submit" class="send-button" :disabled="disabled || !canSubmit" aria-label="运行任务">
               <workbench-icon name="send" :size="15" />
+              <span>运行</span>
             </button>
           </div>
         </div>
@@ -476,6 +477,93 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', closeFloatingM
 .approval-menu > button > .wb-icon { margin-top: 2px; color: #83cea6; }
 .approval-menu > p { display: flex; align-items: flex-start; gap: 6px; margin: 5px 6px 2px; border-top: 1px solid #2d3032; padding: 8px 2px 2px; color: #777d7c; font-size: 10px; line-height: 1.45; }
 .approval-menu > p .wb-icon { margin-top: 1px; color: #b49362; }
+
+/* DataEyes Code — command dock */
+.composer-shell {
+  padding: 12px clamp(16px, 3vw, 36px) 15px;
+  background: linear-gradient(180deg, rgba(241, 243, 245, 0), #f1f3f5 28%);
+}
+
+.composer-wrap { width: min(940px, 100%); }
+
+.composer {
+  position: relative;
+  border-color: rgba(34, 61, 65, .24);
+  border-radius: 16px;
+  background: #111820;
+  box-shadow: 0 19px 46px rgba(24, 43, 50, .18), inset 0 1px rgba(255, 255, 255, .08);
+}
+
+.composer::before {
+  position: absolute;
+  top: -1px;
+  right: 18px;
+  left: 18px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(94, 231, 196, .7), transparent);
+  content: '';
+  opacity: .7;
+}
+
+.composer:focus-within {
+  border-color: rgba(94, 231, 196, .5);
+  box-shadow: 0 19px 46px rgba(24, 43, 50, .2), 0 0 0 3px rgba(94, 231, 196, .08), inset 0 1px rgba(255, 255, 255, .08);
+}
+
+.composer textarea {
+  min-height: 68px;
+  padding: 17px 18px 9px;
+  color: #eff7f5;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.composer textarea::placeholder { color: #7b8d91; }
+.attachment-list { border-bottom-color: rgba(255, 255, 255, .09); padding: 10px 11px 2px; }
+.attachment-list > span { border-color: rgba(255, 255, 255, .12); border-radius: 8px; color: #b3c2c1; background: rgba(255, 255, 255, .06); }
+.attachment-list strong { color: #d5e1df; }
+.attachment-list small { color: #819294; }
+
+.composer-toolbar { min-height: 42px; padding: 6px 9px 9px 10px; }
+.composer-tools, .composer-actions { gap: 5px; }
+.tool-button { width: 30px; height: 30px; border-radius: 8px; color: #829398; }
+.tool-button:hover, .tool-button.is-active { color: #d9efea; background: rgba(255, 255, 255, .08); }
+.toolbar-divider { height: 18px; margin: 0 5px; background: rgba(255, 255, 255, .12); }
+.model-control,
+.permission-mode {
+  height: 32px;
+  border-radius: 8px;
+  color: #b2c4c2;
+  background: rgba(255, 255, 255, .04);
+}
+
+.model-control { max-width: 210px; padding-inline: 9px; }
+.model-control:hover, .permission-mode:hover, .permission-mode.is-active { color: #e7f5f2; background: rgba(94, 231, 196, .1); }
+.permission-mode { border-left: 0; margin-left: 0; padding-inline: 9px; }
+.runtime-state { color: #8ca0a0; font-size: 10.5px; }
+.runtime-state.ready i { background: #5ee7c4; box-shadow: 0 0 10px rgba(94, 231, 196, .38); }
+.runtime-state.running i { background: #63c9e0; }
+.send-button, .stop-button { width: auto; min-width: 70px; height: 33px; gap: 6px; border-radius: 10px; padding: 0 12px; font-size: 11px; font-weight: 720; }
+.send-button { color: #09201c; background: #63e3c2; box-shadow: 0 7px 18px rgba(55, 195, 162, .2); }
+.send-button:hover { background: #8aeed6; transform: translateY(-1px); }
+.send-button:disabled { transform: none; }
+.send-button span { display: inline; }
+.stop-button { color: #ffd9d7; background: #7c3d43; }
+.stop-button:hover { background: #924b52; }
+.guide-button, .resume-button { height: 33px; border: 1px solid rgba(94, 231, 196, .2); border-radius: 9px; padding-inline: 11px; color: #c9f2e8; background: rgba(52, 124, 111, .3); }
+.guide-button:hover, .resume-button:hover { color: #e8fff8; background: rgba(65, 155, 137, .45); }
+.composer-hint { margin-top: 8px; color: #7a898d; font-size: 10.5px; }
+.composer-hint span { color: #39766d; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+
+.composer :is(button, textarea, input):focus-visible {
+  outline: 2px solid rgba(94, 231, 196, .9);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .send-button,
+  .composer { transition-duration: 0s; }
+}
 
 @keyframes pulse { to { opacity: .35; } }
 

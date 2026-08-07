@@ -12,7 +12,7 @@
     </header>
 
     <p v-if="!desktopReady" class="desktop-notice">
-      <workbench-icon name="monitor" :size="14" />自动化需要 YUFENG Desktop App；Web 预览只能查看界面。
+        <workbench-icon name="monitor" :size="14" />自动化需要 DataEyes Code Desktop App；Web 预览只能查看界面。
     </p>
     <p v-else-if="!workspaceRoot" class="desktop-notice is-warning">
       <workbench-icon name="alert" :size="14" />当前没有可用工作区。桌面 App 会自动创建默认工作区；你仍可创建不绑定工作区的自动化。

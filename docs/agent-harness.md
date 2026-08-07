@@ -1,6 +1,6 @@
-# YUFENG Desktop Agent Harness
+# DataEyes Code Desktop Agent Harness
 
-YUFENG Agent 的默认交互不是画布或生图页，而是一个 Codex 风格的桌面任务工作台：用户描述希望电脑完成的任务，Agent 每轮只决定一个下一动作，执行后观察真实结果，再继续、请求批准或完成。
+DataEyes Code 的默认交互不是画布或生图页，而是一个 Codex 风格的桌面任务工作台：用户描述希望电脑完成的任务，Agent 每轮只决定一个下一动作，执行后观察真实结果，再继续、请求批准或完成。
 
 ## 北极星
 
@@ -26,14 +26,14 @@ WorkbenchEventStream → Projector → Workbench UI
 WorkbenchSessionRepository → 本地任务历史
 ```
 
-Planner 可以使用两种执行引擎：默认的 YUFENG Native，或桌面端显式启动的 OpenCode Local。OpenCode 只负责拆解下一步；它通过 Electron Main 的受限 IPC 读取当前工作区并返回结构化动作，动作仍回到同一个 ToolRegistry 和审批链路，不会让 OpenCode 直接取得 YUFENG 的 API Key 或系统控制权。
+Planner 可以使用两种执行引擎：默认的 DataEyes Code Native，或桌面端显式启动的 OpenCode Local。OpenCode 只负责拆解下一步；它通过 Electron Main 的受限 IPC 读取当前工作区并返回结构化动作，动作仍回到同一个 ToolRegistry 和审批链路，不会让 OpenCode 直接取得 DataEyes Code 的 API Key 或系统控制权。
 
 关键边界：
 
 - 通用 Planner 只看到注册工具的名称、描述、schema、风险和审批策略，不直接接触 Electron IPC。
 - Creative 工具内部仍只调用 `generate_image`、`analyze_image`、`generate_video` 等能力，不直接点名供应商模型。
 - 写文件、运行命令和 macOS 控制在执行前必须进入 `awaiting_approval`；模型不能自行设置 approval。
-- 文件工具只访问当前真实工作区根目录；桌面 App 首次启动自动绑定专用的 `YUFENG Agent Workspace`（源码开发模式绑定当前 checkout），用户仍可从侧栏切换项目；终端使用 executable + args，不使用 shell 字符串拼接。
+- 文件工具只访问当前真实工作区根目录；新安装首次启动自动绑定专用的 `DataEyes Code Workspace`（源码开发模式绑定当前 checkout），升级安装会复用已有 `YUFENG Agent Workspace` 和已保存路径；用户仍可从侧栏切换项目。终端使用 executable + args，不使用 shell 字符串拼接。
 - 终端超时和取消是 best-effort：Unix 终止受控进程组，Windows 终止直接子进程。主动脱离该边界的后代进程不承诺被终止，未观察到直接进程退出时返回 `termination_unconfirmed`。
 - Provider 工具不导入 Canvas store，不创建节点，也不要求 Vue Flow 组件处于挂载状态。
 - 图片和视频的真实 URL 只保存在 ArtifactStore 与展示层；Planner 看到稳定 artifact ID。

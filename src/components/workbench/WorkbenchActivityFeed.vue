@@ -5,7 +5,10 @@
         <button type="button" class="header-icon mobile-nav" aria-label="打开导航" @click="emit('open-navigation')">
           <workbench-icon name="panel-left" :size="16" />
         </button>
-        <span class="thread-symbol"><workbench-icon :name="mode === 'history' ? 'history' : 'sparkles'" :size="14" /></span>
+        <span class="thread-symbol">
+          <workbench-icon v-if="mode === 'history'" name="history" :size="14" />
+          <data-eyes-mark v-else :size="21" />
+        </span>
         <div>
           <strong>{{ sessionTitle }}</strong>
           <small>{{ modeLabel }}<span v-if="snapshot.eventCount"> · {{ snapshot.eventCount }} 个事件</span></small>
@@ -25,17 +28,21 @@
       </div>
 
       <div v-else-if="mode === 'draft'" class="welcome-state">
-        <div class="welcome-intro">
-          <span class="welcome-mark"><workbench-icon name="sparkles" :size="18" /></span>
-          <div>
-            <h1>开始一个 Agent 任务</h1>
-            <p>说明目标即可。Agent 会读取项目、调用工具并在危险操作前请求批准。</p>
+        <div class="welcome-hero">
+          <div class="welcome-intro">
+            <span class="welcome-eyebrow"><i></i> LOCAL RUNTIME / READY</span>
+            <h1>把目标交给<br /><em>DataEyes Code</em></h1>
+            <p>描述最终结果。Agent 会理解项目、规划步骤、调用工具，并把每一次操作留在可检查的执行轨迹中。</p>
           </div>
+          <figure class="welcome-visual" aria-label="DataEyes Code 光学执行引擎">
+            <img :src="opticalRuntimeArtwork" alt="" width="1586" height="992" fetchpriority="high" />
+            <figcaption><span><i></i>OPTICAL RUNTIME</span><strong>15 tools available</strong></figcaption>
+          </figure>
         </div>
         <div class="suggestion-list">
           <button v-for="(suggestion, index) in suggestions" :key="suggestion" type="button" @click="emit('apply-suggestion', suggestion)">
-            <span>{{ index + 1 }}</span>
-            <strong>{{ suggestion }}</strong>
+            <span class="suggestion-icon"><workbench-icon :name="suggestionIcon(index)" :size="14" /></span>
+            <span class="suggestion-copy"><small>{{ suggestionLabel(index) }}</small><strong>{{ suggestion }}</strong></span>
             <workbench-icon name="chevron-right" :size="13" />
           </button>
         </div>
@@ -86,7 +93,10 @@
         <section v-if="displayActivities.length" class="activity-stream" aria-label="Agent 活动" aria-live="polite">
           <template v-for="activity in displayActivities" :key="activity.id">
             <article v-if="activity.kind === 'message'" class="chat-message" :class="activity.role === 'user' ? 'is-user' : 'is-agent'">
-              <span class="message-avatar">{{ activity.role === 'user' ? '你' : 'Y' }}</span>
+              <span class="message-avatar">
+                <template v-if="activity.role === 'user'">你</template>
+                <data-eyes-mark v-else :size="19" />
+              </span>
               <div>
                 <header><strong>{{ activity.role === 'user' ? '你' : 'Agent' }}</strong><span v-if="activity.guidance" class="guidance-chip">执行引导</span><time v-if="activity.timeLabel">{{ activity.timeLabel }}</time></header>
                 <p>{{ activity.message }}</p>
@@ -167,6 +177,8 @@
 
 <script setup>
 import { computed, nextTick, ref, watch } from 'vue'
+import opticalRuntimeArtwork from '../../assets/dataeyes-code/optical-runtime-v1.png'
+import DataEyesMark from '../brand/DataEyesMark.vue'
 import {
   buildWorkbenchActivities,
   buildWorkbenchPlan,
@@ -225,6 +237,8 @@ const normalizedArtifacts = computed(() => normalizeWorkbenchArtifacts(props.art
 const startedAt = computed(() => formatWorkbenchTime(props.snapshot?.startedAt || props.snapshot?.createdAt))
 const sessionTitle = computed(() => goal.value || (props.mode === 'draft' ? '新任务' : 'Agent 任务'))
 const modeLabel = computed(() => ({ draft: '本地草稿', live: '实时会话', history: '已保存历史' })[props.mode] || '会话')
+const suggestionIcon = index => ['git-diff', 'terminal', 'monitor', 'sparkles'][index] || 'activity'
+const suggestionLabel = index => ['REVIEW', 'BUILD', 'OBSERVE', 'CREATE'][index] || 'RUN'
 
 const iconForActivity = activity => {
   if (activity.kind === 'terminal') return 'terminal'
@@ -386,12 +400,236 @@ watch(() => [displayActivities.value.length, normalizedArtifacts.value.length], 
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes pulse { to { opacity: .35; } }
 
+/* DataEyes Code — the thread opens like a quiet operations console. */
+.thread-shell {
+  background:
+    radial-gradient(circle at 72% 11%, rgba(94, 231, 196, .055), transparent 24%),
+    #f1f3f5;
+}
+
+.thread-header {
+  min-height: 61px;
+  border-bottom-color: rgba(20, 30, 36, .09);
+  padding: 9px 17px;
+  background: rgba(247, 249, 250, .88);
+  backdrop-filter: blur(16px);
+}
+
+.thread-symbol {
+  width: 34px;
+  height: 34px;
+  border-color: rgba(37, 66, 69, .14);
+  border-radius: 10px;
+  color: #218b7b;
+  background: linear-gradient(145deg, #e4f8f2, #dbe9ed);
+}
+
+.thread-heading strong { color: #1c292d; font-size: 13px; letter-spacing: -.01em; }
+.thread-heading small { color: #77858a; }
+.header-icon { color: #6c7a80; }
+.header-icon:hover { border-color: rgba(28, 89, 83, .16); color: #1c6158; background: rgba(94, 231, 196, .1); }
+
+.run-status {
+  height: 28px;
+  border-color: rgba(38, 68, 70, .13);
+  color: #66767a;
+  background: rgba(255, 255, 255, .7);
+  box-shadow: 0 2px 8px rgba(31, 48, 53, .035);
+}
+
+.run-status.is-running { border-color: rgba(47, 157, 135, .22); color: #21796c; background: rgba(222, 250, 241, .8); }
+.run-status.is-success { border-color: rgba(62, 147, 105, .2); color: #317957; background: rgba(230, 248, 238, .8); }
+
+.thread-content,
+.welcome-state { width: min(920px, calc(100% - 52px)); }
+
+.welcome-state { padding: clamp(44px, 8vh, 86px) 0 44px; }
+
+.welcome-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(250px, .92fr);
+  align-items: stretch;
+  gap: clamp(20px, 4vw, 54px);
+}
+
+.welcome-intro {
+  display: block;
+  align-self: center;
+  padding: 4px 0 7px;
+}
+
+.welcome-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: #6e8f8b;
+  font: 9px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  letter-spacing: .15em;
+}
+
+.welcome-eyebrow i,
+.welcome-visual figcaption i {
+  display: block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #45c8ae;
+  box-shadow: 0 0 0 3px rgba(69, 200, 174, .12), 0 0 12px rgba(69, 200, 174, .32);
+}
+
+.welcome-intro h1 {
+  margin: 18px 0 0;
+  color: #162328;
+  font-size: clamp(30px, 4vw, 48px);
+  font-weight: 760;
+  letter-spacing: -.06em;
+  line-height: 1.06;
+  text-wrap: balance;
+}
+
+.welcome-intro h1 em {
+  color: #268b7e;
+  font-style: normal;
+}
+
+.welcome-intro p {
+  max-width: 470px;
+  margin: 18px 0 0;
+  color: #718086;
+  font-size: 13px;
+  line-height: 1.75;
+}
+
+.welcome-visual {
+  position: relative;
+  min-height: 218px;
+  overflow: hidden;
+  border: 1px solid rgba(103, 156, 153, .2);
+  border-radius: 18px;
+  margin: 0;
+  background: #0b0e14;
+  box-shadow: 0 24px 55px rgba(28, 46, 53, .14), inset 0 1px rgba(255, 255, 255, .1);
+}
+
+.welcome-visual::after {
+  position: absolute;
+  inset: 0;
+  border: 1px solid rgba(255, 255, 255, .04);
+  border-radius: inherit;
+  content: '';
+  pointer-events: none;
+}
+
+.welcome-visual img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 218px;
+  object-fit: cover;
+  object-position: 64% center;
+  opacity: .9;
+  transition: transform 700ms cubic-bezier(.2, .8, .2, 1), opacity 220ms ease;
+}
+
+.welcome-visual:hover img { opacity: 1; transform: scale(1.025); }
+
+.welcome-visual figcaption {
+  position: absolute;
+  right: 13px;
+  bottom: 12px;
+  left: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: rgba(230, 244, 241, .75);
+  font: 9px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  letter-spacing: .09em;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, .6);
+}
+
+.welcome-visual figcaption span { display: inline-flex; align-items: center; gap: 7px; }
+.welcome-visual figcaption strong { color: rgba(215, 235, 231, .58); font-size: 9px; font-weight: 500; letter-spacing: .02em; }
+
+.suggestion-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+  margin-top: 27px;
+}
+
+.suggestion-list button {
+  grid-template-columns: 35px minmax(0, 1fr) 15px;
+  min-height: 65px;
+  gap: 11px;
+  border-color: rgba(35, 58, 63, .13);
+  border-radius: 12px;
+  padding: 10px 12px;
+  color: #33454a;
+  background: rgba(255, 255, 255, .65);
+  box-shadow: 0 5px 16px rgba(32, 52, 58, .035);
+}
+
+.suggestion-list button:hover {
+  border-color: rgba(42, 153, 133, .35);
+  color: #183d3b;
+  background: rgba(246, 255, 252, .96);
+  box-shadow: 0 11px 24px rgba(38, 112, 102, .11);
+  transform: translateY(-2px);
+}
+
+.suggestion-icon {
+  display: grid;
+  width: 35px;
+  height: 35px;
+  place-items: center;
+  border: 1px solid rgba(41, 141, 124, .16);
+  border-radius: 10px;
+  color: #278a7c;
+  background: linear-gradient(145deg, rgba(94, 231, 196, .16), rgba(217, 242, 239, .62));
+}
+
+.suggestion-copy { display: block; min-width: 0; text-align: left; }
+.suggestion-copy small { display: block; color: #7e9b96; font: 8px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing: .13em; }
+.suggestion-copy strong { display: block; overflow: hidden; margin-top: 6px; color: #35484d; font-size: 12.5px; font-weight: 620; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
+.suggestion-list button > .wb-icon { color: #94a6a9; }
+
+.welcome-capabilities {
+  gap: 18px;
+  margin: 18px 2px 0;
+  color: #7b898e;
+  font-size: 10.5px;
+}
+
+.welcome-capabilities span { gap: 6px; }
+.welcome-capabilities .wb-icon { color: #4b9e91; }
+
+.message-avatar {
+  border-color: rgba(47, 115, 106, .18);
+  color: #2b8c7d;
+  background: linear-gradient(145deg, #e1f7f0, #dbe9ed);
+}
+
+.chat-message.is-user .message-avatar { border-color: #163b39; color: #dff8f0; background: #1a5f55; }
+
+.thread-shell :is(button, summary):focus-visible {
+  outline: 2px solid rgba(42, 153, 133, .78);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .welcome-visual img,
+  .suggestion-list button { transition-duration: 0s; }
+}
+
 @media (max-width: 860px) {
   .mobile-nav { display: grid; }
   .thread-heading strong { max-width: 48vw; }
 }
 
 @media (max-width: 620px) {
+  .welcome-hero { grid-template-columns: 1fr; }
+  .welcome-visual { min-height: 170px; }
+  .welcome-visual img { min-height: 170px; }
   .thread-content,
   .welcome-state { width: calc(100% - 20px); }
   .welcome-state { padding-top: 28px; }
@@ -407,5 +645,45 @@ watch(() => [displayActivities.value.length, normalizedArtifacts.value.length], 
   .waiting-card,
   .artifact-strip { margin-left: 0; }
   .chat-message { gap: 7px; }
+}
+
+/* Keep the first-run surface inside the visible feed above the command dock.
+ * The feed remains scrollable for small windows, but the default 720px view
+ * should expose the complete welcome composition without card overlap. */
+.welcome-state {
+  padding-top: clamp(28px, 5vh, 52px);
+  padding-bottom: 30px;
+}
+
+.welcome-hero {
+  grid-template-columns: minmax(0, 1.08fr) minmax(232px, .92fr);
+  gap: clamp(18px, 3vw, 38px);
+}
+
+.welcome-intro h1 {
+  font-size: clamp(28px, 3.25vw, 42px);
+}
+
+.welcome-intro p {
+  margin-top: 14px;
+  font-size: 12.5px;
+}
+
+.welcome-visual,
+.welcome-visual img { min-height: 188px; }
+
+.suggestion-list {
+  margin-top: 18px;
+  gap: 8px;
+}
+
+.suggestion-list button { min-height: 58px; }
+
+.welcome-capabilities { margin-top: 12px; }
+
+@media (max-width: 620px) {
+  .welcome-state { padding-top: 24px; }
+  .welcome-visual,
+  .welcome-visual img { min-height: 170px; }
 }
 </style>

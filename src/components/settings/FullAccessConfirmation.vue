@@ -18,7 +18,7 @@
         <header class="full-access-topbar">
           <div class="product-lockup">
             <span class="product-mark">Y</span>
-            <span><strong>YUFENG Agent</strong><small>权限确认</small></span>
+            <span><strong>DataEyes Code</strong><small>权限确认</small></span>
           </div>
           <span class="session-badge"><i></i>当前 App 会话</span>
         </header>

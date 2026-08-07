@@ -1,6 +1,6 @@
-# YUFENG Agent Local API / MCP
+# DataEyes Code Local API / MCP
 
-YUFENG Agent 在桌面 App 中启动一个仅监听 localhost 的辅助服务，用于健康检查、发布信息和后续 MCP 工具扩展。
+DataEyes Code 在桌面 App 中启动一个仅监听 localhost 的辅助服务，用于健康检查、发布信息和后续 MCP 工具扩展。
 
 ## Default Endpoint
 
@@ -31,7 +31,7 @@ Response:
 ```json
 {
   "ok": true,
-  "app": "YUFENG Agent",
+  "app": "DataEyes Code",
   "version": "1.1.0",
   "mcp": "http://127.0.0.1:43112/mcp"
 }
@@ -55,6 +55,8 @@ Built-in tools:
 - `yufeng.release`: returns the latest GitHub release page.
 - `yufeng.support`: returns project and support links.
 - `yufeng.prompt_suggestions`: returns starter task ideas.
+
+`yufeng.*` 是为兼容现有 MCP 客户端保留的稳定协议标识，不代表当前展示品牌。
 
 Example:
 

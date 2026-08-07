@@ -1,5 +1,8 @@
+import { DISTRIBUTION_CONFIG } from '../config/distribution.js'
+
 const SNAPSHOT_KIND = 'yufeng-canvas.user-data'
 const SNAPSHOT_VERSION = 1
+const APP_NAME = DISTRIBUTION_CONFIG.branding.appName
 
 const SYSTEM_ONLY_KEYS = new Set([
   'yufeng-home-welcome-seen'
@@ -123,7 +126,7 @@ export const isValidUserDataSnapshot = (snapshot) =>
 
 export const importUserDataSnapshot = (snapshot, { overwrite = false, includeSession = true } = {}) => {
   if (!isValidUserDataSnapshot(snapshot)) {
-    throw new Error('这个文件不是有效的 YUFENG Canvas 数据包')
+    throw new Error(`这个文件不是有效的 ${APP_NAME} 数据包`)
   }
 
   const localStorageCount = writeStorageArea(window.localStorage, snapshot.localStorage, {

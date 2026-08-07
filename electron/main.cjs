@@ -10,6 +10,29 @@ const http = require('http')
 const fs = require('fs')
 const { fileURLToPath } = require('url')
 const packageJson = require('../package.json')
+const PRODUCT_NAME = packageJson.productName || 'DataEyes Code'
+const LEGACY_PRODUCT_NAME = 'YUFENG Agent'
+
+// Keep existing desktop profiles in place on the first branded launch. The
+// visible product name changes, but moving Chromium storage, Agent settings,
+// and local assets implicitly would make a normal upgrade look like data loss.
+const preferLegacyUserDataWhenBrandedProfileIsEmpty = () => {
+  const currentUserData = app.getPath('userData')
+  const legacyUserData = path.join(app.getPath('appData'), LEGACY_PRODUCT_NAME)
+  const hasEntries = (directory) => {
+    try {
+      return fs.existsSync(directory) && fs.readdirSync(directory).length > 0
+    } catch {
+      return false
+    }
+  }
+  if (path.resolve(currentUserData) !== path.resolve(legacyUserData) &&
+      hasEntries(legacyUserData) && !hasEntries(currentUserData)) {
+    app.setPath('userData', legacyUserData)
+  }
+}
+
+preferLegacyUserDataWhenBrandedProfileIsEmpty()
 const comfyManager = require('./comfy/manager.cjs')
 const comfyInstaller = require('./comfy/installer.cjs')
 const comfyProcess = require('./comfy/process.cjs')
@@ -510,7 +533,7 @@ const requestFullAccessGrant = async (event) => {
   const parent = BrowserWindow.fromWebContents(event.sender) || undefined
   const options = {
     type: 'warning',
-    title: 'YUFENG Agent 高风险授权',
+    title: `${PRODUCT_NAME} 高风险授权`,
     message: '允许 Agent 在本次应用与页面生命周期内使用全权限？',
     detail: [
       '启用后，只有明确标记为全权限的 Agent 工具调用才能跳过逐次原生确认。',
@@ -601,7 +624,7 @@ const confirmAgentToolAction = async (event, action, input = {}, { expectedWorks
     const parent = BrowserWindow.fromWebContents(event.sender) || undefined
     const options = {
       type: 'warning',
-      title: 'YUFENG Agent 安全确认',
+      title: `${PRODUCT_NAME} 安全确认`,
       message: `允许执行一次 ${action}？`,
       detail: agentToolApprovalDetail(action, payload),
       buttons: ['取消', '允许一次'],
@@ -950,7 +973,7 @@ const readJsonBody = (request) => new Promise((resolve, reject) => {
 const mcpTools = [
   {
     name: 'yufeng.health',
-    description: 'Return YUFENG Agent local API health and version.',
+    description: `Return ${PRODUCT_NAME} local API health and version.`,
     inputSchema: {
       type: 'object',
       properties: {}
@@ -1313,11 +1336,30 @@ const copyDirIfMissing = (sourceDir, targetDir) => {
   }
 }
 
+const copyFileIfMissing = (sourceFile, targetFile) => {
+  if (!fs.existsSync(sourceFile) || fs.existsSync(targetFile)) return false
+  try {
+    ensureParentDir(targetFile)
+    fs.copyFileSync(sourceFile, targetFile, fs.constants.COPYFILE_EXCL)
+    return true
+  } catch (error) {
+    if (error?.code !== 'EEXIST') {
+      console.warn('[data-backup] skipped legacy file copy', {
+        sourceFile,
+        targetFile,
+        error: error?.message || String(error)
+      })
+    }
+    return false
+  }
+}
+
 const getLegacyUserDataCandidates = () => {
   const appDataPath = app.getPath('appData')
   const currentUserData = app.getPath('userData')
   const currentName = path.basename(currentUserData)
   const knownNames = [
+    'DataEyes Code',
     'YUFENG Canvas',
     'AI Canvas',
     'huobao-canvas',
@@ -1329,7 +1371,7 @@ const getLegacyUserDataCandidates = () => {
   const discoveredNames = (() => {
     try {
       return fs.readdirSync(appDataPath)
-        .filter((name) => /huobao|yufeng|canvas|火宝|御风/i.test(name))
+        .filter((name) => /dataeyes|huobao|yufeng|canvas|火宝|御风/i.test(name))
     } catch {
       return []
     }
@@ -1345,21 +1387,30 @@ const migrateLegacyUserDataStorage = () => {
   const currentUserData = app.getPath('userData')
   const currentLocalStorage = path.join(currentUserData, 'Local Storage', 'leveldb')
   const currentAssets = path.join(currentUserData, 'yufeng-canvas', 'assets')
+  const currentAgentTools = path.join(currentUserData, 'agent-tools')
+  const currentBackup = path.join(currentUserData, userDataBackupFileName)
   const needsLocalStorage = !hasFiles(currentLocalStorage)
   const needsAssets = !hasFiles(currentAssets)
+  const needsAgentTools = !hasFiles(currentAgentTools)
+  const needsBackup = !fs.existsSync(currentBackup)
 
-  if (!needsLocalStorage && !needsAssets) return
+  if (!needsLocalStorage && !needsAssets && !needsAgentTools && !needsBackup) return
 
   for (const legacyDir of getLegacyUserDataCandidates()) {
     const legacyLocalStorage = path.join(legacyDir, 'Local Storage', 'leveldb')
     const legacyAssets = path.join(legacyDir, 'yufeng-canvas', 'assets')
-    if (!hasFiles(legacyLocalStorage) && !hasFiles(legacyAssets)) continue
+    const legacyAgentTools = path.join(legacyDir, 'agent-tools')
+    const legacyBackup = path.join(legacyDir, userDataBackupFileName)
+    if (!hasFiles(legacyLocalStorage) && !hasFiles(legacyAssets) &&
+        !hasFiles(legacyAgentTools) && !fs.existsSync(legacyBackup)) continue
 
     const copied = [
       needsLocalStorage && copyDirIfMissing(path.join(legacyDir, 'Local Storage'), path.join(currentUserData, 'Local Storage')),
       needsLocalStorage && copyDirIfMissing(path.join(legacyDir, 'IndexedDB'), path.join(currentUserData, 'IndexedDB')),
       needsLocalStorage && copyDirIfMissing(path.join(legacyDir, 'Session Storage'), path.join(currentUserData, 'Session Storage')),
-      needsAssets && copyDirIfMissing(legacyAssets, currentAssets)
+      needsAssets && copyDirIfMissing(legacyAssets, currentAssets),
+      needsAgentTools && copyDirIfMissing(legacyAgentTools, currentAgentTools),
+      needsBackup && copyFileIfMissing(legacyBackup, currentBackup)
     ].some(Boolean)
 
     if (copied) {
@@ -1443,8 +1494,18 @@ app.whenReady().then(async () => {
   // developer can ask the Agent to inspect and repair this repository without
   // seeing a folder picker. Packaged builds use a dedicated user-owned folder
   // instead; the app data path remains a permission-safe fallback.
+  const documentsPath = app.getPath('documents')
+  const brandedWorkspaceRoot = path.join(documentsPath, 'DataEyes Code Workspace')
+  const legacyWorkspaceRoot = path.join(documentsPath, 'YUFENG Agent Workspace')
+  const legacyWorkspaceExists = (() => {
+    try {
+      return fs.statSync(legacyWorkspaceRoot).isDirectory()
+    } catch {
+      return false
+    }
+  })()
   const defaultWorkspaceRoot = app.isPackaged
-    ? path.join(app.getPath('documents'), 'YUFENG Agent Workspace')
+    ? (legacyWorkspaceExists ? legacyWorkspaceRoot : brandedWorkspaceRoot)
     : app.getAppPath()
   const agentTools = createAgentTools({
     userDataPath: app.getPath('userData'),
@@ -1497,13 +1558,13 @@ app.whenReady().then(async () => {
     const timestamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`
     const defaultPath = path.join(
       app.getPath('documents'),
-      `yufeng-canvas-backup-${timestamp}.json`
+      `dataeyes-code-backup-${timestamp}.json`
     )
     const result = await dialog.showSaveDialog({
-      title: '导出 YUFENG Canvas 备份',
+      title: `导出 ${PRODUCT_NAME} 备份`,
       defaultPath,
       filters: [
-        { name: 'YUFENG Canvas 数据包', extensions: ['json'] }
+        { name: `${PRODUCT_NAME} 数据包`, extensions: ['json'] }
       ]
     })
 
@@ -1523,10 +1584,10 @@ app.whenReady().then(async () => {
 
   ipcMain.handle('app:import-user-data', async () => {
     const result = await dialog.showOpenDialog({
-      title: '导入 YUFENG Canvas 创作与配置',
+      title: `导入 ${PRODUCT_NAME} 数据与配置`,
       properties: ['openFile'],
       filters: [
-        { name: 'YUFENG Canvas 数据包', extensions: ['json'] }
+        { name: `${PRODUCT_NAME} 数据包`, extensions: ['json'] }
       ]
     })
 
@@ -1536,7 +1597,7 @@ app.whenReady().then(async () => {
 
     const snapshot = readJsonFile(result.filePaths[0])
     if (!snapshot || snapshot.kind !== userDataBackupKind) {
-      throw new Error('选择的文件不是有效的 YUFENG Canvas 数据包')
+      throw new Error(`选择的文件不是有效的 ${PRODUCT_NAME} 数据包`)
     }
 
     writeJsonFile(getUserDataBackupPath(), normalizeBackupSnapshot(snapshot))

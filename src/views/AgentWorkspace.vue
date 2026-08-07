@@ -215,7 +215,7 @@ const createOpenCodePlannerForSession = async () => {
       directory: String(workbench.workspaceRoot.value || '')
     })
   } else {
-    const error = new Error('桌面 OpenCode IPC 不可用，请重启 YUFENG Desktop')
+    const error = new Error('桌面 OpenCode IPC 不可用，请重启 DataEyes Code')
     error.code = 'OPENCODE_IPC_UNAVAILABLE'
     throw error
   }
@@ -377,11 +377,25 @@ const workbenchActivities = computed(() => [
 ])
 const providerLabel = computed(() => String(modelStore.providerLabel || modelStore.currentProvider || '未选择'))
 const providerConfigured = computed(() => Boolean(modelStore.hasAnyApiKey))
+const MODEL_CAPABILITY_LABELS = Object.freeze({ chat: '对话', image: '图片', video: '视频' })
+const normalizeModelOptions = models => {
+  const source = Array.isArray(models) ? models : (Array.isArray(models?.value) ? models.value : [])
+  return source
+  .filter(model => typeof model?.key === 'string' && model.key.trim())
+  .map(model => ({
+    key: model.key.trim(),
+    label: String(model.label || model.name || model.key).trim() || model.key.trim()
+  }))
+}
 const modelOptions = computed(() => ({
-  chat: modelStore.chatModelOptions || [],
-  image: modelStore.imageModelOptions || [],
-  video: modelStore.videoModelOptions || []
+  // The store's available* options are provider-scoped and already exclude
+  // explicit outages. Do not fall back to the built-in catalog when
+  // requireUserModels is enabled: an invented option cannot be executed.
+  chat: normalizeModelOptions(modelStore.chatModelOptions),
+  image: normalizeModelOptions(modelStore.imageModelOptions),
+  video: normalizeModelOptions(modelStore.videoModelOptions)
 }))
+const modelCatalogEmpty = computed(() => Object.values(modelOptions.value).every(options => options.length === 0))
 const selectedModels = computed(() => ({
   chat: String(modelStore.selectedChatModel || ''),
   image: String(modelStore.selectedImageModel || ''),
@@ -389,10 +403,26 @@ const selectedModels = computed(() => ({
 }))
 const selectedModelLabel = computed(() => {
   const key = String(modelStore.selectedChatModel || '').trim()
-  if (!key) return '自动路由'
-  const label = modelOptions.value.chat.find(model => model.key === key)?.label || key
+  if (!key) return modelOptions.value.chat.length ? '自动路由' : '先配置模型'
+  const selected = modelOptions.value.chat.find(model => model.key === key)
+  if (!selected) return modelOptions.value.chat.length ? '当前模型不可用' : '先配置模型'
+  const label = selected.label || key
   return modelStore.isModelLocked?.('chat') ? `${label} · 锁定` : label
 })
+const ensurePlannerModelReady = () => {
+  // OpenCode owns its own connected model catalog. The sidecar health check
+  // and planner factory remain responsible for validating that path.
+  if (settings.agentEngine.value === 'opencode') return true
+  if (modelOptions.value.chat.length > 0) return true
+  openSettings('api')
+  const reason = modelCatalogEmpty.value
+    ? '当前 Provider 的模型目录为空'
+    : '当前 Provider 尚未导入对话模型'
+  window.$message?.warning(
+    `${reason}（${providerLabel.value}），请先同步目录或手动添加一个可用模型。`
+  )
+  return false
+}
 const approvalMessage = computed(() => {
   const call = workbench.pendingToolCall.value
   if (!call) return ''
@@ -431,7 +461,7 @@ const sessionContext = computed(() => ({
   模式: workbench.desktopReady.value ? '桌面 App' : 'Web 预览',
   Provider: `${providerLabel.value}${providerConfigured.value ? '（已配置）' : '（未配置）'}`,
   模型: selectedModelLabel.value,
-  引擎: settings.agentEngine.value === 'opencode' ? 'OpenCode Local' : 'YUFENG Native',
+  引擎: settings.agentEngine.value === 'opencode' ? 'OpenCode Local' : 'DataEyes Native',
   OpenCode: openCodeStatus.value?.state === 'running'
     ? (openCodeStatus.value.url || '已连接')
     : (openCodeLastError.value?.message || '未运行'),
@@ -626,6 +656,7 @@ const attachmentContext = () => {
 const submit = async (input = goal.value) => {
   const normalized = String(input || '').trim()
   if (!normalized || workbench.isRunning.value || workbench.isAwaitingApproval.value || workbench.isHistorySelection.value) return
+  if (!ensurePlannerModelReady()) return
   const submitted = `${normalized}${attachmentContext()}`
   if (utf8Bytes(submitted) > MAX_SUBMISSION_CONTEXT_BYTES) {
     window.$message?.warning('任务与附件总计不能超过 24 KB，请缩短任务描述或移除部分附件')
@@ -750,7 +781,7 @@ const confirmFullAccess = async () => {
   if (fullAccessBusy.value) return false
   const tools = desktopBridge()?.agentTools
   if (typeof tools?.requestFullAccess !== 'function') {
-    window.$message?.warning('完全访问权限只在 YUFENG Desktop App 中可用')
+    window.$message?.warning('完全访问权限只在 DataEyes Code Desktop App 中可用')
     return false
   }
   fullAccessBusy.value = true
@@ -780,7 +811,7 @@ const setApprovalMode = async mode => {
   if (mode === 'full_access') {
     if (workbench.approvalMode.value === 'full_access') return true
     if (!workbench.desktopReady.value || typeof desktopBridge()?.agentTools?.requestFullAccess !== 'function') {
-      window.$message?.warning('完全访问权限只在 YUFENG Desktop App 中可用')
+    window.$message?.warning('完全访问权限只在 DataEyes Code Desktop App 中可用')
       return false
     }
     showSettingsCenter.value = false
@@ -807,6 +838,7 @@ const openSettings = section => {
 const retry = async () => {
   const lastUser = [...workbench.messages.value].reverse().find(message => message.role === 'user')
   if (!lastUser?.content || workbench.isRunning.value || workbench.isAwaitingApproval.value) return
+  if (!ensurePlannerModelReady()) return
   selectedArtifact.value = null
   closeMobilePanels()
   goal.value = ''
@@ -883,6 +915,14 @@ const selectModel = payload => {
   }
   const field = fields[capability]
   if (!field) return
+  const options = modelOptions.value[capability] || []
+  if (model && !options.some(option => option.key === model)) {
+    openSettings('api')
+    window.$message?.warning(
+      `${MODEL_CAPABILITY_LABELS[capability] || '当前'}模型不在当前 Provider 的可用目录中，请先同步或添加后再切换。`
+    )
+    return
+  }
   if (typeof modelStore.setSelectedModel === 'function') {
     modelStore.setSelectedModel(capability, model, { mode: model ? 'locked' : 'auto' })
   } else {
@@ -987,7 +1027,7 @@ const refreshOpenCode = async () => {
 const startOpenCode = async () => {
   const bridge = desktopBridge()
   if (typeof bridge?.openCode?.start !== 'function') {
-    window.$message?.warning('OpenCode 本地引擎只在桌面 App 中可用；请先打开 YUFENG Desktop')
+    window.$message?.warning('OpenCode 本地引擎只在桌面 App 中可用；请先打开 DataEyes Code')
     return false
   }
   const directory = String(workbench.workspaceRoot.value || '').trim()
@@ -1021,7 +1061,7 @@ const stopOpenCode = async () => {
     if (typeof bridge?.openCode?.stop === 'function') await bridge.openCode.stop()
     openCodeStatus.value = { state: 'stopped', url: '', version: '' }
     if (settings.agentEngine.value === 'opencode') settings.setAgentEngine('native')
-    window.$message?.info('OpenCode 本地引擎已停止，已切回 YUFENG Native')
+    window.$message?.info('OpenCode 本地引擎已停止，已切回 DataEyes Native')
     return true
   } catch (error) {
     window.$message?.error(error?.message || 'OpenCode 停止失败')
@@ -1039,7 +1079,7 @@ const setAgentEngine = async engine => {
     }
   }
   settings.setAgentEngine(next)
-  window.$message?.success(next === 'opencode' ? '已切换到 OpenCode Local' : '已切换到 YUFENG Native')
+  window.$message?.success(next === 'opencode' ? '已切换到 OpenCode Local' : '已切换到 DataEyes Native')
   return true
 }
 
@@ -1136,25 +1176,28 @@ defineExpose({
 
 <style scoped>
 .agent-workbench {
-  --wb-bg: #151719;
-  --wb-panel: #111315;
-  --wb-border: #292d2f;
-  --wb-text: #d9dddb;
-  --wb-muted: #717777;
+  --wb-bg: #f1f3f5;
+  --wb-panel: #f7f9fa;
+  --wb-border: rgba(26, 54, 59, .11);
+  --wb-text: #24353a;
+  --wb-muted: #748388;
+  --wb-accent: #5ee7c4;
+  --wb-accent-strong: #268b7e;
+  --wb-warning: #e9a95c;
   display: grid;
-  grid-template-columns: 278px minmax(0,1fr);
+  grid-template-columns: 258px minmax(0,1fr);
   width: 100%;
   height: 100dvh;
   min-height: 0;
   overflow: hidden;
   color: var(--wb-text);
   background: var(--wb-bg);
-  font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif;
-  color-scheme: dark;
+  font-family: ui-rounded, "SF Pro Rounded", "Segoe UI Variable", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif;
+  color-scheme: light;
 }
 
-.agent-workbench.inspector-open { grid-template-columns: 278px minmax(0,1fr) 340px; }
-.workbench-center { display: grid; grid-template-rows: minmax(0,1fr) auto auto; min-width: 0; min-height: 0; background: #151719; }
+.agent-workbench.inspector-open { grid-template-columns: 258px minmax(0,1fr) 360px; }
+.workbench-center { display: grid; grid-template-rows: minmax(0,1fr) auto auto; min-width: 0; min-height: 0; background: #f1f3f5; }
 .reasoning-status-wrap { width: min(850px,calc(100% - 28px)); margin: 0 auto; padding: 7px 0 0; }
 .mobile-backdrop { display: none; }
 .artifact-lightbox { position: fixed; z-index: 100; inset: 0; display: grid; place-items: center; padding: 42px; background: rgba(6,7,8,.9); backdrop-filter: blur(12px); }
@@ -1162,6 +1205,17 @@ defineExpose({
 .artifact-lightbox video { max-width: min(92vw,1280px); max-height: 86vh; border: 1px solid #3b4041; border-radius: 10px; box-shadow: 0 24px 90px #000; }
 .artifact-lightbox > button { position: fixed; top: 17px; right: 18px; display: grid; width: 32px; height: 32px; place-items: center; border: 1px solid #414647; border-radius: 8px; color: #d9dddb; background: #202325; }
 .artifact-lightbox > button:hover { background: #292d2f; }
+
+.agent-workbench :is(button, input, textarea, select, summary):focus-visible {
+  outline: 2px solid rgba(42, 153, 133, .8);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-workbench * {
+    scroll-behavior: auto !important;
+  }
+}
 
 @media (max-width: 1160px) {
   .agent-workbench,

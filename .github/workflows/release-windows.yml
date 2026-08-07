@@ -6,7 +6,7 @@ on:
       ref:
         description: Git tag or commit to package
         required: true
-        default: v1.3.1
+        default: v1.4.0
 
 permissions:
   contents: read
@@ -49,10 +49,10 @@ jobs:
       - name: Upload Windows release assets
         uses: actions/upload-artifact@v4
         with:
-          name: yufeng-agent-windows-x64
+          name: dataeyes-code-windows-x64
           if-no-files-found: error
           retention-days: 7
           path: |
-            release/YUFENG-Agent-Setup-*.exe
-            release/YUFENG-Agent-Setup-*.exe.blockmap
+            release/DataEyes-Code-Setup-*.exe
+            release/DataEyes-Code-Setup-*.exe.blockmap
             release/latest.yml

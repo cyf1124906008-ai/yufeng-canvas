@@ -144,3 +144,216 @@
 .agent-workbench.density-compact .composer textarea { min-height: 45px; padding-top: 10px; }
 .agent-workbench.density-compact .inspector-tabs button { height: 31px; }
 .agent-workbench.density-compact .inspector-section { padding-block: 8px; }
+
+/* -------------------------------------------------------------------------
+   DataEyes Code visual contract
+   Keep the workbench on one deliberate token system. Legacy Canvas surfaces
+   still use the rules above; this late layer only scopes the Agent shell.
+   ------------------------------------------------------------------------- */
+.agent-workbench.theme-light {
+  --wb-bg: #f1f3f5;
+  --wb-panel: #f7f9fa;
+  --wb-border: rgba(26, 54, 59, .11);
+  --wb-text: #24353a;
+  --wb-muted: #748388;
+  color-scheme: light;
+}
+
+.agent-workbench.theme-light,
+.agent-workbench.theme-light .workbench-center,
+.agent-workbench.theme-light .thread-shell {
+  background: #f1f3f5 !important;
+}
+
+/* The dark navigation rail is the brand anchor in both themes. */
+.agent-workbench.theme-light .wb-sidebar {
+  border-right-color: rgba(168, 189, 185, .14) !important;
+  background:
+    radial-gradient(circle at 13% 2%, rgba(94, 231, 196, .11), transparent 27%),
+    linear-gradient(180deg, #10141b 0%, #0b0e14 74%) !important;
+  color: #d9e4e1 !important;
+}
+
+.agent-workbench.theme-light .thread-header,
+.agent-workbench.theme-light .inspector-header {
+  border-color: rgba(30, 55, 61, .1) !important;
+  background: rgba(247, 249, 250, .88) !important;
+}
+
+.agent-workbench.theme-light .composer-shell {
+  background: linear-gradient(180deg, rgba(241, 243, 245, 0), #f1f3f5 28%) !important;
+}
+
+.agent-workbench.theme-light .composer {
+  border-color: rgba(34, 61, 65, .24) !important;
+  background: #111820 !important;
+  box-shadow: 0 19px 46px rgba(24, 43, 50, .18), inset 0 1px rgba(255, 255, 255, .08) !important;
+}
+
+.agent-workbench.theme-light .composer textarea { color: #eff7f5 !important; }
+.agent-workbench.theme-light .composer textarea::placeholder { color: #7b8d91 !important; }
+.agent-workbench.theme-light .composer :is(.tool-button, .model-control, .permission-mode) { color: #b2c4c2 !important; }
+.agent-workbench.theme-light .composer .send-button { color: #09201c !important; background: #63e3c2 !important; box-shadow: 0 7px 18px rgba(55, 195, 162, .2) !important; }
+.agent-workbench.theme-light .composer .composer-hint { color: #7a898d !important; }
+
+.agent-workbench.theme-light .inspector {
+  border-left-color: rgba(28, 51, 57, .12) !important;
+  background: #f7f9fa !important;
+  color: #25353a !important;
+}
+
+.agent-workbench.theme-light .inspector-tabs {
+  border-bottom-color: rgba(30, 55, 61, .1) !important;
+  background: rgba(238, 243, 245, .72) !important;
+}
+
+.agent-workbench.theme-light .inspector-tabs button.is-active {
+  color: #1b6b61 !important;
+  background: #fff !important;
+  box-shadow: 0 2px 8px rgba(39, 83, 84, .09), inset 0 0 0 1px rgba(37, 145, 124, .14) !important;
+}
+
+.agent-workbench.theme-light .inspector-section { border-bottom-color: rgba(30, 55, 61, .09) !important; }
+.agent-workbench.theme-light .inspector :is(.context-list > div, .usage-grid > div, .run-section dl > div:nth-child(odd)) { background: #eef3f4 !important; }
+.agent-workbench.theme-light .inspector :is(.file-list details, .terminal-list details, .artifact-list button) { border-color: rgba(37, 68, 73, .12) !important; background: #fdfefe !important; }
+.agent-workbench.theme-light .inspector :is(.context-list span, .usage-grid span) { color: #809094 !important; }
+.agent-workbench.theme-light .inspector :is(.context-list strong, .usage-grid strong, .run-section dd) { color: #4f6569 !important; }
+
+/* The legacy Canvas button skin also targets every direct span inside a
+ * suggestion. Keep the new welcome glyphs on the light instrument surface. */
+.agent-workbench.theme-light .suggestion-list .suggestion-icon {
+  display: grid !important;
+  width: 35px !important;
+  height: 35px !important;
+  border: 1px solid rgba(41, 141, 124, .16) !important;
+  border-radius: 10px !important;
+  color: #278a7c !important;
+  background: linear-gradient(145deg, rgba(94, 231, 196, .16), rgba(217, 242, 239, .62)) !important;
+  box-shadow: none !important;
+}
+.agent-workbench.theme-light .suggestion-list .suggestion-icon .wb-icon {
+  color: #278a7c !important;
+  background: transparent !important;
+}
+.agent-workbench.theme-light .suggestion-list .suggestion-copy {
+  display: block !important;
+  width: auto !important;
+  height: auto !important;
+  min-width: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  color: inherit !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.agent-workbench.theme-light .suggestion-list .suggestion-copy small,
+.agent-workbench.theme-light .suggestion-list .suggestion-copy strong {
+  display: block !important;
+  width: auto !important;
+  height: auto !important;
+  border: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+}
+
+.agent-workbench.theme-light .thread-shell :is(.thread-heading strong, .welcome-intro h1, .chat-message header strong) { color: #1c292d !important; }
+.agent-workbench.theme-light .thread-shell :is(.thread-heading small, .welcome-intro p, .welcome-capabilities, .chat-message time) { color: #718086 !important; }
+.agent-workbench.theme-light .thread-shell .suggestion-list button { border-color: rgba(35, 58, 63, .13) !important; color: #33454a !important; background: rgba(255, 255, 255, .65) !important; box-shadow: 0 5px 16px rgba(32, 52, 58, .035) !important; }
+.agent-workbench.theme-light .thread-shell .suggestion-list button:hover { border-color: rgba(42, 153, 133, .35) !important; background: rgba(246, 255, 252, .96) !important; }
+
+/* Dark theme keeps the same hierarchy with an ink stage. */
+.agent-workbench:not(.theme-light) {
+  --wb-bg: #0b0e14;
+  --wb-panel: #111820;
+  --wb-border: rgba(216, 235, 232, .13);
+  --wb-text: #e6f0ed;
+  --wb-muted: #85969a;
+  color-scheme: dark;
+}
+
+.agent-workbench:not(.theme-light) .workbench-center,
+.agent-workbench:not(.theme-light) .thread-shell { background: #0f141b !important; }
+.agent-workbench:not(.theme-light) .thread-header { border-color: rgba(216, 235, 232, .11) !important; background: rgba(15, 20, 27, .9) !important; }
+.agent-workbench:not(.theme-light) .thread-heading strong,
+.agent-workbench:not(.theme-light) .welcome-intro h1 { color: #edf6f3 !important; }
+.agent-workbench:not(.theme-light) .thread-heading small,
+.agent-workbench:not(.theme-light) .welcome-intro p { color: #91a1a5 !important; }
+.agent-workbench:not(.theme-light) .composer-shell { background: linear-gradient(180deg, rgba(15, 20, 27, 0), #0f141b 28%) !important; }
+.agent-workbench:not(.theme-light) .inspector { background: #111820 !important; }
+.agent-workbench:not(.theme-light) .welcome-visual { box-shadow: 0 24px 55px rgba(0, 0, 0, .28), inset 0 1px rgba(255, 255, 255, .1); }
+
+.agent-workbench:not(.theme-light) .thread-shell .suggestion-list button {
+  border-color: rgba(216, 235, 232, .13) !important;
+  color: #d8e5e1 !important;
+  background: #151d24 !important;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, .16) !important;
+}
+.agent-workbench:not(.theme-light) .thread-shell .suggestion-list button:hover {
+  border-color: rgba(94, 231, 196, .38) !important;
+  color: #eff8f4 !important;
+  background: #1a2930 !important;
+}
+.agent-workbench:not(.theme-light) .thread-shell .suggestion-list .suggestion-icon {
+  display: grid !important;
+  width: 35px !important;
+  height: 35px !important;
+  border: 1px solid rgba(94, 231, 196, .2) !important;
+  border-radius: 10px !important;
+  color: #73dec1 !important;
+  background: rgba(94, 231, 196, .09) !important;
+  box-shadow: none !important;
+}
+.agent-workbench:not(.theme-light) .thread-shell .suggestion-list .suggestion-icon .wb-icon { color: #73dec1 !important; }
+.agent-workbench:not(.theme-light) .thread-shell .suggestion-list .suggestion-copy {
+  display: block !important;
+  width: auto !important;
+  height: auto !important;
+  min-width: 0 !important;
+  border: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.agent-workbench:not(.theme-light) .thread-shell .suggestion-list .suggestion-copy small { color: #7fa69f !important; }
+.agent-workbench:not(.theme-light) .thread-shell .suggestion-list .suggestion-copy strong { color: #d8e5e1 !important; }
+
+.agent-workbench:not(.theme-light) .inspector-header {
+  border-bottom-color: rgba(216, 235, 232, .11) !important;
+  background: rgba(17, 24, 32, .92) !important;
+}
+.agent-workbench:not(.theme-light) .inspector-header strong { color: #e6f0ed !important; }
+.agent-workbench:not(.theme-light) .inspector-header small { color: #84979a !important; }
+.agent-workbench:not(.theme-light) .inspector-tabs {
+  border-bottom-color: rgba(216, 235, 232, .1) !important;
+  background: rgba(21, 29, 36, .86) !important;
+}
+.agent-workbench:not(.theme-light) .inspector-tabs button { color: #87999d !important; }
+.agent-workbench:not(.theme-light) .inspector-tabs button:hover { color: #dceae6 !important; background: rgba(94, 231, 196, .08) !important; }
+.agent-workbench:not(.theme-light) .inspector-tabs button.is-active {
+  color: #8fe4c9 !important;
+  background: #1b2a30 !important;
+  box-shadow: inset 0 0 0 1px rgba(94, 231, 196, .18) !important;
+}
+.agent-workbench:not(.theme-light) .inspector-section { border-bottom-color: rgba(216, 235, 232, .09) !important; }
+.agent-workbench:not(.theme-light) .inspector :is(.context-list > div, .usage-grid > div, .run-section dl > div:nth-child(odd)) { background: #182229 !important; }
+.agent-workbench:not(.theme-light) .inspector :is(.context-list span, .usage-grid span, .run-section dt) { color: #7d9094 !important; }
+.agent-workbench:not(.theme-light) .inspector :is(.context-list strong, .usage-grid strong, .run-section dd) { color: #d1dfdc !important; }
+.agent-workbench:not(.theme-light) .inspector :is(.file-list details, .terminal-list details, .artifact-list button) { border-color: rgba(216, 235, 232, .12) !important; background: #151d24 !important; }
+.agent-workbench:not(.theme-light) .inspector :is(.file-list details:hover, .terminal-list details:hover, .artifact-list button:not(:disabled):hover) { border-color: rgba(94, 231, 196, .3) !important; background: #1a2930 !important; }
+.agent-workbench:not(.theme-light) .inspector .panel-empty > span { border-color: rgba(216, 235, 232, .14) !important; background: #182229 !important; }
+
+/* Never lose keyboard visibility inside the three rails. */
+.agent-workbench :is(button, input, textarea, select, summary):focus-visible {
+  outline: 2px solid rgba(94, 231, 196, .86) !important;
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-workbench * {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: .01ms !important;
+  }
+}

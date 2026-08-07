@@ -194,7 +194,7 @@ test('mobile API settings keep protocol and clear controls available', async () 
   assert.doesNotMatch(mobileRules, /\.footer-actions \.n-button:first-child \{\s*display:\s*none/)
 })
 
-test('settings and support surfaces use YUFENG Agent branding while legacy storage paths remain compatible', async () => {
+test('settings and support surfaces avoid the retired Canvas brand while distribution uses DataEyes Code', async () => {
   const [settings, support, distribution] = await Promise.all([
     readSource('../src/components/ApiSettings.vue'),
     readSource('../src/components/SupportModal.vue'),
@@ -203,6 +203,6 @@ test('settings and support surfaces use YUFENG Agent branding while legacy stora
 
   assert.doesNotMatch(settings, /YUFENG Canvas/)
   assert.doesNotMatch(support, /YUFENG Canvas/)
-  assert.match(distribution, /appName: 'YUFENG Agent'/)
+  assert.match(distribution, /appName: 'DataEyes Code'/)
   assert.doesNotMatch(distribution, /appName: 'YUFENG Canvas'/)
 })

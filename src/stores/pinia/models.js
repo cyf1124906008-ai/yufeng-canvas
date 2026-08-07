@@ -343,7 +343,33 @@ const joinApiEndpoint = (baseUrl = '', endpoint = '') => {
   return `${base}${path}`
 }
 
+const UNAVAILABLE_MODEL_STATUSES = new Set([
+  'unavailable',
+  'offline',
+  'disabled',
+  'error',
+  'inactive'
+])
+
+// A provider catalog may carry availability metadata. Keep an explicit
+// outage/disablement out of the Workbench picker, but treat missing metadata
+// as available: a catalog that does not report status must not be turned into
+// a fabricated outage.
+export const isModelAvailable = (model = {}) => {
+  if (model.available === false || model.enabled === false || model.availability === false) {
+    return false
+  }
+  if (model.availability && typeof model.availability === 'object' && model.availability.available === false) {
+    return false
+  }
+  const status = String(model.status || model.availability?.status || '').trim().toLowerCase()
+  return !UNAVAILABLE_MODEL_STATUSES.has(status)
+}
+
 const isModelSupported = (model, provider) => {
+  if (!isModelAvailable(model)) {
+    return false
+  }
   if (!model.provider) {
     return true
   }

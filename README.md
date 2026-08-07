@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="docs/images/logo-mark.svg" width="96" alt="YUFENG Agent logo" />
+  <img src="docs/images/logo-mark.svg" width="96" alt="DataEyes Code logo" />
 </p>
 
-<h1 align="center">YUFENG Agent</h1>
+<h1 align="center">DataEyes Code</h1>
 
 <p align="center">
   本地桌面 Agent Harness：像 Codex / Claude Code 一样接收任务，自主调用文件、终端、电脑控制与创作工具。
@@ -23,7 +23,7 @@
 
 ## 产品方向
 
-YUFENG Agent 不要求用户拖节点或手工连接工作流。默认入口是一个 Codex 风格的桌面任务工作台：
+DataEyes Code 不要求用户拖节点或手工连接工作流。默认入口是一个 Codex 风格的桌面任务工作台：
 
 ```text
 用户任务
@@ -48,9 +48,9 @@ Observation → 继续 / 改道 / 请求批准 / 最终答复
 | --- | --- |
 | Codex-style Agent Workbench | 新三栏命令中心：工作区与任务历史、对话和实时工具轨迹、计划 / 文件变更 / 产物检查器；支持多轮补充和文本附件。 |
 | Generic Agent Session | Planner 每轮只返回 `message`、`tool_call` 或 `finish`；工具失败与拒绝都会作为 observation 继续决策。 |
-| OpenCode Local Planner | 桌面端可选用本机 `opencode serve` 负责任务拆解；真正的文件、终端和电脑操作仍由 YUFENG ToolRegistry、审批和 Electron 主进程执行。OpenCode 的 Provider 凭据不从 YUFENG 转发。 |
+| OpenCode Local Planner | 桌面端可选用本机 `opencode serve` 负责任务拆解；真正的文件、终端和电脑操作仍由 DataEyes Code ToolRegistry、审批和 Electron 主进程执行。OpenCode 的 Provider 凭据不从 DataEyes Code 转发。 |
 | Task Plan | Agent 可建立并更新结构化步骤，最多一个步骤处于 `in_progress`；计划状态通过事件流实时投影，不展示隐藏思维链。 |
-| Local Workspace Tools | 首次启动自动使用专用的 `YUFENG Agent Workspace`，也可在侧栏切换到用户选择的项目目录；在根目录内列文件、读文本、搜索和新建文件，现有文件优先使用 SHA 绑定的行级补丁，产生可审查 diff。 |
+| Local Workspace Tools | 新安装首次启动自动使用专用的 `DataEyes Code Workspace`；升级安装会继续复用原 `YUFENG Agent Workspace` 与已保存的项目目录。用户也可从侧栏切换工作区，在根目录内列文件、读文本、搜索和新建文件，现有文件优先使用 SHA 绑定的行级补丁，产生可审查 diff。 |
 | Conditional File Rollback | 每次结构化补丁生成当前 App 会话内的一次性回滚记录；只有记录仍存在且当前文件 SHA 与原变更一致时，才可经再次审批原子回滚。 |
 | Controlled Terminal | 使用 executable + args 运行，不拼接 shell；支持超时、输出上限、实时阶段与输出长度、停止，以及结束后的统一脱敏输出。每次执行都要批准。 |
 | macOS Computer Tools | 检查系统权限、截屏并用 Vision 分析、打开应用、坐标点击和输入文本；副作用逐项批准。 |
@@ -90,9 +90,9 @@ pnpm install
 pnpm dev
 ```
 
-打开“模型与 API”进入 Provider Console，配置自己的 Provider、Base URL、API Key 和模型名，也可以测试连接、同步模型或导入 DataEyes 实测目录。YUFENG Agent 不内置或上传用户的 Key。
+打开“模型与 API”进入 Provider Console，配置自己的 Provider、Base URL、API Key 和模型名，也可以测试连接、同步模型或导入 DataEyes 实测目录。DataEyes Code 不内置或上传用户的 Key。
 
-桌面端如果要使用 OpenCode 作为 Planner：先在本机安装并登录 OpenCode，然后在设置的“Agent”页选择“OpenCode Local”并启动 sidecar。YUFENG 首次启动会自动创建专用的 `YUFENG Agent Workspace`，需要时仍可从侧栏切换工作区。YUFENG 只读取 OpenCode 自己的模型目录；只有目录中已连接的 `provider/model` 才会传给 OpenCode，否则使用它配置的默认模型。官方服务端接口说明见 [OpenCode Server 文档](https://dev.opencode.ai/docs/server/)。
+桌面端如果要使用 OpenCode 作为 Planner：先在本机安装并登录 OpenCode，然后在设置的“Agent”页选择“OpenCode Local”并启动 sidecar。DataEyes Code 首次启动会自动创建专用工作区，需要时仍可从侧栏切换。它只读取 OpenCode 自己的模型目录；只有目录中已连接的 `provider/model` 才会传给 OpenCode，否则使用 OpenCode 配置的默认模型。官方服务端接口说明见 [OpenCode Server 文档](https://dev.opencode.ai/docs/server/)。
 
 推荐的 DataEyes 地址：
 
@@ -137,6 +137,7 @@ pnpm desktop:dist:mac
 
 ## 架构说明
 
+- [DataEyes Code 品牌与兼容标识](docs/dataeyes-code-branding.md)
 - [Agent Harness 总体架构](docs/agent-harness.md)
 - [V0.2 Result Observation](docs/plans/agent-v0.2-result-observation.md)
 - [V0.3 Model Router](docs/plans/agent-v0.3-model-router.md)
@@ -145,6 +146,7 @@ pnpm desktop:dist:mac
 - [V0.6 Desktop Workbench](docs/plans/agent-v0.6-workbench.md)
 - [V0.7 Command Center](docs/plans/agent-v0.7-command-center.md)
 - [v1.3.0 Release Notes](docs/releases/v1.3.0.md)
+- [v1.4.0 Release Notes](docs/releases/v1.4.0.md)
 - [v1.2.0 Release Notes](docs/releases/v1.2.0.md)
 - [Local API / MCP](docs/local-api-mcp.md)
 

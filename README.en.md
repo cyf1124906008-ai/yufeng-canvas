@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="docs/images/logo-mark.svg" width="96" alt="YUFENG Canvas logo" />
+  <img src="docs/images/logo-mark.svg" width="96" alt="DataEyes Code logo" />
 </p>
 
-<h1 align="center">YUFENG Canvas</h1>
+<h1 align="center">DataEyes Code</h1>
 
 <p align="center">
   A local AI visual workflow studio for chat, text-to-image, image-to-image, text-to-video, image-to-video, and reusable node pipelines.
@@ -11,18 +11,18 @@
 <p align="center">
   <a href="README.md">简体中文</a>
   ·
-  <a href="https://github.com/cyf1124906008-ai/yufeng-canvas/releases/latest/download/YUFENG-Canvas-Latest.exe">Download for Windows</a>
+  <a href="https://github.com/cyf1124906008-ai/yufeng-canvas/releases/latest">Download Desktop App</a>
   ·
   <a href="https://github.com/cyf1124906008-ai/yufeng-canvas/releases/latest">Latest Release</a>
   ·
   <a href="https://dataeyes.ai/">Get a DataEyes API Key</a>
 </p>
 
-![YUFENG Canvas overview](docs/images/product-overview.svg)
+![DataEyes Code overview](docs/images/product-overview.svg)
 
 ## What Is It?
 
-YUFENG Canvas is a desktop canvas for AI visual production. Instead of sending one-off prompts, you can configure your own API keys and model names, then compose reusable workflows with text, image, video, and configuration nodes.
+DataEyes Code is a local desktop Agent Harness. Its default workbench accepts a goal, chooses one safe next action, uses workspace, terminal, computer-control, and creative tools, then observes the result before continuing. The legacy Canvas implementation remains available as migration-compatible source but is not the default product surface.
 
 It is designed for:
 
@@ -68,7 +68,7 @@ It is designed for:
 
 ## Quick Start
 
-1. Download and install [YUFENG-Canvas-Latest.exe](https://github.com/cyf1124906008-ai/yufeng-canvas/releases/latest/download/YUFENG-Canvas-Latest.exe).
+1. Download the current DataEyes Code installer from the [latest release page](https://github.com/cyf1124906008-ai/yufeng-canvas/releases/latest).
 2. Open `API Settings` in the top-right corner.
 3. Fill in your own API key, base URL, provider, and model names.
 4. Start from chat on the home page, or create a project and use the workflow canvas.
@@ -85,7 +85,7 @@ Get an API key:
 
 ## Model Configuration
 
-YUFENG Canvas does not ship with your API key and does not bundle any private credentials into the installer. Every user should configure their own:
+DataEyes Code does not ship with your API key and does not bundle private credentials into the installer. Every user should configure their own:
 
 - `Provider`: for example `dataeyes`, or any custom provider label.
 - `Base URL`: for example `https://cloud.dataeyes.ai`.
