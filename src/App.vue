@@ -7,6 +7,7 @@ import { computed } from 'vue'
 import { NConfigProvider, NDialogProvider, NMessageProvider, darkTheme } from 'naive-ui'
 import { agentSettings } from './stores/settings'
 import AppFeedbackProvider from './components/AppFeedbackProvider.vue'
+import DataEyesCodeStartup from './components/DataEyesCodeStartup.vue'
 
 // Naive UI theme based on dark mode | 基于深色模式的 Naive UI 主题
 const theme = computed(() => agentSettings.isDark.value ? darkTheme : null)
@@ -50,6 +51,7 @@ const themeOverrides = {
       <n-dialog-provider>
         <app-feedback-provider>
           <router-view />
+          <data-eyes-code-startup />
         </app-feedback-provider>
       </n-dialog-provider>
     </n-message-provider>
