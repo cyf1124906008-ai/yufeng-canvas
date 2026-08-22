@@ -763,9 +763,23 @@ export const useModelStore = defineStore('model', () => {
     return true
   }
 
+  const isModelSelectable = (group, modelKey) => {
+    const normalizedGroup = MODEL_ROUTING_GROUPS.includes(group) ? group : ''
+    if (!normalizedGroup) return false
+    const normalizedKey = String(modelKey || '').trim()
+    if (!normalizedKey) return true
+    const availableByGroup = {
+      chat: availableChatModels,
+      image: availableImageModels,
+      video: availableVideoModels
+    }
+    return availableByGroup[normalizedGroup].value.some(model => model.key === normalizedKey)
+  }
+
   const setSelectedModel = (group, modelKey, { mode = 'locked' } = {}) => {
     const normalizedGroup = MODEL_ROUTING_GROUPS.includes(group) ? group : ''
     if (!normalizedGroup) return false
+    if (!isModelSelectable(normalizedGroup, modelKey)) return false
     const fields = {
       chat: selectedChatModel,
       image: selectedImageModel,
@@ -1132,6 +1146,7 @@ export const useModelStore = defineStore('model', () => {
     modelRoutingModes,
     setModelRoutingMode,
     setSelectedModel,
+    isModelSelectable,
     isModelLocked,
     customChatModels,
     customImageModels,

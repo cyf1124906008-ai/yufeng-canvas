@@ -28,6 +28,25 @@ test('ModelRouter keeps model names outside the Agent capability contract', () =
   assert.equal(router.route('generate_text').model, 'chat-selected')
 })
 
+test('ModelRouter hot-switches image and video selections on the next creative route', () => {
+  const selectedImageModel = ref('image-a')
+  const selectedVideoModel = ref('video-a')
+  const router = new ModelRouter(createStore({
+    selectedImageModel,
+    selectedVideoModel,
+    modelRoutingModes: { image: 'locked', video: 'locked' },
+    availableImageModels: ref([{ key: 'image-a' }, { key: 'image-b' }]),
+    availableVideoModels: ref([{ key: 'video-a' }, { key: 'video-b' }])
+  }))
+
+  assert.equal(router.route('generate_image').model, 'image-a')
+  assert.equal(router.route('generate_video').model, 'video-a')
+  selectedImageModel.value = 'image-b'
+  selectedVideoModel.value = 'video-b'
+  assert.equal(router.route('generate_image').model, 'image-b')
+  assert.equal(router.route('generate_video').model, 'video-b')
+})
+
 test('ModelRouter falls back to the first available capability model', () => {
   const router = new ModelRouter(createStore({ selectedImageModel: ref('missing') }))
 

@@ -87,10 +87,10 @@
               <button
                 type="button"
                 class="model-control"
-                :disabled="active"
+                :disabled="modelSelectionLocked"
                 aria-haspopup="listbox"
                 :aria-expanded="showModelMenu"
-                title="选择当前任务使用的模型"
+                :title="active ? '切换后从后续 Agent 步骤生效' : '选择新任务使用的模型'"
                 @click="toggleModelMenu"
               >
                 <workbench-icon name="brain" :size="14" />
@@ -100,7 +100,7 @@
               <div v-if="showModelMenu" class="model-menu" role="listbox" aria-label="选择模型">
                 <header>
                   <span><workbench-icon name="brain" :size="14" />模型</span>
-                  <small>下一次任务生效</small>
+                  <small>{{ active ? '后续 Agent 步骤生效' : '新任务使用此选择' }}</small>
                 </header>
                 <section v-for="group in modelGroups" :key="group.id" class="model-menu-group">
                   <div class="model-menu-label">{{ group.label }}</div>
@@ -156,21 +156,35 @@
           </div>
 
           <div class="composer-actions">
-            <span class="runtime-state" :class="runtimeState.tone">
+            <span class="runtime-state" :class="runtimeState.tone" role="status" aria-live="polite">
               <i></i>{{ runtimeState.label }}
             </span>
-            <button v-if="active && canSubmit" type="submit" class="guide-button" aria-label="发送执行引导">
+            <button v-if="active && canSubmit" type="submit" class="guide-button" aria-label="发送执行引导" title="发送执行引导">
               <workbench-icon name="send" :size="13" />引导
             </button>
-            <button v-if="active" type="button" class="stop-button" aria-label="停止任务" @click="emit('stop')">
+            <button
+              v-if="active || stopping"
+              type="button"
+              class="stop-button"
+              :disabled="stopping"
+              :aria-label="stopping ? '正在安全停止' : '停止任务'"
+              :title="stopping ? '正在安全停止' : '停止任务'"
+              @click="emit('stop')"
+            >
               <workbench-icon name="stop" :size="14" />
             </button>
-            <button v-else-if="canResume" type="button" class="resume-button" aria-label="继续任务" @click="emit('resume')">
+            <button v-else-if="canResume" type="button" class="resume-button" aria-label="继续任务" title="继续任务" @click="emit('resume')">
               <workbench-icon name="activity" :size="13" />继续
             </button>
-            <button v-else type="submit" class="send-button" :disabled="disabled || !canSubmit" aria-label="运行任务">
-              <workbench-icon name="send" :size="15" />
-              <span>运行</span>
+            <button
+              v-else
+              type="submit"
+              class="send-button"
+              :disabled="disabled || !canSubmit"
+              :aria-label="canSubmit ? '运行任务' : '请输入任务后运行'"
+              :title="canSubmit ? '运行任务' : '请输入任务后运行'"
+            >
+              <workbench-icon name="send" :size="16" />
             </button>
           </div>
         </div>
@@ -255,6 +269,7 @@ const selectedModels = computed(() => ({
 const approvalModes = WORKBENCH_APPROVAL_MODES
 const currentApprovalMode = computed(() => workbenchApprovalMode(props.approvalMode))
 const approvalModeLocked = computed(() => props.running || props.awaitingApproval || props.history)
+const modelSelectionLocked = computed(() => props.history || props.stopping)
 const approvalModeLockedReason = computed(() => {
   if (props.history) return '历史任务为只读，审批模式不可更改'
   if (props.awaitingApproval) return '请先处理当前审批请求'
@@ -297,14 +312,14 @@ const toggleApprovalModes = () => {
 }
 
 const toggleModelMenu = () => {
-  if (active.value) return
+  if (modelSelectionLocked.value) return
   showApprovalModes.value = false
   showCommands.value = false
   showModelMenu.value = !showModelMenu.value
 }
 
 const selectModel = (capability, model) => {
-  if (active.value) return
+  if (modelSelectionLocked.value) return
   emit('select-model', { capability, model })
   showModelMenu.value = false
 }
@@ -360,8 +375,8 @@ watch(approvalModeLocked, locked => {
   if (locked) showApprovalModes.value = false
 })
 
-watch(active, activeNow => {
-  if (activeNow) showModelMenu.value = false
+watch(modelSelectionLocked, locked => {
+  if (locked) showModelMenu.value = false
 })
 
 onMounted(() => document.addEventListener('pointerdown', closeFloatingMenus))
@@ -545,13 +560,13 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', closeFloatingM
 .runtime-state { color: #8ca0a0; font-size: 10.5px; }
 .runtime-state.ready i { background: #5ee7c4; box-shadow: 0 0 10px rgba(94, 231, 196, .38); }
 .runtime-state.running i { background: #63c9e0; }
-.send-button, .stop-button { width: auto; min-width: 70px; height: 33px; gap: 6px; border-radius: 10px; padding: 0 12px; font-size: 11px; font-weight: 720; }
+.send-button, .stop-button { width: 33px; min-width: 33px; height: 33px; border-radius: 10px; padding: 0; }
 .send-button { color: #09201c; background: #63e3c2; box-shadow: 0 7px 18px rgba(55, 195, 162, .2); }
 .send-button:hover { background: #8aeed6; transform: translateY(-1px); }
 .send-button:disabled { transform: none; }
-.send-button span { display: inline; }
 .stop-button { color: #ffd9d7; background: #7c3d43; }
 .stop-button:hover { background: #924b52; }
+.stop-button:disabled { cursor: wait; opacity: .58; }
 .guide-button, .resume-button { height: 33px; border: 1px solid rgba(94, 231, 196, .2); border-radius: 9px; padding-inline: 11px; color: #c9f2e8; background: rgba(52, 124, 111, .3); }
 .guide-button:hover, .resume-button:hover { color: #e8fff8; background: rgba(65, 155, 137, .45); }
 .composer-hint { margin-top: 8px; color: #7a898d; font-size: 10.5px; }
@@ -577,7 +592,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', closeFloatingM
   .model-control { display: grid; width: 29px; min-width: 29px; max-width: 29px; place-items: center; padding: 0; }
   .model-control span,
   .model-control > svg:last-child { display: none; }
-  .model-menu { right: 0; left: auto; width: min(340px, calc(100vw - 16px)); }
+  .model-menu { right: auto; left: 0; width: min(340px, calc(100vw - 16px)); }
   .permission-mode { max-width: 82px; padding-right: 6px; }
   .approval-menu { right: 0; left: 0; width: auto; }
   .approval-menu header small { display: none; }

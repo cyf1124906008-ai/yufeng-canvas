@@ -71,3 +71,20 @@ test('AgentWorkspace gives an actionable setup path when the model catalog is em
   assert.match(source, /modelStore\.chatModelOptions/)
   assert.doesNotMatch(source, /modelOptions[\s\S]{0,600}CHAT_MODELS/)
 })
+
+test('OpenCode mode owns an independent fail-closed model catalog and selection', async () => {
+  const source = await readSource('../src/views/AgentWorkspace.vue')
+
+  assert.match(source, /settings\.agentEngine\.value === 'opencode'[\s\S]*openCodeModelOptions\.value/)
+  assert.match(source, /settings\.selectedOpenCodeModel\.value/)
+  assert.match(source, /settings\.setSelectedOpenCodeModel\(model\)/)
+  assert.match(source, /resolveOpenCodeModelForRequest/)
+  assert.match(source, /OPENCODE_SELECTED_MODEL_UNAVAILABLE/)
+  assert.match(source, /refreshOpenCodeModelCatalog\(\)/)
+  assert.match(source, /从后续 Agent 步骤生效/)
+  assert.match(source, /let openCodeCatalogEpoch = 0/)
+  assert.match(source, /requestEpoch !== openCodeCatalogEpoch/)
+  assert.match(source, /evaluateOpenCodeEngineEntry/)
+  assert.match(source, /已进入 OpenCode；原模型已失效/)
+  assert.doesNotMatch(source, /const preferred = String\(modelStore\.selectedChatModel/)
+})

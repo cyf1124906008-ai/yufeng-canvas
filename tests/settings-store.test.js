@@ -4,8 +4,13 @@ import test from 'node:test'
 import {
   AGENT_SETTINGS_STORAGE_KEY,
   createAgentSettingsStore,
-  normalizeAgentSettings
+  evaluateOpenCodeEngineEntry,
+  isOpenCodeModelSelectionReady,
+  normalizeAgentSettings,
+  normalizeOpenCodeModelKey,
+  resolveOpenCodeModelForRequest
 } from '../src/stores/settings.js'
+import { selectOpenCodeModel } from '../src/agent/runtime/openCodeAdapter.js'
 
 function createStorage(seed = {}) {
   const values = new Map(Object.entries(seed))
@@ -160,4 +165,102 @@ test('reasoning effort accepts only supported levels and persists the selected p
   assert.equal(store.reasoningEffort.value, 'max')
   assert.equal(JSON.parse(storage.snapshot()[AGENT_SETTINGS_STORAGE_KEY]).reasoningEffort, 'max')
   store.dispose()
+})
+
+test('OpenCode model selection is non-sensitive, normalized, and persisted independently', () => {
+  const storage = createStorage()
+  const store = createAgentSettingsStore({ storage, root: createRoot(), systemTheme: createMedia(false) })
+
+  assert.equal(normalizeOpenCodeModelKey('  opencode/model-a\u0000  '), 'opencode/model-a')
+  assert.equal(store.setSelectedOpenCodeModel('opencode/model-a'), true)
+  assert.equal(store.selectedOpenCodeModel.value, 'opencode/model-a')
+  assert.equal(JSON.parse(storage.snapshot()[AGENT_SETTINGS_STORAGE_KEY]).selectedOpenCodeModel, 'opencode/model-a')
+
+  const restored = createAgentSettingsStore({ storage, root: createRoot(), systemTheme: createMedia(false) })
+  assert.equal(restored.selectedOpenCodeModel.value, 'opencode/model-a')
+  store.dispose()
+  restored.dispose()
+})
+
+test('OpenCode request selection fails closed on catalog mismatch or discovery failure', async () => {
+  const catalog = {
+    connected: ['opencode'],
+    models: [{ key: 'opencode/model-a' }, { key: 'opencode/model-b' }]
+  }
+
+  await assert.rejects(
+    resolveOpenCodeModelForRequest({
+      selectedModel: () => 'opencode/missing',
+      loadCatalog: async () => catalog,
+      selectModel: selectOpenCodeModel
+    }),
+    error => error.code === 'OPENCODE_SELECTED_MODEL_UNAVAILABLE'
+  )
+  await assert.rejects(
+    resolveOpenCodeModelForRequest({
+      selectedModel: () => 'opencode/model-a',
+      loadCatalog: async () => { throw new Error('https://secret.invalid/?token=should-not-leak') },
+      selectModel: selectOpenCodeModel
+    }),
+    error => error.code === 'OPENCODE_MODEL_CATALOG_UNAVAILABLE' && !/secret|token/i.test(error.message)
+  )
+  assert.equal(await resolveOpenCodeModelForRequest({
+    selectedModel: () => '',
+    loadCatalog: async () => { throw new Error('offline') },
+    selectModel: selectOpenCodeModel
+  }), undefined, 'auto route may continue with the sidecar default')
+})
+
+test('OpenCode request re-reads an A to B hot switch after catalog discovery', async () => {
+  let selected = 'opencode/model-a'
+  let releaseCatalog
+  const catalog = {
+    connected: ['opencode'],
+    models: [{ key: 'opencode/model-a' }, { key: 'opencode/model-b' }]
+  }
+  const pending = resolveOpenCodeModelForRequest({
+    selectedModel: () => selected,
+    loadCatalog: () => new Promise(resolve => { releaseCatalog = resolve }),
+    selectModel: selectOpenCodeModel
+  })
+  selected = 'opencode/model-b'
+  releaseCatalog(catalog)
+  assert.equal(await pending, 'opencode/model-b')
+})
+
+test('a stale persisted OpenCode model allows engine entry and can be repaired to auto or model B', () => {
+  const storage = createStorage({
+    [AGENT_SETTINGS_STORAGE_KEY]: JSON.stringify({
+      agentEngine: 'native',
+      selectedOpenCodeModel: 'opencode/model-a'
+    })
+  })
+  const store = createAgentSettingsStore({ storage, root: createRoot(), systemTheme: createMedia(false) })
+  const models = [{ key: 'opencode/model-b' }]
+  const entry = evaluateOpenCodeEngineEntry({
+    runtimeStatus: { state: 'running' },
+    selectedModel: store.selectedOpenCodeModel.value,
+    models
+  })
+
+  assert.deepEqual(entry, { allowed: true, repairRequired: true })
+  assert.equal(store.setAgentEngine('opencode'), true)
+  assert.equal(isOpenCodeModelSelectionReady({ selectedModel: store.selectedOpenCodeModel.value, models }), false)
+  store.setSelectedOpenCodeModel('')
+  assert.equal(isOpenCodeModelSelectionReady({ selectedModel: store.selectedOpenCodeModel.value, models }), true)
+  store.setSelectedOpenCodeModel('opencode/model-b')
+  assert.equal(isOpenCodeModelSelectionReady({ selectedModel: store.selectedOpenCodeModel.value, models }), true)
+  store.dispose()
+})
+
+test('OpenCode catalog resolver preserves cancellation identity', async () => {
+  const abort = Object.assign(new Error('cancelled'), { name: 'AbortError', code: 'OPENCODE_ABORTED' })
+  await assert.rejects(
+    resolveOpenCodeModelForRequest({
+      selectedModel: () => 'opencode/model-a',
+      loadCatalog: async () => { throw abort },
+      selectModel: selectOpenCodeModel
+    }),
+    error => error === abort
+  )
 })

@@ -12,6 +12,18 @@ test('composer exposes stop, guide, safe-stopping, and resume controls', async (
   assert.match(composer, /guidancePending/)
 })
 
+test('composer idle submit is icon-only while preserving accessible state labels', async () => {
+  const composer = await readFile(new URL('../src/components/workbench/WorkbenchComposer.vue', import.meta.url), 'utf8')
+
+  assert.match(composer, /class="send-button"/)
+  assert.match(composer, /:aria-label="canSubmit \? '运行任务' : '请输入任务后运行'"/)
+  assert.match(composer, /:title="canSubmit \? '运行任务' : '请输入任务后运行'"/)
+  assert.match(composer, /v-if="active \|\| stopping"/)
+  assert.match(composer, /:disabled="stopping"/)
+  assert.match(composer, /role="status" aria-live="polite"/)
+  assert.doesNotMatch(composer, /<span>运行<\/span>/)
+})
+
 test('AgentWorkspace routes live input to guidance and stopped input to same-session resume', async () => {
   const workspace = await readFile(new URL('../src/views/AgentWorkspace.vue', import.meta.url), 'utf8')
   assert.match(workspace, /@guide="guide"/)

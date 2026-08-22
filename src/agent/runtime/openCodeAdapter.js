@@ -810,10 +810,16 @@ export function createOpenCodePlanner({
         `YUFENG 可用工具：${JSON.stringify(sanitizeWorkbenchValue(tools || []))}`,
         `当前 Workbench 状态：${JSON.stringify(safeSession)}`
       ].join('\n\n')
+      // A resolver is evaluated immediately before each prompt. The value is
+      // then copied into this request, so changing the selection affects the
+      // next prompt without mutating a request already handed to the adapter.
+      const requestModel = typeof model === 'function'
+        ? await model({ session, tools, signal, adapter })
+        : model
       const response = await adapter.prompt({
         sessionId: remoteSessionId,
         text: prompt,
-        model,
+        model: requestModel,
         agent,
         system: systemPrompt,
         tools: disabledTools,

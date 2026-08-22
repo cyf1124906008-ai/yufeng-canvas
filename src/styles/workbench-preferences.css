@@ -350,7 +350,7 @@
 .agent-workbench .runtime-state { color: var(--wb-tertiary); }
 .agent-workbench .runtime-state.ready i { background: var(--wb-success); box-shadow: none; }
 .agent-workbench .runtime-state.running i { background: var(--wb-accent); }
-.agent-workbench .send-button { min-width: 68px; height: 32px; color: white; background: var(--wb-accent); box-shadow: none; }
+.agent-workbench .send-button { width: 32px; min-width: 32px; height: 32px; padding: 0; color: white; background: var(--wb-accent); box-shadow: none; }
 .agent-workbench .send-button:hover { background: var(--wb-accent-strong); transform: none; }
 .agent-workbench .stop-button { min-width: 32px; color: white; background: var(--wb-danger); }
 .agent-workbench .guide-button,

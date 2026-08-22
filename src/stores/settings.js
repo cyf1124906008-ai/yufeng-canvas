@@ -14,6 +14,7 @@ export const DEFAULT_AGENT_SETTINGS = Object.freeze({
   // user-selected local sidecar and never becomes an authority by restoring
   // a persisted permission or API credential.
   agentEngine: 'native',
+  selectedOpenCodeModel: '',
   reasoningEffort: 'auto',
   maxActionsPerTurn: 24,
   tools: Object.freeze({
@@ -61,6 +62,68 @@ const boundedInteger = (value, fallback, min, max) => {
   return Number.isFinite(parsed) ? Math.min(max, Math.max(min, parsed)) : fallback
 }
 
+export const normalizeOpenCodeModelKey = value => String(value || '')
+  .replace(/[\u0000-\u001f\u007f]/g, '')
+  .trim()
+  .slice(0, 512)
+
+const openCodeSelectionError = (code, message) => Object.assign(new Error(message), { code })
+
+export function isOpenCodeModelSelectionReady({ selectedModel, models = [] } = {}) {
+  const selected = normalizeOpenCodeModelKey(selectedModel)
+  if (!selected) return true
+  return (Array.isArray(models) ? models : []).some(model => (
+    normalizeOpenCodeModelKey(typeof model === 'string' ? model : model?.key) === selected
+  ))
+}
+
+export function evaluateOpenCodeEngineEntry({ runtimeStatus, selectedModel, models = [] } = {}) {
+  const running = runtimeStatus?.state === 'running' || runtimeStatus?.healthy === true
+  return {
+    allowed: running,
+    repairRequired: running && !isOpenCodeModelSelectionReady({ selectedModel, models })
+  }
+}
+
+/**
+ * Resolve the sidecar model immediately before a planner prompt is emitted.
+ * The selected value is read again after catalog I/O so an A -> B switch made
+ * during discovery applies to the upcoming prompt, never to one already sent.
+ */
+export async function resolveOpenCodeModelForRequest({
+  selectedModel,
+  loadCatalog,
+  selectModel
+} = {}) {
+  const readSelected = () => normalizeOpenCodeModelKey(
+    typeof selectedModel === 'function' ? selectedModel() : selectedModel
+  )
+  if (!readSelected()) return undefined
+  if (typeof loadCatalog !== 'function' || typeof selectModel !== 'function') {
+    throw openCodeSelectionError('OPENCODE_MODEL_CATALOG_UNAVAILABLE', 'OpenCode 模型目录当前不可用')
+  }
+
+  let catalog
+  try {
+    catalog = await loadCatalog()
+  } catch (error) {
+    if (error?.name === 'AbortError' || ['ABORT_ERR', 'OPENCODE_ABORTED'].includes(error?.code)) {
+      throw error
+    }
+    // Never copy a provider/server error into renderer state: it may contain
+    // a URL, credential fragment, or upstream response body.
+    throw openCodeSelectionError('OPENCODE_MODEL_CATALOG_UNAVAILABLE', 'OpenCode 模型目录读取失败')
+  }
+
+  const latest = readSelected()
+  if (!latest) return undefined
+  const resolved = selectModel(latest, catalog)
+  if (!resolved) {
+    throw openCodeSelectionError('OPENCODE_SELECTED_MODEL_UNAVAILABLE', '所选 OpenCode 模型已不在当前可用目录中')
+  }
+  return resolved
+}
+
 export function normalizeAgentSettings(value = {}, { restoring = false, legacyTheme = '' } = {}) {
   const source = value && typeof value === 'object' ? value : {}
   const storedTheme = THEMES.has(source.theme)
@@ -83,6 +146,7 @@ export function normalizeAgentSettings(value = {}, { restoring = false, legacyTh
     // restarted application always falls back to explicit approval.
     approvalMode: restoring && ['auto', 'full_access'].includes(storedApproval) ? 'ask' : storedApproval,
     agentEngine: storedEngine,
+    selectedOpenCodeModel: normalizeOpenCodeModelKey(source.selectedOpenCodeModel),
     reasoningEffort: REASONING_EFFORTS.has(source.reasoningEffort)
       ? source.reasoningEffort
       : DEFAULT_AGENT_SETTINGS.reasoningEffort,
@@ -185,6 +249,10 @@ export function createAgentSettingsStore({
     state.agentEngine = value
     return true
   }
+  const setSelectedOpenCodeModel = value => {
+    state.selectedOpenCodeModel = normalizeOpenCodeModelKey(value)
+    return true
+  }
   const setReasoningEffort = value => {
     if (!REASONING_EFFORTS.has(value)) return false
     state.reasoningEffort = value
@@ -225,6 +293,7 @@ export function createAgentSettingsStore({
     setDensity,
     setApprovalMode,
     setAgentEngine,
+    setSelectedOpenCodeModel,
     setReasoningEffort,
     setMaxActionsPerTurn,
     setToolEnabled,

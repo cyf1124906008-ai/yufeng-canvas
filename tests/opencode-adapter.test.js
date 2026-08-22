@@ -270,6 +270,36 @@ test('OpenCode planner keeps execution inside the existing Workbench tool bounda
   assert.equal(calls[1][1].model, 'opencode/big-pickle')
 })
 
+test('OpenCode planner resolves a hot-switched model per prompt without mutating an in-flight request', async () => {
+  let selectedModel = 'opencode/model-a'
+  let finishFirst
+  const promptInputs = []
+  const planner = createOpenCodePlanner({
+    model: () => selectedModel,
+    adapter: {
+      createSession: async () => ({ id: 'remote-session' }),
+      prompt: async input => {
+        promptInputs.push(input)
+        if (promptInputs.length === 1) {
+          await new Promise(resolve => { finishFirst = resolve })
+        }
+        return { parts: [{ type: 'text', text: '{"type":"finish","result":{"content":"done"}}' }] }
+      }
+    }
+  })
+
+  const inFlight = planner.nextAction({ session: {}, tools: [] })
+  await Promise.resolve()
+  await Promise.resolve()
+  assert.equal(promptInputs[0].model, 'opencode/model-a')
+  selectedModel = 'opencode/model-b'
+  assert.equal(promptInputs[0].model, 'opencode/model-a')
+  finishFirst()
+  await inFlight
+  await planner.nextAction({ session: {}, tools: [] })
+  assert.deepEqual(promptInputs.map(input => input.model), ['opencode/model-a', 'opencode/model-b'])
+})
+
 test('Workbench can select OpenCode as the planner while retaining a native fallback', async () => {
   let nativeCalls = 0
   let factoryCalls = 0

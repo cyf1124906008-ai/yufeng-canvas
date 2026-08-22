@@ -38,6 +38,26 @@ test('headless chat calls the configured endpoint without Canvas logging depende
   assert.equal(result, '{"name":"finish"}')
 })
 
+test('headless chat reads the latest selected model for each newly issued request', async () => {
+  const selectedChatModel = { value: 'chat-a' }
+  const bodies = []
+  const client = createHeadlessChatClient({
+    modelStore: {
+      selectedChatModel,
+      getChatEndpoint: () => 'https://api.example/v1/chat/completions'
+    },
+    fetchImpl: async (_url, options) => {
+      bodies.push(JSON.parse(options.body))
+      return response({ choices: [{ message: { content: 'done' } }] })
+    }
+  })
+
+  await client.send('first')
+  selectedChatModel.value = 'chat-b'
+  await client.send('second')
+  assert.deepEqual(bodies.map(body => body.model), ['chat-a', 'chat-b'])
+})
+
 test('headless chat sends real image input to a selected Vision model', async () => {
   let body
   const client = createHeadlessChatClient({

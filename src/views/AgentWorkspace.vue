@@ -182,7 +182,12 @@ import {
 } from '../agent/runtime/openCodeAdapter.js'
 import { useAgentAutomations } from '../agent/automation/index.js'
 import { useModelStore } from '../stores/pinia/index.js'
-import { useAgentSettings } from '../stores/settings.js'
+import {
+  evaluateOpenCodeEngineEntry,
+  isOpenCodeModelSelectionReady,
+  resolveOpenCodeModelForRequest,
+  useAgentSettings
+} from '../stores/settings.js'
 
 defineOptions({ name: 'AgentWorkspace' })
 
@@ -190,6 +195,39 @@ const modelStore = useModelStore()
 const settings = useAgentSettings()
 const openCodeStatus = ref({ state: 'unknown', url: '', version: '' })
 const openCodeLastError = ref(null)
+const openCodeModelOptions = ref([])
+const openCodeCatalogStatus = ref({ state: 'idle', code: '', message: '' })
+let openCodeCatalogEpoch = 0
+
+const applyOpenCodeModelCatalog = (catalog, epoch) => {
+  if (epoch !== openCodeCatalogEpoch) return catalog
+  const source = Array.isArray(catalog?.models) ? catalog.models : []
+  openCodeModelOptions.value = normalizeModelOptions(
+    source.filter(model => selectOpenCodeModel(model?.key, catalog) === model?.key)
+  )
+  openCodeCatalogStatus.value = { state: 'ready', code: '', message: '' }
+  return catalog
+}
+
+const createOpenCodeAdapterForWorkspace = () => {
+  const status = openCodeStatus.value || {}
+  const bridge = desktopBridge()
+  if (typeof bridge?.openCode?.createSession === 'function' && typeof bridge?.openCode?.prompt === 'function') {
+    return createOpenCodeBridgeAdapter({
+      bridge: bridge.openCode,
+      directory: String(workbench.workspaceRoot.value || '')
+    })
+  }
+  if (status.url) {
+    return createOpenCodeAdapter({
+      baseUrl: status.url,
+      directory: String(workbench.workspaceRoot.value || '')
+    })
+  }
+  const error = new Error('桌面 OpenCode IPC 不可用，请重启 DataEyes Code')
+  error.code = 'OPENCODE_IPC_UNAVAILABLE'
+  throw error
+}
 
 const createOpenCodePlannerForSession = async () => {
   const status = openCodeStatus.value || {}
@@ -198,45 +236,37 @@ const createOpenCodePlannerForSession = async () => {
     error.code = 'OPENCODE_NOT_RUNNING'
     throw error
   }
-  const bridge = desktopBridge()
-  let adapter
-  if (typeof bridge?.openCode?.createSession === 'function' && typeof bridge?.openCode?.prompt === 'function') {
-    // Keep packaged Desktop traffic on the Main-process proxy. The renderer
-    // never supplies a directory or URL to OpenCode, so file:// origins do
-    // not hit CORS and sessions remain bound to Electron's workspace check.
-    adapter = createOpenCodeBridgeAdapter({
-      bridge: bridge.openCode,
-      directory: String(workbench.workspaceRoot.value || '')
-    })
-  } else if (status.url) {
-    // Web preview can still connect to a user-managed server when its origin
-    // is explicitly allowed by `opencode serve --cors`.
-    adapter = createOpenCodeAdapter({
-      baseUrl: status.url,
-      directory: String(workbench.workspaceRoot.value || '')
-    })
-  } else {
-    const error = new Error('桌面 OpenCode IPC 不可用，请重启 DataEyes Code')
-    error.code = 'OPENCODE_IPC_UNAVAILABLE'
-    throw error
-  }
+  const adapter = createOpenCodeAdapterForWorkspace()
 
-  let model
-  const preferred = String(modelStore.selectedChatModel || '').trim()
-  if (preferred.includes('/')) {
+  const resolveModel = async ({ signal } = {}) => {
+    let requestEpoch = 0
     try {
-      const catalog = await adapter.listModels()
-      model = selectOpenCodeModel(preferred, catalog)
-    } catch {
-      // Catalog inspection is advisory. If OpenCode is healthy but its
-      // provider endpoint is temporarily unavailable, let it use its own
-      // configured default instead of forwarding an unverified YUFENG key.
-      model = undefined
+      return await resolveOpenCodeModelForRequest({
+        selectedModel: () => settings.selectedOpenCodeModel.value,
+        loadCatalog: async () => {
+          requestEpoch = ++openCodeCatalogEpoch
+          return applyOpenCodeModelCatalog(await adapter.listModels({ signal }), requestEpoch)
+        },
+        selectModel: selectOpenCodeModel
+      })
+    } catch (error) {
+      if (requestEpoch && requestEpoch !== openCodeCatalogEpoch) throw error
+      if (error?.code === 'OPENCODE_SELECTED_MODEL_UNAVAILABLE') {
+        openCodeCatalogStatus.value = {
+          state: 'invalid_selection',
+          code: error.code,
+          message: error.message
+        }
+      } else if (error?.code === 'OPENCODE_MODEL_CATALOG_UNAVAILABLE') {
+        openCodeModelOptions.value = []
+        openCodeCatalogStatus.value = { state: 'error', code: error.code, message: error.message }
+      }
+      throw error
     }
   }
   return createOpenCodePlanner({
     adapter,
-    model
+    model: resolveModel
   })
 }
 
@@ -388,7 +418,7 @@ const normalizeModelOptions = models => {
     label: String(model.label || model.name || model.key).trim() || model.key.trim()
   }))
 }
-const modelOptions = computed(() => ({
+const nativeModelOptions = computed(() => ({
   // The store's available* options are provider-scoped and already exclude
   // explicit outages. Do not fall back to the built-in catalog when
   // requireUserModels is enabled: an invented option cannot be executed.
@@ -396,24 +426,52 @@ const modelOptions = computed(() => ({
   image: normalizeModelOptions(modelStore.imageModelOptions),
   video: normalizeModelOptions(modelStore.videoModelOptions)
 }))
+const modelOptions = computed(() => ({
+  chat: settings.agentEngine.value === 'opencode'
+    ? openCodeModelOptions.value
+    : nativeModelOptions.value.chat,
+  image: nativeModelOptions.value.image,
+  video: nativeModelOptions.value.video
+}))
 const modelCatalogEmpty = computed(() => Object.values(modelOptions.value).every(options => options.length === 0))
 const selectedModels = computed(() => ({
-  chat: String(modelStore.selectedChatModel || ''),
+  chat: settings.agentEngine.value === 'opencode'
+    ? String(settings.selectedOpenCodeModel.value || '')
+    : String(modelStore.selectedChatModel || ''),
   image: String(modelStore.selectedImageModel || ''),
   video: String(modelStore.selectedVideoModel || '')
 }))
 const selectedModelLabel = computed(() => {
-  const key = String(modelStore.selectedChatModel || '').trim()
+  const isOpenCode = settings.agentEngine.value === 'opencode'
+  const key = isOpenCode
+    ? String(settings.selectedOpenCodeModel.value || '').trim()
+    : String(modelStore.selectedChatModel || '').trim()
+  if (isOpenCode && !key) return 'OpenCode 自动路由'
+  if (isOpenCode && openCodeCatalogStatus.value.state === 'loading') return '正在读取 OpenCode 模型'
+  if (isOpenCode && openCodeCatalogStatus.value.state === 'error') return 'OpenCode 模型目录不可用'
+  if (isOpenCode && openCodeCatalogStatus.value.state === 'invalid_selection') return '当前 OpenCode 模型不可用'
   if (!key) return modelOptions.value.chat.length ? '自动路由' : '先配置模型'
   const selected = modelOptions.value.chat.find(model => model.key === key)
   if (!selected) return modelOptions.value.chat.length ? '当前模型不可用' : '先配置模型'
   const label = selected.label || key
+  if (isOpenCode) return `${label} · OpenCode`
   return modelStore.isModelLocked?.('chat') ? `${label} · 锁定` : label
 })
 const ensurePlannerModelReady = () => {
-  // OpenCode owns its own connected model catalog. The sidecar health check
-  // and planner factory remain responsible for validating that path.
-  if (settings.agentEngine.value === 'opencode') return true
+  if (settings.agentEngine.value === 'opencode') {
+    if (openCodeStatus.value?.state !== 'running' && openCodeStatus.value?.healthy !== true) {
+      window.$message?.warning('OpenCode 本地 sidecar 尚未运行，请先在设置中启动')
+      return false
+    }
+    const selected = String(settings.selectedOpenCodeModel.value || '').trim()
+    // Empty is an explicit auto-route selection and may use OpenCode's own
+    // configured default even when catalog discovery is temporarily down.
+    if (isOpenCodeModelSelectionReady({ selectedModel: selected, models: openCodeModelOptions.value })) return true
+    window.$message?.error(
+      openCodeCatalogStatus.value.message || '所选 OpenCode 模型已不在当前可用目录中，请重新选择'
+    )
+    return false
+  }
   if (modelOptions.value.chat.length > 0) return true
   openSettings('api')
   const reason = modelCatalogEmpty.value
@@ -909,9 +967,10 @@ const selectTool = tool => {
 }
 
 const selectModel = payload => {
-  if (workbench.isRunning.value || workbench.isAwaitingApproval.value || workbench.isHistorySelection.value) return
+  if (workbench.isHistorySelection.value || workbench.isStopping.value) return
   const capability = String(payload?.capability || '').trim()
   const model = String(payload?.model || '').trim()
+  const isOpenCodeChat = settings.agentEngine.value === 'opencode' && capability === 'chat'
   const fields = {
     chat: 'selectedChatModel',
     image: 'selectedImageModel',
@@ -921,21 +980,38 @@ const selectModel = payload => {
   if (!field) return
   const options = modelOptions.value[capability] || []
   if (model && !options.some(option => option.key === model)) {
-    openSettings('api')
-    window.$message?.warning(
-      `${MODEL_CAPABILITY_LABELS[capability] || '当前'}模型不在当前 Provider 的可用目录中，请先同步或添加后再切换。`
-    )
+    if (isOpenCodeChat) {
+      window.$message?.warning('该模型不在 OpenCode sidecar 当前可用目录中，未执行切换。')
+    } else {
+      openSettings('api')
+      window.$message?.warning(
+        `${MODEL_CAPABILITY_LABELS[capability] || '当前'}模型不在当前 Provider 的可用目录中，请先同步或添加后再切换。`
+      )
+    }
     return
   }
-  if (typeof modelStore.setSelectedModel === 'function') {
-    modelStore.setSelectedModel(capability, model, { mode: model ? 'locked' : 'auto' })
+  if (isOpenCodeChat) {
+    settings.setSelectedOpenCodeModel(model)
+    openCodeCatalogStatus.value = { state: 'ready', code: '', message: '' }
+    if (openCodeLastError.value?.code === 'OPENCODE_SELECTED_MODEL_UNAVAILABLE') {
+      openCodeLastError.value = null
+    }
+  } else if (typeof modelStore.setSelectedModel === 'function') {
+    const changed = modelStore.setSelectedModel(capability, model, { mode: model ? 'locked' : 'auto' })
+    if (changed === false) {
+      window.$message?.warning(`${MODEL_CAPABILITY_LABELS[capability] || '当前'}模型与当前 Provider 不兼容，未执行切换。`)
+      return
+    }
   } else {
     modelStore[field] = model
   }
   const label = model
     ? (modelOptions.value[capability] || []).find(option => option.key === model)?.label || model
     : '自动路由'
-  window.$message?.success(`${capability === 'chat' ? '对话' : capability === 'image' ? '图片' : '视频'}模型已切换为 ${label}`)
+  const effectiveTiming = workbench.isRunning.value || workbench.isAwaitingApproval.value
+    ? '，从后续 Agent 步骤生效'
+    : ''
+  window.$message?.success(`${capability === 'chat' ? '对话' : capability === 'image' ? '图片' : '视频'}模型已切换为 ${label}${effectiveTiming}`)
 }
 
 const selectWorkspace = async workspaceId => {
@@ -1009,6 +1085,57 @@ const desktopBridge = () => {
   }
 }
 
+const openCodeCatalogFailure = (error, fallbackCode = 'OPENCODE_MODEL_CATALOG_FAILED') => {
+  const candidate = String(error?.code || '').trim().toUpperCase()
+  const code = /^[A-Z0-9_]{3,80}$/.test(candidate) ? candidate : fallbackCode
+  return {
+    state: 'error',
+    code,
+    // Keep the real bounded error code, but never echo upstream payloads,
+    // credentials, URLs, or arbitrary provider messages into renderer state.
+    message: `OpenCode 模型目录读取失败（${code}）`
+  }
+}
+
+const refreshOpenCodeModelCatalog = async () => {
+  const requestEpoch = ++openCodeCatalogEpoch
+  if (openCodeStatus.value?.state !== 'running' && openCodeStatus.value?.healthy !== true) {
+    openCodeModelOptions.value = []
+    openCodeCatalogStatus.value = { state: 'unavailable', code: 'OPENCODE_NOT_RUNNING', message: 'OpenCode 尚未运行' }
+    return false
+  }
+  openCodeCatalogStatus.value = { state: 'loading', code: '', message: '' }
+  try {
+    const adapter = createOpenCodeAdapterForWorkspace()
+    const catalog = await adapter.listModels()
+    if (requestEpoch !== openCodeCatalogEpoch) return false
+    applyOpenCodeModelCatalog(catalog, requestEpoch)
+    const selected = String(settings.selectedOpenCodeModel.value || '').trim()
+    if (selected && !openCodeModelOptions.value.some(model => model.key === selected)) {
+      const invalid = {
+        state: 'invalid_selection',
+        code: 'OPENCODE_SELECTED_MODEL_UNAVAILABLE',
+        message: '所选 OpenCode 模型已不在当前可用目录中，请重新选择'
+      }
+      openCodeCatalogStatus.value = invalid
+      openCodeLastError.value = { code: invalid.code, message: invalid.message }
+      return false
+    }
+    openCodeCatalogStatus.value = { state: 'ready', code: '', message: '' }
+    if (openCodeLastError.value?.code?.startsWith?.('OPENCODE_MODEL_') || openCodeLastError.value?.code === 'OPENCODE_SELECTED_MODEL_UNAVAILABLE') {
+      openCodeLastError.value = null
+    }
+    return true
+  } catch (error) {
+    if (requestEpoch !== openCodeCatalogEpoch) return false
+    openCodeModelOptions.value = []
+    const failure = openCodeCatalogFailure(error)
+    openCodeCatalogStatus.value = failure
+    openCodeLastError.value = { code: failure.code, message: failure.message }
+    return false
+  }
+}
+
 const refreshOpenCode = async () => {
   const bridge = desktopBridge()
   if (typeof bridge?.openCode?.getStatus !== 'function') {
@@ -1017,6 +1144,12 @@ const refreshOpenCode = async () => {
   }
   try {
     openCodeStatus.value = await bridge.openCode.getStatus()
+    if (openCodeStatus.value?.state === 'running' || openCodeStatus.value?.healthy === true) {
+      await refreshOpenCodeModelCatalog()
+    } else {
+      openCodeModelOptions.value = []
+      openCodeCatalogStatus.value = { state: 'unavailable', code: 'OPENCODE_NOT_RUNNING', message: 'OpenCode 尚未运行' }
+    }
     return openCodeStatus.value
   } catch (error) {
     openCodeLastError.value = {
@@ -1045,8 +1178,19 @@ const startOpenCode = async () => {
     if (openCodeStatus.value?.state !== 'running') {
       throw Object.assign(new Error('OpenCode sidecar 未进入运行状态'), { code: 'OPENCODE_START_INCOMPLETE' })
     }
-    window.$message?.success('OpenCode 本地引擎已连接；新任务会使用它规划下一步')
+    await refreshOpenCodeModelCatalog()
+    const entry = evaluateOpenCodeEngineEntry({
+      runtimeStatus: openCodeStatus.value,
+      selectedModel: settings.selectedOpenCodeModel.value,
+      models: openCodeModelOptions.value
+    })
+    if (!entry.allowed) return false
     if (settings.agentEngine.value !== 'opencode') settings.setAgentEngine('opencode')
+    if (entry.repairRequired) {
+      window.$message?.warning('已进入 OpenCode；原模型已失效，请在模型菜单选择自动路由或新的可用模型。')
+    } else {
+      window.$message?.success('OpenCode 本地引擎已连接；新任务会使用它规划下一步')
+    }
     return true
   } catch (error) {
     openCodeLastError.value = {
@@ -1063,7 +1207,10 @@ const stopOpenCode = async () => {
   const bridge = desktopBridge()
   try {
     if (typeof bridge?.openCode?.stop === 'function') await bridge.openCode.stop()
+    openCodeCatalogEpoch += 1
     openCodeStatus.value = { state: 'stopped', url: '', version: '' }
+    openCodeModelOptions.value = []
+    openCodeCatalogStatus.value = { state: 'unavailable', code: 'OPENCODE_NOT_RUNNING', message: 'OpenCode 尚未运行' }
     if (settings.agentEngine.value === 'opencode') settings.setAgentEngine('native')
     window.$message?.info('OpenCode 本地引擎已停止，已切回 DataEyes Native')
     return true
@@ -1079,11 +1226,26 @@ const setAgentEngine = async engine => {
   if (next === 'opencode') {
     if (openCodeStatus.value?.state !== 'running') {
       const started = await startOpenCode()
-      if (!started) return false
+      return started
+    } else {
+      await refreshOpenCodeModelCatalog()
     }
+    const entry = evaluateOpenCodeEngineEntry({
+      runtimeStatus: openCodeStatus.value,
+      selectedModel: settings.selectedOpenCodeModel.value,
+      models: openCodeModelOptions.value
+    })
+    if (!entry.allowed) return false
+    settings.setAgentEngine(next)
+    if (entry.repairRequired) {
+      window.$message?.warning('已进入 OpenCode；请先在模型菜单修复失效选择。')
+    } else {
+      window.$message?.success('已切换到 OpenCode Local')
+    }
+    return true
   }
   settings.setAgentEngine(next)
-  window.$message?.success(next === 'opencode' ? '已切换到 OpenCode Local' : '已切换到 DataEyes Native')
+  window.$message?.success('已切换到 DataEyes Native')
   return true
 }
 

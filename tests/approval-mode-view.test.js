@@ -54,6 +54,15 @@ test('composer exposes direct capability model switching and Workspace persists 
   assert.match(workspace, /:model-options="modelOptions"/)
   assert.match(workspace, /@select-model="selectModel"/)
   assert.match(workspace, /modelStore\[field\] = model/)
+  assert.match(composer, /modelSelectionLocked = computed\(\(\) => props\.history \|\| props\.stopping\)/)
+  assert.match(composer, /后续 Agent 步骤生效/)
+  assert.match(composer, /\.model-menu \{ right: auto; left: 0; width: min\(340px, calc\(100vw - 16px\)\); \}/)
+  const selectionHandler = workspace.slice(
+    workspace.indexOf('const selectModel = payload =>'),
+    workspace.indexOf('const selectWorkspace = async')
+  )
+  assert.doesNotMatch(selectionHandler, /if \(workbench\.isRunning\.value \|\| workbench\.isAwaitingApproval\.value/)
+  assert.match(selectionHandler, /if \(workbench\.isHistorySelection\.value \|\| workbench\.isStopping\.value\) return/)
   assert.match(settings, /handleSelectActiveModel/)
   assert.match(settings, /selectedField = \{[\s\S]*selectedChatModel/)
 })

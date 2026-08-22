@@ -47,6 +47,32 @@ test('Workbench planner accepts strict JSON actions and preserves ordinary repli
   assert.doesNotMatch(captured, /function|execute/)
 })
 
+test('Workbench planner hot-switches chat model only for the next request', async () => {
+  const selectedChatModel = { value: 'chat-a' }
+  const requests = []
+  let finishFirst
+  const planner = createWorkbenchPlanner({
+    modelStore: { selectedChatModel },
+    sendChat: async (_prompt, _stream, options) => {
+      requests.push(options.model)
+      if (requests.length === 1) {
+        await new Promise(resolve => { finishFirst = resolve })
+      }
+      return '{"type":"finish","result":{"content":"done"}}'
+    }
+  })
+
+  const inFlight = planner.nextAction({ session: {}, tools: [] })
+  await Promise.resolve()
+  assert.deepEqual(requests, ['chat-a'])
+  selectedChatModel.value = 'chat-b'
+  assert.deepEqual(requests, ['chat-a'], 'an in-flight request keeps its captured model')
+  finishFirst()
+  await inFlight
+  await planner.nextAction({ session: {}, tools: [] })
+  assert.deepEqual(requests, ['chat-a', 'chat-b'])
+})
+
 test('Workbench planner exposes approval mode and read_only retry guidance', async () => {
   let captured = ''
   const planner = createWorkbenchPlanner({

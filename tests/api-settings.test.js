@@ -132,6 +132,9 @@ test('provider-scoped model mutations preserve global selections and safely repa
       }
     ]
 
+    assert.equal(store.setSelectedModel('chat', 'not-in-active-provider'), false)
+    assert.equal(store.isModelSelectable('chat', 'not-in-active-provider'), false)
+
     for (const entry of cases) {
       const initialSelection = store[entry.selected]
       const inactiveModel = `test-inactive-${entry.kind}`
