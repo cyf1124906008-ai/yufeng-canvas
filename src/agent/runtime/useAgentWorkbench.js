@@ -1,9 +1,12 @@
 import { computed, getCurrentScope, onScopeDispose, ref, shallowRef } from 'vue'
 import {
-  WorkbenchSession,
   normalizeApprovalMode,
   projectWorkbenchEvents
 } from '../workbench/index.js'
+import {
+  createCompatibilityWorkbenchHarness,
+  createWorkbenchHarnessKernel
+} from '../harness/index.js'
 import { WorkbenchSessionRepository } from '../memory/index.js'
 import { createHeadlessChatClient } from './headlessChatClient.js'
 import {
@@ -104,7 +107,8 @@ export function useAgentWorkbench({
   reasoningEffort = 'auto',
   planner: injectedPlanner = null,
   plannerFactory: injectedPlannerFactory = null,
-  plannerOptions = {}
+  plannerOptions = {},
+  harnessKernelFactory = createWorkbenchHarnessKernel
 } = {}) {
   if (!modelStore) throw new TypeError('useAgentWorkbench 需要 modelStore')
 
@@ -142,6 +146,42 @@ export function useAgentWorkbench({
     return createWorkbenchPlanner({ sendChat, modelStore, ...plannerOptions })
   }
   let planner = null
+  let harnessKernel
+  try {
+    harnessKernel = harnessKernelFactory({
+      plannerFactory: createPlanner,
+      toolRegistry
+    })
+    const requiredKernelMethods = ['createSession', 'plannerFor', 'snapshot', 'disposeSession', 'dispose']
+    if (!harnessKernel || requiredKernelMethods.some(method => typeof harnessKernel[method] !== 'function')) {
+      throw new TypeError('Harness kernel factory returned an invalid runtime')
+    }
+  } catch (kernelError) {
+    appendRuntimeLog(runtimeLogs, 'warning', 'DeepSeek Harness 内核启动失败，已进入可观测兼容模式', {
+      code: kernelError?.code || 'HARNESS_KERNEL_INIT_FAILED'
+    })
+    harnessKernel = createCompatibilityWorkbenchHarness({
+      plannerFactory: createPlanner,
+      toolRegistry,
+      error: kernelError
+    })
+  }
+  const harnessRuntimeSnapshot = shallowRef(harnessKernel.snapshot())
+  const unsubscribeHarness = harnessKernel.subscribe?.(snapshot => {
+    harnessRuntimeSnapshot.value = snapshot
+  }) || (() => {})
+  void Promise.resolve(harnessKernel.ready).then(snapshot => {
+    harnessRuntimeSnapshot.value = snapshot
+    if (snapshot.lifecycle === 'degraded' && snapshot.mode !== 'compatibility-fallback') {
+      appendRuntimeLog(runtimeLogs, 'warning', 'DeepSeek Harness 插件树未完全激活', {
+        code: snapshot.errors?.[0]?.code || 'HARNESS_PLUGIN_TREE_DEGRADED'
+      })
+    }
+  }).catch(kernelError => {
+    appendRuntimeLog(runtimeLogs, 'warning', 'DeepSeek Harness 就绪检查失败', {
+      code: kernelError?.code || 'HARNESS_KERNEL_READY_FAILED'
+    })
+  })
   const repository = injectedHistoryRepository === undefined
     ? createHistoryRepository(historyStorage === undefined ? defaultStorage() : historyStorage)
     : injectedHistoryRepository
@@ -177,6 +217,18 @@ export function useAgentWorkbench({
   const error = ref(null)
   const activeOperationCount = ref(0)
   let unsubscribe = null
+  let disposePromise = null
+
+  const releaseHarnessSession = (target, reason) => {
+    if (!target) return
+    target.cancel(reason)
+    void Promise.resolve(harnessKernel.disposeSession(target, reason)).catch(scopeError => {
+      appendRuntimeLog(runtimeLogs, 'warning', 'DeepSeek Harness 会话 scope 销毁失败', {
+        code: scopeError?.code || 'HARNESS_SESSION_SCOPE_DISPOSE_FAILED',
+        sessionId: target.sessionId
+      })
+    })
+  }
 
   const trackOperation = async operation => {
     activeOperationCount.value += 1
@@ -218,7 +270,11 @@ export function useAgentWorkbench({
   }
 
   const attachSession = (nextSession, { persist = false, history = false } = {}) => {
+    const previousSession = session.value
     unsubscribe?.()
+    if (previousSession && previousSession !== nextSession) {
+      releaseHarnessSession(previousSession, 'Workbench switched session')
+    }
     session.value = nextSession
     selectedSessionId.value = nextSession.sessionId
     isHistorySelection.value = history
@@ -237,15 +293,14 @@ export function useAgentWorkbench({
   }
 
   const createSession = ({ sessionId, events = [] } = {}) => {
-    planner = createPlanner()
-    return attachSession(new WorkbenchSession({
-    sessionId,
-    events,
-    planner,
-    toolRegistry,
-    approvalMode: selectedApprovalMode.value,
-    maxActionsPerTurn: resolveMaxActionsPerTurn(maxActionsPerTurn)
-    }), { history: false })
+    const nextSession = harnessKernel.createSession({
+      sessionId,
+      events,
+      approvalMode: selectedApprovalMode.value,
+      maxActionsPerTurn: resolveMaxActionsPerTurn(maxActionsPerTurn)
+    })
+    planner = harnessKernel.plannerFor(nextSession)
+    return attachSession(nextSession, { history: false })
   }
 
   const newTask = () => {
@@ -351,13 +406,13 @@ export function useAgentWorkbench({
     try {
       const record = repository?.get?.(String(sessionId || '').trim())
       if (!record) return null
-      return attachSession(new WorkbenchSession({
+      const restoredSession = harnessKernel.createSession({
         sessionId: record.sessionId,
         events: interruptedEvents(record),
-        planner: (planner = createPlanner()),
-        toolRegistry,
         maxActionsPerTurn: resolveMaxActionsPerTurn(maxActionsPerTurn)
-      }), { persist: true, history: true })
+      })
+      planner = harnessKernel.plannerFor(restoredSession)
+      return attachSession(restoredSession, { persist: true, history: true })
     } catch (historyError) {
       appendRuntimeLog(runtimeLogs, 'warning', 'Workbench 历史任务恢复失败', {
         code: historyError?.code || 'WORKBENCH_HISTORY_RESTORE_FAILED'
@@ -372,7 +427,7 @@ export function useAgentWorkbench({
     if (isCurrent) {
       unsubscribe?.()
       unsubscribe = null
-      session.value?.cancel('用户删除了任务历史')
+      releaseHarnessSession(session.value, '用户删除了任务历史')
       session.value = null
       selectedSessionId.value = ''
       isHistorySelection.value = false
@@ -386,7 +441,7 @@ export function useAgentWorkbench({
   const clearHistory = () => {
     unsubscribe?.()
     unsubscribe = null
-    session.value?.cancel('用户清空了任务历史')
+    releaseHarnessSession(session.value, '用户清空了任务历史')
     session.value = null
     selectedSessionId.value = ''
     isHistorySelection.value = false
@@ -422,7 +477,7 @@ export function useAgentWorkbench({
 
   const chooseWorkspace = async () => {
     if (typeof agentTools?.chooseWorkspaceRoot !== 'function') {
-      const unavailable = new Error('工作区选择只在 YUFENG Desktop App 中可用')
+      const unavailable = new Error('工作区选择只在 DataEyes Code 桌面 App 中可用')
       unavailable.code = 'DESKTOP_TOOL_UNAVAILABLE'
       throw unavailable
     }
@@ -448,9 +503,23 @@ export function useAgentWorkbench({
   })
 
   const dispose = () => {
+    if (disposePromise) return disposePromise
     session.value?.cancel('Workbench runtime disposed')
     unsubscribe?.()
     creativeAgent.dispose?.()
+    disposePromise = Promise.resolve(harnessKernel.dispose())
+      .then(snapshot => {
+        harnessRuntimeSnapshot.value = snapshot
+        return snapshot
+      })
+      .catch(kernelError => {
+        appendRuntimeLog(runtimeLogs, 'warning', 'DeepSeek Harness 内核销毁失败', {
+          code: kernelError?.code || 'HARNESS_KERNEL_DISPOSE_FAILED'
+        })
+        throw kernelError
+      })
+      .finally(unsubscribeHarness)
+    return disposePromise
   }
 
   refreshHistory()
@@ -507,6 +576,8 @@ export function useAgentWorkbench({
     creativeArtifacts,
     creativeAgent,
     runtimeLogs,
+    harnessRuntime: computed(() => harnessRuntimeSnapshot.value),
+    runtimeSnapshot: computed(() => harnessRuntimeSnapshot.value),
     toolRegistry,
     planner,
     repository,

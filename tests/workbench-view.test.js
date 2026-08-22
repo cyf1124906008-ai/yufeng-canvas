@@ -194,9 +194,9 @@ test('workbench visual contract keeps professional desktop rails, compact compos
     readFile(new URL('../src/views/AgentWorkspace.vue', import.meta.url), 'utf8')
   ])
 
-  assert.match(workspace, /grid-template-columns: 258px minmax\(0,1fr\) 360px/)
+  assert.match(workspace, /grid-template-columns: 224px minmax\(0,1fr\) 320px/)
   assert.match(workspace, /grid-template-rows: minmax\(0,1fr\) auto/)
-  assert.match(workspace, /@media \(max-width: 1160px\)/)
+  assert.match(workspace, /@media \(max-width: 1439px\)/)
   assert.match(workspace, /@media \(max-width: 860px\)/)
   assert.match(sidebar, /position: fixed/)
   assert.match(sidebar, /task-search/)

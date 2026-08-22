@@ -64,9 +64,10 @@ test('App mounts the reusable startup shell above an already-mounted router view
   assert.match(component, /prefers-reduced-motion: reduce/)
   assert.match(component, /transition: opacity 160ms ease/)
   assert.doesNotMatch(component, /transition:\s*all\b/)
+  assert.doesNotMatch(component, /LOCAL AGENT|BOOT 01|WORKSPACE BOUNDARY/)
 
   const keyframes = [...component.matchAll(/@keyframes\s+[^{]+\{([\s\S]*?)\n\}/g)]
-  assert.ok(keyframes.length >= 6)
+  assert.ok(keyframes.length >= 4)
   for (const [, body] of keyframes) {
     assert.doesNotMatch(body, /\b(?:width|height|inset|top|right|bottom|left|margin|padding)\s*:/)
   }

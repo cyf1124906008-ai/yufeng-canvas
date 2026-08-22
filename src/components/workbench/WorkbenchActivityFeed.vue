@@ -28,29 +28,18 @@
       </div>
 
       <div v-else-if="mode === 'draft'" class="welcome-state">
-        <div class="welcome-hero">
-          <div class="welcome-intro">
-            <span class="welcome-eyebrow"><i></i> LOCAL RUNTIME / READY</span>
-            <h1>把目标交给<br /><em>DataEyes Code</em></h1>
-            <p>描述最终结果。Agent 会理解项目、规划步骤、调用工具，并把每一次操作留在可检查的执行轨迹中。</p>
+        <div class="welcome-intro" :class="{ 'is-running': status.tone === 'running' }">
+          <span class="welcome-mark"><data-eyes-mark :size="24" /></span>
+          <div>
+            <h1>今天要做什么？</h1>
+            <p>描述目标，DataEyes Code 会在当前工作区规划、执行，并留下可随时检查和接管的步骤。</p>
           </div>
-          <figure class="welcome-visual" aria-label="DataEyes Code 光学执行引擎">
-            <img :src="opticalRuntimeArtwork" alt="" width="1586" height="992" fetchpriority="high" />
-            <figcaption><span><i></i>OPTICAL RUNTIME</span><strong>15 tools available</strong></figcaption>
-          </figure>
         </div>
         <div class="suggestion-list">
-          <button v-for="(suggestion, index) in suggestions" :key="suggestion" type="button" @click="emit('apply-suggestion', suggestion)">
-            <span class="suggestion-icon"><workbench-icon :name="suggestionIcon(index)" :size="14" /></span>
-            <span class="suggestion-copy"><small>{{ suggestionLabel(index) }}</small><strong>{{ suggestion }}</strong></span>
+          <button v-for="suggestion in suggestions.slice(0, 3)" :key="suggestion" type="button" @click="emit('apply-suggestion', suggestion)">
+            <span class="suggestion-copy"><strong>{{ suggestion }}</strong></span>
             <workbench-icon name="chevron-right" :size="13" />
           </button>
-        </div>
-        <div class="welcome-capabilities" aria-label="可用能力">
-          <span><workbench-icon name="file" :size="12" />文件</span>
-          <span><workbench-icon name="terminal" :size="12" />终端</span>
-          <span><workbench-icon name="monitor" :size="12" />电脑控制</span>
-          <span><workbench-icon name="sparkles" :size="12" />创作模型</span>
         </div>
       </div>
 
@@ -163,8 +152,8 @@
               :disabled="!artifact.url"
               @click="emit('artifact-select', artifact)"
             >
-              <img v-if="artifact.kind === 'image' && artifact.url" :src="artifact.url" :alt="artifact.label" />
-              <video v-else-if="artifact.kind === 'video' && artifact.url" :src="artifact.url" muted></video>
+              <img v-if="artifact.kind === 'image' && artifact.url" :src="artifact.url" :alt="artifact.label" width="160" height="90" loading="lazy" />
+              <video v-else-if="artifact.kind === 'video' && artifact.url" :src="artifact.url" width="160" height="90" muted aria-hidden="true"></video>
               <span v-else><workbench-icon :name="artifact.kind === 'video' ? 'video' : artifact.kind === 'image' ? 'image' : 'file'" :size="18" /></span>
               <div><strong>{{ artifact.label }}</strong><small>{{ artifact.isFinal ? '最终交付' : artifact.status.label }}</small></div>
             </button>
@@ -177,7 +166,6 @@
 
 <script setup>
 import { computed, nextTick, ref, watch } from 'vue'
-import opticalRuntimeArtwork from '../../assets/dataeyes-code/optical-runtime-v1.png'
 import DataEyesMark from '../brand/DataEyesMark.vue'
 import {
   buildWorkbenchActivities,
@@ -237,8 +225,6 @@ const normalizedArtifacts = computed(() => normalizeWorkbenchArtifacts(props.art
 const startedAt = computed(() => formatWorkbenchTime(props.snapshot?.startedAt || props.snapshot?.createdAt))
 const sessionTitle = computed(() => goal.value || (props.mode === 'draft' ? '新任务' : 'Agent 任务'))
 const modeLabel = computed(() => ({ draft: '本地草稿', live: '实时会话', history: '已保存历史' })[props.mode] || '会话')
-const suggestionIcon = index => ['git-diff', 'terminal', 'monitor', 'sparkles'][index] || 'activity'
-const suggestionLabel = index => ['REVIEW', 'BUILD', 'OBSERVE', 'CREATE'][index] || 'RUN'
 
 const iconForActivity = activity => {
   if (activity.kind === 'terminal') return 'terminal'

@@ -1,7 +1,7 @@
 <template>
   <footer class="composer-shell">
     <div class="composer-wrap">
-      <div v-if="showCommands" class="command-menu" role="listbox" aria-label="快捷命令">
+      <div v-if="showCommands" class="command-menu" role="menu" aria-label="快捷命令">
         <header>
           <span>快捷命令</span>
           <small>选择一种任务起点</small>
@@ -10,7 +10,7 @@
           v-for="tool in commandTools"
           :key="tool.id"
           type="button"
-          role="option"
+          role="menuitem"
           @click="selectCommand(tool)"
         >
           <span class="command-icon"><workbench-icon :name="iconForTool(tool.id)" :size="15" /></span>
@@ -65,6 +65,8 @@
           :disabled="disabled"
           :placeholder="placeholder"
           aria-label="任务输入"
+          name="task-prompt"
+          autocomplete="off"
           @input="onInput"
           @keydown.meta.enter.exact.prevent="submit"
           @keydown.ctrl.enter.exact.prevent="submit"
@@ -73,7 +75,7 @@
 
         <div class="composer-toolbar">
           <div class="composer-tools">
-            <input ref="fileInput" class="file-input" type="file" multiple :accept="acceptedFiles" @change="onFilesSelected" />
+            <input ref="fileInput" class="file-input" type="file" name="task-attachments" multiple :accept="acceptedFiles" aria-label="附加文本文件" @change="onFilesSelected" />
             <button type="button" class="tool-button" :disabled="disabled || active" title="附加文本文件" aria-label="附加文本文件" @click="fileInput?.click()">
               <workbench-icon name="paperclip" :size="15" />
             </button>

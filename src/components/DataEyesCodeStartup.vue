@@ -12,27 +12,15 @@
         tabindex="-1"
         @click.self="skip"
       >
-        <div class="startup-chrome startup-chrome-top" aria-hidden="true">
-          <span>DATAEYES / LOCAL AGENT</span>
-          <span>BOOT 01</span>
-        </div>
-
         <main class="startup-sequence">
-          <div class="execution-rail" aria-hidden="true">
-            <span class="rail-line"></span>
-            <span class="rail-packet rail-packet-left"></span>
-            <span class="rail-packet rail-packet-right"></span>
-            <span class="rail-cursor"></span>
+          <div class="startup-mark" aria-hidden="true">
+            <span class="mark-orbit"></span>
+            <span class="mark-core">DE</span>
           </div>
-
-          <p class="startup-kicker">LOCAL AGENT WORKBENCH</p>
-          <h1 id="dataeyes-startup-title" class="startup-wordmark">
-            <span>DataEyes</span><em>Code</em>
-          </h1>
-          <p id="dataeyes-startup-manifesto" class="startup-manifesto">Plan <i></i> Act <i></i> Verify</p>
-
-          <div class="startup-signal" aria-hidden="true">
-            <span></span><span></span><span></span><span></span><span></span>
+          <h1 id="dataeyes-startup-title" class="startup-wordmark">DataEyes Code</h1>
+          <p class="startup-status">正在准备本地工作区</p>
+          <div class="startup-progress" aria-hidden="true">
+            <span></span>
           </div>
         </main>
 
@@ -40,10 +28,6 @@
           <span>跳过</span><kbd>Esc</kbd>
         </button>
 
-        <div class="startup-chrome startup-chrome-bottom" aria-hidden="true">
-          <span>WORKSPACE BOUNDARY</span>
-          <span>APPROVAL PROTECTED</span>
-        </div>
       </section>
     </Transition>
   </Teleport>
@@ -139,6 +123,11 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .dataeyes-startup-shell {
+  --startup-bg: #f5f5f7;
+  --startup-panel: rgba(255, 255, 255, .84);
+  --startup-text: #1d1d1f;
+  --startup-muted: #6e6e73;
+  --startup-border: rgba(0, 0, 0, .08);
   position: fixed;
   z-index: 2147483000;
   inset: 0;
@@ -146,213 +135,135 @@ onBeforeUnmount(() => {
   min-width: 280px;
   place-items: center;
   overflow: hidden;
-  color: #edf3ef;
-  background:
-    radial-gradient(circle at 50% 46%, rgba(128, 228, 176, .075), transparent 29%),
-    linear-gradient(145deg, #0d1010, #121615 58%, #0d1010);
-  font-family: "HarmonyOS Sans SC", "MiSans", "PingFang SC", sans-serif;
+  outline: 2px solid transparent;
+  outline-offset: -2px;
+  color: var(--startup-text);
+  background: var(--startup-bg);
+  font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", "PingFang SC", sans-serif;
 }
 
-.dataeyes-startup-shell::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  opacity: .18;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, .025) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, .018) 1px, transparent 1px);
-  background-size: 44px 44px;
-  mask-image: radial-gradient(circle at center, #000 0 34%, transparent 74%);
+:global(html.dark) .dataeyes-startup-shell {
+  --startup-bg: #0e0e10;
+  --startup-panel: rgba(28, 28, 30, .86);
+  --startup-text: #f5f5f7;
+  --startup-muted: #98989d;
+  --startup-border: rgba(255, 255, 255, .1);
 }
-
-.startup-chrome {
-  position: absolute;
-  right: clamp(22px, 4vw, 58px);
-  left: clamp(22px, 4vw, 58px);
-  display: flex;
-  justify-content: space-between;
-  color: #59615e;
-  font: 600 9px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  letter-spacing: .18em;
-  text-transform: uppercase;
-  animation: chrome-reveal 360ms ease-out 120ms both;
-}
-
-.startup-chrome-top { top: clamp(22px, 4vw, 48px); }
-.startup-chrome-bottom { bottom: clamp(22px, 4vw, 48px); }
 
 .startup-sequence {
   position: relative;
-  width: min(720px, calc(100vw - 48px));
-  padding: 44px 20px 34px;
+  display: grid;
+  width: min(460px, calc(100vw - 48px));
+  justify-items: center;
+  padding: 40px 28px;
   text-align: center;
 }
 
-.execution-rail {
+.startup-mark {
   position: relative;
-  width: min(460px, 78vw);
-  height: 24px;
-  margin: 0 auto 26px;
+  display: grid;
+  width: 68px;
+  height: 68px;
+  place-items: center;
+  animation: mark-arrive 520ms cubic-bezier(.2, .78, .2, 1) both;
 }
 
-.rail-line,
-.rail-packet,
-.rail-cursor {
+.mark-orbit {
   position: absolute;
-  top: 50%;
-  display: block;
+  inset: 0;
+  border: 1px solid color-mix(in srgb, #147d92 35%, var(--startup-border));
+  border-radius: 22px;
+  background: var(--startup-panel);
+  box-shadow: 0 18px 48px rgba(20, 125, 146, .11), inset 0 1px 0 rgba(255, 255, 255, .38);
+  transform: rotate(9deg);
+  animation: orbit-settle 760ms cubic-bezier(.2, .8, .2, 1) both;
 }
 
-.rail-line {
-  right: 0;
-  left: 0;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, #47534e 18%, #86d8ad 50%, #47534e 82%, transparent);
-  transform: scaleX(.06);
-  animation: rail-open 650ms cubic-bezier(.22, .75, .2, 1) 90ms both;
-}
-
-.rail-packet {
-  width: 7px;
-  height: 7px;
-  margin-top: -3px;
-  border: 1px solid rgba(139, 222, 177, .72);
-  background: #12251b;
-  box-shadow: 0 0 14px rgba(115, 221, 165, .24);
-}
-
-.rail-packet-left {
-  left: 50%;
-  animation: packet-left 720ms cubic-bezier(.18, .72, .16, 1) 120ms both;
-}
-
-.rail-packet-right {
-  right: 50%;
-  animation: packet-right 720ms cubic-bezier(.18, .72, .16, 1) 120ms both;
-}
-
-.rail-cursor {
-  left: 50%;
-  width: 2px;
-  height: 18px;
-  margin-top: -9px;
-  background: #a4efc5;
-  box-shadow: 0 0 18px rgba(139, 232, 182, .5);
-  animation: cursor-resolve 420ms ease-out 680ms both;
-}
-
-.startup-kicker {
-  color: #76b895;
-  font: 700 10px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  letter-spacing: .22em;
-  animation: copy-rise 430ms cubic-bezier(.2, .75, .2, 1) 260ms both;
+.mark-core {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  width: 52px;
+  height: 52px;
+  place-items: center;
+  border-radius: 17px;
+  color: #fff;
+  background: linear-gradient(145deg, #168ea4, #0c697d);
+  box-shadow: 0 8px 22px rgba(20, 125, 146, .22);
+  font-size: 14px;
+  font-weight: 720;
+  letter-spacing: -.04em;
 }
 
 .startup-wordmark {
-  display: flex;
-  justify-content: center;
-  margin-top: 10px;
-  color: #f2f5f3;
-  font-size: clamp(42px, 8vw, 78px);
+  margin: 24px 0 0;
+  color: var(--startup-text);
+  font-size: clamp(28px, 5vw, 38px);
   font-weight: 650;
-  line-height: .95;
-  letter-spacing: -.065em;
+  line-height: 1.08;
+  letter-spacing: -.045em;
+  animation: copy-rise 420ms cubic-bezier(.2, .75, .2, 1) 140ms both;
 }
 
-.startup-wordmark span,
-.startup-wordmark em {
-  display: inline-block;
-  font-style: normal;
-  animation: copy-rise 500ms cubic-bezier(.2, .75, .2, 1) both;
+.startup-status {
+  margin: 9px 0 0;
+  color: var(--startup-muted);
+  font-size: 13px;
+  line-height: 1.5;
+  animation: copy-rise 420ms ease-out 220ms both;
 }
 
-.startup-wordmark span { animation-delay: 330ms; }
-.startup-wordmark em {
-  margin-left: .18em;
-  color: #9ae3b9;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: .86em;
-  font-weight: 420;
-  letter-spacing: -.08em;
-  animation-delay: 410ms;
-}
-
-.startup-manifesto {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  margin-top: 20px;
-  color: #717a76;
-  font: 600 10px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  letter-spacing: .15em;
-  text-transform: uppercase;
-  animation: copy-rise 420ms ease-out 530ms both;
-}
-
-.startup-manifesto i {
-  width: 3px;
+.startup-progress {
+  width: 128px;
   height: 3px;
-  border-radius: 50%;
-  background: #56876c;
+  margin-top: 24px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--startup-text) 9%, transparent);
+  animation: copy-rise 380ms ease-out 300ms both;
 }
 
-.startup-signal {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  height: 13px;
-  margin-top: 26px;
-  animation: copy-rise 380ms ease-out 620ms both;
-}
-
-.startup-signal span {
+.startup-progress span {
   display: block;
-  width: 2px;
-  height: 8px;
-  border-radius: 2px;
-  background: #78c89c;
-  transform-origin: 50% 100%;
-  animation: signal-pulse 520ms ease-in-out 720ms alternate both;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  background: #147d92;
+  transform: translateX(-104%);
+  animation: progress-fill 940ms cubic-bezier(.3, .7, .2, 1) 230ms forwards;
 }
-
-.startup-signal span:nth-child(2),
-.startup-signal span:nth-child(4) { animation-delay: 790ms; }
-.startup-signal span:nth-child(3) { animation-delay: 850ms; }
 
 .startup-skip {
   position: absolute;
   right: clamp(22px, 4vw, 58px);
-  bottom: clamp(50px, 7vw, 84px);
+  bottom: clamp(28px, 5vw, 54px);
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 7px 9px 7px 11px;
-  border: 1px solid rgba(255, 255, 255, .08);
-  border-radius: 7px;
-  color: #7c8581;
-  background: rgba(255, 255, 255, .025);
+  border: 1px solid var(--startup-border);
+  border-radius: 9px;
+  color: var(--startup-muted);
+  background: var(--startup-panel);
   font-size: 10px;
-  animation: chrome-reveal 360ms ease-out 560ms both;
+  animation: copy-rise 360ms ease-out 420ms both;
   transition: opacity 120ms ease, transform 120ms ease;
 }
 
 .startup-skip:hover,
 .startup-skip:focus-visible {
-  color: #dbe3df;
+  color: var(--startup-text);
   opacity: 1;
   transform: translateY(-1px);
 }
 
-.startup-skip:focus-visible { outline: 1px solid #83cfa4; outline-offset: 3px; }
+.startup-skip:focus-visible { outline: 2px solid #147d92; outline-offset: 3px; }
 .startup-skip kbd {
   padding: 2px 5px;
-  border: 1px solid rgba(255, 255, 255, .09);
+  border: 1px solid var(--startup-border);
   border-radius: 4px;
-  color: #656e6a;
-  background: rgba(255, 255, 255, .035);
+  color: var(--startup-muted);
+  background: color-mix(in srgb, var(--startup-text) 4%, transparent);
   font: 500 8px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
@@ -361,27 +272,14 @@ onBeforeUnmount(() => {
 .dataeyes-startup-enter-from,
 .dataeyes-startup-leave-to { opacity: 0; }
 
-@keyframes rail-open {
-  from { opacity: 0; transform: scaleX(.06); }
-  to { opacity: 1; transform: scaleX(1); }
+@keyframes mark-arrive {
+  from { opacity: 0; transform: translateY(8px) scale(.92); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
-@keyframes packet-left {
-  from { opacity: 0; transform: translate3d(-220px, 0, 0) rotate(45deg) scale(.6); }
-  70% { opacity: 1; }
-  to { opacity: 0; transform: translate3d(-3px, 0, 0) rotate(45deg) scale(.8); }
-}
-
-@keyframes packet-right {
-  from { opacity: 0; transform: translate3d(220px, 0, 0) rotate(45deg) scale(.6); }
-  70% { opacity: 1; }
-  to { opacity: 0; transform: translate3d(3px, 0, 0) rotate(45deg) scale(.8); }
-}
-
-@keyframes cursor-resolve {
-  from { opacity: 0; transform: scaleY(.2); }
-  55% { opacity: 1; transform: scaleY(1); }
-  to { opacity: .72; transform: scaleY(.74); }
+@keyframes orbit-settle {
+  from { transform: rotate(-18deg) scale(.84); }
+  to { transform: rotate(9deg) scale(1); }
 }
 
 @keyframes copy-rise {
@@ -389,56 +287,40 @@ onBeforeUnmount(() => {
   to { opacity: 1; transform: translate3d(0, 0, 0); }
 }
 
-@keyframes chrome-reveal {
-  from { opacity: 0; transform: translate3d(0, 4px, 0); }
-  to { opacity: 1; transform: translate3d(0, 0, 0); }
-}
-
-@keyframes signal-pulse {
-  from { opacity: .3; transform: scaleY(.38); }
-  to { opacity: 1; transform: scaleY(1); }
+@keyframes progress-fill {
+  from { transform: translateX(-104%); }
+  to { transform: translateX(0); }
 }
 
 @media (max-width: 560px) {
-  .startup-wordmark { display: block; }
-  .startup-wordmark em { margin-top: 8px; margin-left: 0; }
   .startup-skip { right: 50%; bottom: 62px; transform: translateX(50%); }
   .startup-skip:hover,
   .startup-skip:focus-visible { transform: translate3d(50%, -1px, 0); }
-  .startup-chrome-bottom span:last-child { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .dataeyes-startup-enter-active,
   .dataeyes-startup-leave-active,
-  .startup-chrome,
-  .rail-line,
-  .rail-packet,
-  .rail-cursor,
-  .startup-kicker,
-  .startup-wordmark span,
-  .startup-wordmark em,
-  .startup-manifesto,
-  .startup-signal,
-  .startup-signal span,
+  .startup-mark,
+  .mark-orbit,
+  .startup-wordmark,
+  .startup-status,
+  .startup-progress,
+  .startup-progress span,
   .startup-skip {
     animation: none !important;
     transition-duration: 1ms !important;
   }
 
-  .rail-line,
-  .rail-cursor,
-  .startup-chrome,
-  .startup-kicker,
-  .startup-wordmark span,
-  .startup-wordmark em,
-  .startup-manifesto,
-  .startup-signal,
+  .startup-mark,
+  .mark-orbit,
+  .startup-wordmark,
+  .startup-status,
+  .startup-progress,
+  .startup-progress span,
   .startup-skip {
     opacity: 1;
     transform: none;
   }
-
-  .rail-packet { display: none; }
 }
 </style>

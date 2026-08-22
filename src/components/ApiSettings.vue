@@ -13,9 +13,9 @@
         <div class="settings-heading">
           <span class="product-mark" aria-hidden="true"><b>DE</b><i></i></span>
           <div>
-            <p>DATAEYES CODE / CONTROL PLANE</p>
-            <h2>连接与模型</h2>
-            <span>为本地 Agent 选择 Provider、凭据和可用能力。</span>
+            <p>DataEyes Code</p>
+            <h2>模型服务</h2>
+            <span>管理 Provider 连接、凭据和可用模型。</span>
           </div>
         </div>
         <div class="header-actions">
@@ -30,10 +30,9 @@
         <aside class="provider-rail" aria-label="Provider 选择">
           <div class="rail-heading">
             <div>
-              <span>PROVIDER</span>
-              <small>选择当前连接环境 · {{ visibleProviders.length }} 个可用渠道</small>
+              <span>服务</span>
+              <small>{{ visibleProviders.length }} 个可用渠道</small>
             </div>
-            <span class="rail-meta">SELECT / CONNECT</span>
           </div>
 
           <div class="provider-list" role="tablist" aria-label="可用 Provider">
@@ -55,12 +54,12 @@
                 <small>{{ providerHost(provider.value) }}</small>
               </span>
               <span class="provider-state" :class="`is-${providerStatus(provider.value).tone}`" :title="providerStatus(provider.value).label" :aria-label="providerStatus(provider.value).label"></span>
-              <span v-if="provider.value === formData.provider" class="provider-active-mark">ACTIVE</span>
+              <span v-if="provider.value === formData.provider" class="provider-active-mark" aria-hidden="true">✓</span>
             </button>
           </div>
 
           <div class="provider-help">
-            <span>KEYCHAIN / LOCAL ONLY</span>
+            <span>凭据存储</span>
             <p>凭据只保存在当前设备。导出备份前，请确认接收方可信。</p>
             <a :href="apiKeyHelpUrl" target="_blank" rel="noopener noreferrer">获取或查看 API Key ↗</a>
           </div>
@@ -70,12 +69,10 @@
           <section class="settings-panel connection-panel">
             <div class="panel-heading">
               <div>
-                <p>01 / CONNECTION</p>
                 <h3>{{ currentProviderLabel }}</h3>
                 <span>默认连接会被对话、图片和视频能力继承；需要时可单独覆盖。</span>
               </div>
               <div class="panel-actions">
-                <span class="panel-meta">{{ showBaseUrlInput ? 'CUSTOM ROUTE' : 'PRESET ROUTE' }}</span>
                 <n-button
                   size="small"
                   :loading="connectionTesting"
@@ -87,6 +84,10 @@
                 </n-button>
               </div>
             </div>
+
+            <n-alert v-if="!isConfigured" type="warning" class="compact-alert connection-warning">
+              当前 Provider 尚未配置可用凭据，连接测试和模型同步会被阻止。
+            </n-alert>
 
             <n-form :model="formData" label-placement="top" class="connection-form">
               <div class="connection-primary-grid">
@@ -172,7 +173,6 @@
           <section class="settings-panel catalog-panel">
             <div class="panel-heading catalog-heading">
               <div>
-                <p>02 / MODEL CATALOG</p>
                 <h3>模型目录</h3>
                 <span>同步真实目录，或添加 Provider 已确认的模型名；当前模型会用于后续 Agent 任务。</span>
               </div>
@@ -201,7 +201,6 @@
             </div>
 
             <div class="catalog-add-row">
-              <span class="catalog-add-label" aria-hidden="true">ADD</span>
               <n-input
                 v-if="activeCatalog === 'chat'"
                 v-model:value="newChatModel"
@@ -256,7 +255,7 @@
                   :title="isActiveModel(model.key) ? '当前使用中' : '切换为当前模型'"
                   @click="handleSelectActiveModel(model.key)"
                 >
-                  {{ isActiveModel(model.key) ? 'ACTIVE' : '使用' }}
+                  {{ isActiveModel(model.key) ? '当前' : '使用' }}
                 </button>
                 <button
                   v-if="model.isCustom"
@@ -283,7 +282,7 @@
 
         <aside class="status-rail" aria-label="连接状态摘要">
           <section class="status-card overview-card">
-            <p>RUNTIME STATUS</p>
+            <p>连接状态</p>
             <div class="status-title">
               <span class="large-status-dot" :class="`is-${connectionState.tone}`"></span>
               <div><strong>{{ connectionState.label }}</strong><small>{{ currentProviderLabel }} · 当前连接</small></div>
@@ -325,9 +324,6 @@
             </div>
           </details>
 
-          <n-alert v-if="!isConfigured" type="warning" class="compact-alert">
-            当前 Provider 尚未配置可用凭据，连接测试和模型同步会被阻止。
-          </n-alert>
         </aside>
       </div>
 
@@ -589,11 +585,11 @@ const configuredCapabilityCount = computed(() => capabilityRows.value.filter(cap
 const isConfigured = computed(() => configuredCapabilityCount.value > 0)
 
 const connectionState = computed(() => {
-  if (connectionTesting.value) return { tone: 'testing', label: 'Testing' }
-  if (connectionTestResult.value?.ok) return { tone: 'ready', label: 'Connected' }
-  if (connectionTestResult.value && !connectionTestResult.value.ok) return { tone: 'error', label: 'Connection error' }
-  if (isConfigured.value) return { tone: 'configured', label: 'Configured' }
-  return { tone: 'missing', label: 'Not configured' }
+  if (connectionTesting.value) return { tone: 'testing', label: '测试中' }
+  if (connectionTestResult.value?.ok) return { tone: 'ready', label: '连接正常' }
+  if (connectionTestResult.value && !connectionTestResult.value.ok) return { tone: 'error', label: '连接失败' }
+  if (isConfigured.value) return { tone: 'configured', label: '已配置' }
+  return { tone: 'missing', label: '未配置' }
 })
 
 const providerSwitchLocked = computed(() =>
@@ -1145,7 +1141,7 @@ const openAssetsFolder = async () => {
   font-size: 14px;
 }
 
-:global(.dark) .settings-shell {
+:global(html.dark .settings-shell) {
   --panel: #191a1e;
   --panel-subtle: #15161a;
   --line: #2b2d32;
@@ -1202,7 +1198,7 @@ const openAssetsFolder = async () => {
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
 }
 
-:global(.dark) .product-mark {
+:global(html.dark .product-mark) {
   color: #15171b;
   background: #f0f1f3;
 }
@@ -1415,7 +1411,7 @@ const openAssetsFolder = async () => {
   font-size: 10px;
 }
 
-:global(.dark) .provider-avatar { color: #b7c1ff; background: #292e49; }
+:global(html.dark .provider-avatar) { color: #b7c1ff; background: #292e49; }
 .provider-copy strong { overflow: hidden; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
 .provider-state { width: 7px; height: 7px; box-shadow: 0 0 0 3px var(--panel-subtle); }
 
@@ -1545,9 +1541,9 @@ const openAssetsFolder = async () => {
 .capability-icon.is-chat, .model-icon.is-chat { color: #5065cf; background: #e9ecff; }
 .capability-icon.is-image, .model-icon.is-image { color: #937032; background: #fff1cf; }
 .capability-icon.is-video, .model-icon.is-video { color: #8c4daa; background: #f5e5ff; }
-:global(.dark) .capability-icon.is-chat, :global(.dark) .model-icon.is-chat { color: #b8c2ff; background: #29304e; }
-:global(.dark) .capability-icon.is-image, :global(.dark) .model-icon.is-image { color: #f1cf89; background: #3b3120; }
-:global(.dark) .capability-icon.is-video, :global(.dark) .model-icon.is-video { color: #dfb2f2; background: #38263f; }
+:global(html.dark .capability-icon.is-chat), :global(html.dark .model-icon.is-chat) { color: #b8c2ff; background: #29304e; }
+:global(html.dark .capability-icon.is-image), :global(html.dark .model-icon.is-image) { color: #f1cf89; background: #3b3120; }
+:global(html.dark .capability-icon.is-video), :global(html.dark .model-icon.is-video) { color: #dfb2f2; background: #38263f; }
 
 .endpoint-grid {
   display: grid;
@@ -1702,7 +1698,7 @@ const openAssetsFolder = async () => {
 .data-tools summary { padding-bottom: 2px; }
 .backup-copy p { margin: 9px 0 0; color: var(--muted); font-size: 11px; line-height: 1.55; }
 .backup-copy .backup-warning { color: #a56a17; }
-:global(.dark) .backup-copy .backup-warning { color: #d9ad62; }
+:global(html.dark .backup-copy .backup-warning) { color: #d9ad62; }
 .backup-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin-top: 10px; }
 .backup-actions > :last-child:nth-child(odd) { grid-column: 1 / -1; }
 
@@ -1777,56 +1773,55 @@ const openAssetsFolder = async () => {
   .footer-actions .n-button:first-child { margin-right: auto; }
 }
 
-/* DataEyes Code control-plane refresh. Keep the existing Naive UI bindings,
-   but make the information architecture one continuous, readable surface. */
+/* Restrained system surface: neutral hierarchy, one DataEyes accent. */
 .settings-shell {
-  --canvas: #eef3f0;
-  --panel: #fbfdfb;
-  --panel-subtle: #f2f7f4;
+  --canvas: #f5f5f7;
+  --panel: #ffffff;
+  --panel-subtle: #f0f0f2;
   --panel-raised: #ffffff;
-  --line: #d7e3dc;
-  --line-strong: #b8cfc2;
-  --text: #17231d;
-  --muted: #64756c;
-  --faint: #87978e;
-  --accent: #2b9a68;
-  --accent-strong: #187349;
-  --accent-soft: #e0f3e8;
-  --blue: #5575c5;
-  --warning: #a36b19;
+  --line: #d8d8dc;
+  --line-strong: #c5c5ca;
+  --text: #1d1d1f;
+  --muted: #6e6e73;
+  --faint: #8e8e93;
+  --accent: #147d92;
+  --accent-strong: #106a7c;
+  --accent-soft: rgba(20, 125, 146, .1);
+  --blue: #007aff;
+  --warning: #9a6700;
   background: var(--canvas);
   color: var(--text);
-  font-family: "HarmonyOS Sans SC", "MiSans", "PingFang SC", sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Segoe UI Variable", "Microsoft YaHei UI", sans-serif;
 }
 
-:global(.dark) .settings-shell {
-  --canvas: #0c1110;
-  --panel: #121a17;
-  --panel-subtle: #101714;
-  --panel-raised: #18231f;
-  --line: #26372e;
-  --line-strong: #3b594a;
-  --text: #e8f1eb;
-  --muted: #91a59a;
-  --faint: #667b70;
-  --accent: #8fdeb0;
-  --accent-strong: #b7f2cc;
-  --accent-soft: rgba(126, 219, 164, .12);
-  --blue: #9db2f2;
-  --warning: #e1b76f;
+:global(html.dark .settings-shell) {
+  --canvas: #0e0e10;
+  --panel: #1c1c1e;
+  --panel-subtle: #151517;
+  --panel-raised: #242426;
+  --line: #38383a;
+  --line-strong: #4a4a4e;
+  --text: #f5f5f7;
+  --muted: #a1a1a6;
+  --faint: #8e8e93;
+  --accent: #64d2ff;
+  --accent-strong: #8addff;
+  --accent-soft: rgba(100, 210, 255, .12);
+  --blue: #0a84ff;
+  --warning: #ffd60a;
 }
 
 :global(.api-settings-modal.n-card) {
   border: 1px solid var(--line) !important;
-  border-radius: 18px !important;
+  border-radius: 14px !important;
   background: var(--canvas) !important;
-  box-shadow: 0 30px 110px rgba(7, 22, 14, .24) !important;
+  box-shadow: 0 24px 72px rgba(0, 0, 0, .18) !important;
 }
 
 :global(.dark .api-settings-modal.n-card) {
-  border-color: #26372e !important;
-  background: #0c1110 !important;
-  box-shadow: 0 34px 120px rgba(0, 0, 0, .62) !important;
+  border-color: #38383a !important;
+  background: #0e0e10 !important;
+  box-shadow: 0 28px 82px rgba(0, 0, 0, .48) !important;
 }
 
 .settings-header,
@@ -1836,8 +1831,8 @@ const openAssetsFolder = async () => {
 }
 
 .settings-header {
-  min-height: 82px;
-  padding: 14px 22px;
+  min-height: 68px;
+  padding: 10px 18px;
 }
 
 .settings-heading { gap: 13px; }
@@ -1845,15 +1840,15 @@ const openAssetsFolder = async () => {
 
 .product-mark {
   position: relative;
-  width: 42px;
-  height: 42px;
-  flex-basis: 42px;
+  width: 36px;
+  height: 36px;
+  flex-basis: 36px;
   overflow: hidden;
   border: 1px solid var(--line-strong);
-  border-radius: 12px;
+  border-radius: 10px;
   color: var(--text);
   background: var(--panel-raised);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .05), 0 7px 18px rgba(17, 54, 34, .08);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .05);
 }
 
 .product-mark b {
@@ -1877,23 +1872,26 @@ const openAssetsFolder = async () => {
 .settings-heading p,
 .panel-heading p,
 .status-card > p:first-child {
-  color: var(--accent) !important;
-  font: 750 10px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  letter-spacing: .16em;
+  color: var(--muted) !important;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: 0;
 }
 
-.settings-heading h2 { margin-top: 6px; color: var(--text); font-size: 20px; letter-spacing: -.025em; }
+.settings-heading h2 { margin-top: 3px; color: var(--text); font-size: 19px; font-weight: 600; letter-spacing: -.025em; }
 .settings-heading span:not(.product-mark) { color: var(--muted); font-size: 12px; }
 .header-actions { gap: 12px; }
 
 .connection-pill {
   border-color: var(--line) !important;
-  border-radius: 7px;
+  border-radius: 999px;
   padding: 7px 10px;
   color: var(--muted) !important;
   background: var(--panel-subtle) !important;
-  font: 650 10px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  letter-spacing: .04em;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
 }
 
 .connection-pill i { width: 6px; height: 6px; }
@@ -1945,7 +1943,7 @@ const openAssetsFolder = async () => {
   padding: 0 0 10px;
 }
 
-.rail-heading span { color: var(--text); font: 750 11px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing: .14em; }
+.rail-heading span { color: var(--text); font-size: 13px; font-weight: 600; line-height: 1.2; letter-spacing: -.01em; }
 .rail-heading small { margin-top: 4px; color: var(--muted); font-size: 11px; }
 .rail-meta { color: var(--faint) !important; font-size: 10px !important; letter-spacing: .12em !important; }
 
@@ -1966,17 +1964,17 @@ const openAssetsFolder = async () => {
   gap: 9px;
   min-height: 56px;
   border: 1px solid var(--line) !important;
-  border-radius: 11px;
+  border-radius: 9px;
   padding: 8px 10px;
   color: var(--text) !important;
   background: var(--panel-subtle) !important;
   box-shadow: none !important;
   text-align: left;
-  transition: border-color 160ms ease, background-color 160ms ease, transform 160ms ease;
+  transition: border-color 150ms ease, background-color 150ms ease;
 }
 
-.provider-item:hover { border-color: var(--line-strong) !important; background: var(--panel-raised) !important; transform: translateY(-1px); }
-.provider-item.is-active { border-color: var(--accent) !important; background: var(--accent-soft) !important; box-shadow: inset 3px 0 0 var(--accent) !important; }
+.provider-item:hover { border-color: var(--line-strong) !important; background: var(--panel-raised) !important; }
+.provider-item.is-active { border-color: var(--line-strong) !important; background: var(--panel-raised) !important; box-shadow: inset 2px 0 0 var(--accent) !important; }
 .provider-item:disabled { cursor: default; opacity: .72; }
 .provider-item.is-active:disabled { opacity: 1; }
 
@@ -2002,21 +2000,25 @@ const openAssetsFolder = async () => {
 }
 
 .provider-copy strong { color: var(--text); font-size: 12px; }
-.provider-copy small { color: var(--muted); font-size: 10px; }
+.provider-copy small { color: var(--muted); font-size: 11px; }
 .provider-state { width: 7px; height: 7px; box-shadow: 0 0 0 3px var(--panel-subtle); }
 .provider-item.is-active .provider-state { box-shadow: 0 0 0 3px var(--accent-soft); }
 
 .provider-active-mark {
   position: absolute;
   z-index: 2;
-  top: 6px;
-  right: 9px;
-  display: block;
-  white-space: nowrap;
+  top: 8px;
+  right: 10px;
+  display: grid;
+  width: 17px;
+  height: 17px;
+  place-items: center;
+  border-radius: 50%;
   pointer-events: none;
-  color: var(--accent-strong);
-  font: 800 10px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  letter-spacing: .09em;
+  color: #fff;
+  background: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
 }
 
 .provider-help {
@@ -2029,8 +2031,8 @@ const openAssetsFolder = async () => {
   padding: 10px 1px 0;
 }
 
-.provider-help span { color: var(--faint); font: 700 10px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing: .1em; }
-.provider-help p { margin: 0; color: var(--muted); font-size: 11px; }
+.provider-help span { color: var(--text); font-size: 11px; font-weight: 600; line-height: 1.2; }
+.provider-help p { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.45; }
 .provider-help a { color: var(--accent-strong); font-size: 11px; text-decoration: none; }
 .provider-help a:hover { text-decoration: underline; }
 
@@ -2052,8 +2054,8 @@ const openAssetsFolder = async () => {
 .status-card {
   min-width: 0;
   border: 1px solid var(--line) !important;
-  border-radius: 11px;
-  padding: 12px 13px;
+  border-radius: 10px;
+  padding: 11px 12px;
   background: var(--panel) !important;
   box-shadow: none !important;
 }
@@ -2061,25 +2063,25 @@ const openAssetsFolder = async () => {
 .status-title { gap: 10px; margin: 9px 0 10px; }
 .large-status-dot { width: 10px; height: 10px; box-shadow: 0 0 0 4px var(--accent-soft); }
 .status-title strong { color: var(--text); font-size: 13px; }
-.status-title small { color: var(--muted); font-size: 10px; }
+.status-title small { color: var(--muted); font-size: 11px; }
 .overview-card dl > div { padding: 5px 6px; background: transparent !important; }
 .overview-card dl > div + div { border-top: 1px solid var(--line); }
-.overview-card dt { color: var(--muted); font-size: 10px; }
-.overview-card dd { color: var(--text); font: 600 10px/1.3 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.overview-card dt { color: var(--muted); font-size: 11px; }
+.overview-card dd { color: var(--text); font: 600 11px/1.3 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 .test-result { border-left: 2px solid var(--accent) !important; }
 .test-result.is-error { border-left-color: #db6670 !important; }
 .test-result header strong { color: var(--text); font-size: 12px; }
-.test-result p { margin-top: 7px; color: var(--muted); font-size: 10px; }
+.test-result p { margin-top: 7px; color: var(--muted); font-size: 11px; }
 .status-section-heading { margin-bottom: 7px; }
 .status-section-heading strong { color: var(--text); font-size: 12px; }
 .status-section-heading span { color: var(--accent-strong); font: 700 10px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 .coverage-list { gap: 4px; }
 .coverage-list > div { padding: 5px 6px; background: var(--panel-subtle); }
 .coverage-list strong { color: var(--text); font-size: 11px; }
-.coverage-list small { color: var(--muted); font-size: 10px; }
+.coverage-list small { color: var(--muted); font-size: 11px; }
 .data-tools { grid-column: 1 / -1; padding: 0 13px; }
 .data-tools summary { padding: 9px 0 6px; }
-.backup-copy p { color: var(--muted); font-size: 10px; }
+.backup-copy p { color: var(--muted); font-size: 11px; }
 .backup-copy .backup-warning { color: var(--warning); }
 .backup-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; margin: 9px 0 11px; }
 .status-rail > .compact-alert { grid-column: 1 / -1; margin: 0; }
@@ -2097,23 +2099,24 @@ const openAssetsFolder = async () => {
   border: 1px solid var(--line) !important;
   border-radius: 14px;
   background: var(--panel) !important;
-  box-shadow: 0 10px 30px rgba(15, 47, 29, .05) !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .035), 0 8px 22px rgba(0, 0, 0, .025) !important;
 }
 
 .connection-panel,
 .catalog-panel { padding: 20px; }
 .settings-panel + .settings-panel { margin-top: 12px; }
 .panel-heading { margin-bottom: 16px; }
-.panel-heading h3 { margin-top: 6px; color: var(--text); font-size: 18px; letter-spacing: -.02em; }
-.panel-heading > div > span { color: var(--muted); font-size: 11px; line-height: 1.5; }
+.panel-heading h3 { margin: 0; color: var(--text); font-size: 18px; font-weight: 600; letter-spacing: -.02em; }
+.panel-heading > div > span { display: block; margin-top: 5px; color: var(--muted); font-size: 12px; line-height: 1.5; }
 .panel-actions { display: flex; align-items: center; gap: 10px; }
 .panel-meta { color: var(--faint); font: 700 10px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing: .1em; }
 
 .connection-form :deep(.n-form-item-label),
 .capability-card :deep(.n-form-item-label) { color: var(--muted) !important; font-size: 11px; font-weight: 700; }
-.field-note { color: var(--faint); font-size: 10px; }
+.field-note { color: var(--faint); font-size: 11px; }
 .compact-alert { border-radius: 9px !important; }
 .compact-alert :deep(.n-alert-body) { padding: 9px 11px; color: var(--text); font-size: 11px; }
+.connection-warning { margin: -3px 0 14px; }
 
 .advanced-section,
 .data-tools,
@@ -2139,14 +2142,14 @@ const openAssetsFolder = async () => {
 .lab-panel summary strong { color: var(--text); font-size: 12px; }
 .advanced-section summary small,
 .data-tools summary small,
-.lab-panel summary small { color: var(--muted); font-size: 10px; }
+.lab-panel summary small { color: var(--muted); font-size: 11px; }
 .summary-count { color: var(--accent-strong); font: 700 10px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 
 .capability-overrides { gap: 10px; }
 .capability-card { border-color: var(--line); border-radius: 10px; background: var(--panel-subtle); }
 .capability-card header { margin-bottom: 10px; }
 .capability-card header strong { color: var(--text); font-size: 12px; }
-.capability-card header small { color: var(--muted); font-size: 10px; }
+.capability-card header small { color: var(--muted); font-size: 11px; }
 .capability-icon { border: 1px solid transparent; }
 .endpoint-grid > div { border: 1px solid var(--line); background: var(--panel-subtle); }
 .endpoint-grid span { color: var(--muted); }
@@ -2171,10 +2174,9 @@ const openAssetsFolder = async () => {
 .catalog-tabs button strong { color: var(--faint); font: 700 10px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 .catalog-tabs button.is-active strong { color: var(--accent-strong); }
 
-.catalog-add-row { grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; margin: 13px 0; }
-.catalog-add-label { color: var(--faint); font: 800 10px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing: .1em; }
-.catalog-add-row > .protocol-select { grid-column: 3; }
-.catalog-add-row > .n-button { grid-column: 4; }
+.catalog-add-row { grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; margin: 13px 0; }
+.catalog-add-row > .protocol-select,
+.catalog-add-row > .n-button { grid-column: auto; }
 .protocol-select { width: 138px; }
 .catalog-list { border-color: var(--line); border-radius: 10px; background: var(--panel-subtle); }
 .catalog-row { min-height: 58px; border-bottom-color: var(--line); transition: background-color 160ms ease, border-color 160ms ease, transform 160ms ease; }
@@ -2183,21 +2185,20 @@ const openAssetsFolder = async () => {
 .model-icon { border: 1px solid var(--line); }
 .model-copy strong { color: var(--text); font-size: 12px; }
 .model-copy code { color: var(--muted); font: 500 10px/1.3 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
-.select-model { display: inline-flex; align-items: center; justify-content: center; min-width: 60px; width: max-content; height: 27px; white-space: nowrap; border-color: var(--line-strong); border-radius: 7px; color: var(--muted); font: 700 10px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing: .04em; transition: color 160ms ease, background-color 160ms ease, border-color 160ms ease, transform 160ms ease; }
-.select-model:hover { border-color: var(--accent); color: var(--accent-strong); background: var(--accent-soft); transform: translateY(-1px); }
-.select-model.is-selected { border-color: var(--accent) !important; color: #102219 !important; background: var(--accent) !important; box-shadow: 0 4px 12px color-mix(in srgb, var(--accent) 24%, transparent); }
-:global(.dark) .select-model.is-selected { color: #0c1710 !important; }
+.select-model { display: inline-flex; align-items: center; justify-content: center; min-width: 54px; width: max-content; height: 28px; white-space: nowrap; border-color: var(--line-strong); border-radius: 7px; color: var(--muted); font-size: 11px; font-weight: 600; line-height: 1; transition: color 150ms ease, background-color 150ms ease, border-color 150ms ease; }
+.select-model:hover { border-color: var(--accent); color: var(--accent-strong); background: var(--accent-soft); }
+.select-model.is-selected { border-color: var(--accent) !important; color: var(--accent-strong) !important; background: var(--accent-soft) !important; box-shadow: none; }
 .remove-model { width: 27px; height: 27px; border: 1px solid transparent; border-radius: 7px; }
 .remove-model:hover { border-color: #db6670; color: #db6670; background: rgba(219, 102, 112, .08); }
 .catalog-empty { border-color: var(--line-strong); border-radius: 10px; padding: 26px 14px; background: var(--panel-subtle); }
 .catalog-empty > span { color: var(--accent); font: 400 25px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 .catalog-empty strong { color: var(--text); font-size: 12px; }
-.catalog-empty p { color: var(--muted); font-size: 10px; }
+.catalog-empty p { color: var(--muted); font-size: 11px; }
 
-.settings-footer { min-height: 66px; padding: 11px 22px; }
+.settings-footer { min-height: 60px; padding: 9px 18px; }
 .footer-context span { display: flex; align-items: center; gap: 7px; color: var(--text); font-size: 12px; }
 .footer-context span i { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
-.footer-context small { color: var(--muted); font-size: 10px; }
+.footer-context small { color: var(--muted); font-size: 11px; }
 .footer-actions { gap: 8px; }
 
 .settings-shell :deep(.n-input),
@@ -2249,9 +2250,9 @@ const openAssetsFolder = async () => {
   .panel-heading, .catalog-heading { align-items: flex-start; flex-direction: column; }
   .panel-actions, .catalog-actions { width: 100%; justify-content: space-between; }
   .catalog-actions { justify-content: flex-start; }
-  .catalog-add-row { grid-template-columns: auto minmax(0, 1fr) auto; }
-  .catalog-add-row > .protocol-select { grid-column: 2 / -1; width: 100%; }
-  .catalog-add-row > .n-button { grid-column: 3; }
+  .catalog-add-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .catalog-add-row > .protocol-select { grid-column: 1 / -1; width: 100%; }
+  .catalog-add-row > .n-button { grid-column: 2; }
 }
 
 @media (max-width: 520px) {
@@ -2266,7 +2267,7 @@ const openAssetsFolder = async () => {
   .footer-actions { width: 100%; }
   .footer-actions :deep(.n-button) { flex: 1 1 auto; }
   .footer-actions :deep(.n-button:first-child) { flex: 0 0 auto; margin-right: auto; }
-  .catalog-add-row { grid-template-columns: auto minmax(0, 1fr); }
+  .catalog-add-row { grid-template-columns: minmax(0, 1fr); }
   .catalog-add-row > .n-button { grid-column: 1 / -1; width: 100%; }
   .catalog-add-row > .protocol-select { grid-column: 1 / -1; }
   .catalog-row { grid-template-columns: 29px minmax(0, 1fr) auto 25px; align-items: start; }
@@ -2289,24 +2290,24 @@ const openAssetsFolder = async () => {
   }
 }
 
-/* Desktop control-plane: keep the connection and model catalog in the first
- * viewport. The compact horizontal provider/status treatment remains the
- * responsive fallback below 1020px. */
+/* Desktop: two calm rails. Status becomes a compact summary above content. */
 @media (min-width: 1021px) {
   .settings-grid {
-    grid-template-columns: 210px minmax(500px, 1fr) 254px;
-    grid-template-rows: minmax(0, 1fr);
+    grid-template-columns: 204px minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
     overflow: hidden;
   }
 
   .provider-rail {
-    grid-row: 1;
+    grid-column: 1;
+    grid-row: 1 / 3;
     display: flex;
     min-height: 0;
     overflow-y: auto;
     border-right: 1px solid var(--line) !important;
     border-bottom: 0;
-    padding: 16px 12px;
+    padding: 18px 12px;
+    background: var(--panel-subtle) !important;
   }
 
   .rail-heading {
@@ -2334,27 +2335,34 @@ const openAssetsFolder = async () => {
     grid-template-columns: none;
   }
 
+  .provider-help p { margin: 8px 0; }
+
   .settings-main {
-    grid-row: 1;
+    grid-column: 2;
+    grid-row: 2;
     min-height: 0;
     overflow-y: auto;
-    padding: 16px;
+    padding: 16px 20px 22px;
   }
 
   .status-rail {
+    grid-column: 2;
     grid-row: 1;
-    display: flex;
-    min-height: 0;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    min-height: auto;
+    max-height: 220px;
     overflow-y: auto;
     border-top: 0;
-    border-bottom: 0;
-    border-left: 1px solid var(--line) !important;
-    padding: 16px 12px;
-    background: var(--panel-subtle) !important;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+    border-left: 0 !important;
+    padding: 12px 20px;
+    background: var(--canvas) !important;
   }
 
-  .status-card { flex: 0 0 auto; }
+  .status-card { min-height: auto; }
   .data-tools { grid-column: auto; }
-  .status-rail > .compact-alert { grid-column: auto; }
+  .status-rail > .compact-alert { grid-column: 1 / -1; }
 }
 </style>

@@ -119,6 +119,7 @@
       :provider-configured="providerConfigured"
       :agent-engine="settings.agentEngine.value"
       :opencode-status="openCodeStatus"
+      :harness-runtime="workbench.harnessRuntime.value"
       @open-api-settings="showApiSettings = true"
       @update-approval-mode="setApprovalMode"
       @update-agent-engine="setAgentEngine"
@@ -152,8 +153,8 @@
       <button type="button" aria-label="关闭预览" @click="selectedArtifact = null">
         <workbench-icon name="close" :size="18" />
       </button>
-      <img v-if="selectedArtifact.kind === 'image'" :src="selectedArtifact.url" :alt="selectedArtifact.label" />
-      <video v-else-if="selectedArtifact.kind === 'video'" :src="selectedArtifact.url" controls autoplay></video>
+      <img v-if="selectedArtifact.kind === 'image'" :src="selectedArtifact.url" :alt="selectedArtifact.label" width="1280" height="720" />
+      <video v-else-if="selectedArtifact.kind === 'video'" :src="selectedArtifact.url" width="1280" height="720" controls></video>
     </div>
   </main>
 </template>
@@ -276,7 +277,7 @@ const showSettingsCenter = ref(false)
 const showApiSettings = ref(false)
 const settingsSection = ref('general')
 const navigationOpen = ref(false)
-const inspectorOpen = ref(Boolean(settings.defaultInspector.value) && typeof window !== 'undefined' && window.innerWidth > 1160)
+const inspectorOpen = ref(Boolean(settings.defaultInspector.value) && typeof window !== 'undefined' && window.innerWidth >= 1440)
 const inspectorTab = ref('plan')
 const composerFocusToken = ref(0)
 const showFullAccessConfirmation = ref(false)
@@ -462,6 +463,9 @@ const sessionContext = computed(() => ({
   Provider: `${providerLabel.value}${providerConfigured.value ? '（已配置）' : '（未配置）'}`,
   模型: selectedModelLabel.value,
   引擎: settings.agentEngine.value === 'opencode' ? 'OpenCode Local' : 'DataEyes Native',
+  Harness: workbench.harnessRuntime.value?.mode === 'cordis'
+    ? `DeepSeek Cordis · ${workbench.harnessRuntime.value.lifecycle === 'ready' ? '就绪' : '降级'}`
+    : '兼容模式',
   OpenCode: openCodeStatus.value?.state === 'running'
     ? (openCodeStatus.value.url || '已连接')
     : (openCodeLastError.value?.message || '未运行'),
@@ -982,7 +986,7 @@ const confirmClearHistory = () => confirmAction({
 
 const closeMobilePanels = () => {
   navigationOpen.value = false
-  if (typeof window !== 'undefined' && window.innerWidth <= 1160) inspectorOpen.value = false
+  if (typeof window !== 'undefined' && window.innerWidth < 1440) inspectorOpen.value = false
 }
 
 const onGlobalKeydown = event => {
@@ -1185,7 +1189,7 @@ defineExpose({
   --wb-accent-strong: #268b7e;
   --wb-warning: #e9a95c;
   display: grid;
-  grid-template-columns: 258px minmax(0,1fr);
+  grid-template-columns: 224px minmax(0,1fr);
   width: 100%;
   height: 100dvh;
   min-height: 0;
@@ -1196,7 +1200,7 @@ defineExpose({
   color-scheme: light;
 }
 
-.agent-workbench.inspector-open { grid-template-columns: 258px minmax(0,1fr) 360px; }
+.agent-workbench.inspector-open { grid-template-columns: 224px minmax(0,1fr) 320px; }
 .workbench-center { display: grid; grid-template-rows: minmax(0,1fr) auto auto; min-width: 0; min-height: 0; background: #f1f3f5; }
 .reasoning-status-wrap { width: min(850px,calc(100% - 28px)); margin: 0 auto; padding: 7px 0 0; }
 .mobile-backdrop { display: none; }
@@ -1217,9 +1221,9 @@ defineExpose({
   }
 }
 
-@media (max-width: 1160px) {
+@media (max-width: 1439px) {
   .agent-workbench,
-  .agent-workbench.inspector-open { grid-template-columns: 240px minmax(0,1fr); }
+  .agent-workbench.inspector-open { grid-template-columns: 224px minmax(0,1fr); }
   .mobile-backdrop { position: fixed; z-index: 60; inset: 0; display: block; background: rgba(5,6,7,.55); backdrop-filter: blur(2px); }
 }
 

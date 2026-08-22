@@ -5,7 +5,7 @@ export const AGENT_SETTINGS_STORAGE_KEY = 'yufeng-agent-settings-v1'
 export const DEFAULT_AGENT_SETTINGS = Object.freeze({
   theme: 'system',
   density: 'comfortable',
-  defaultInspector: true,
+  defaultInspector: false,
   backgroundMode: true,
   launchAtLogin: false,
   preventSleepDuringRuns: true,

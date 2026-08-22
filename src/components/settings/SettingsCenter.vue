@@ -16,10 +16,10 @@
             <span>返回工作台</span>
           </button>
           <div class="settings-title">
-            <span class="settings-mark"><data-eyes-mark :size="26" /></span>
-            <div><strong id="settings-center-title">DataEyes Code</strong><small>OPTICAL RUNTIME</small></div>
+            <span class="settings-mark"><data-eyes-mark :size="24" /></span>
+            <div><strong id="settings-center-title">设置</strong><small>DataEyes Code</small></div>
           </div>
-          <span class="save-state"><i></i>偏好自动保存在本机</span>
+          <span class="save-state"><i></i>已自动保存</span>
         </header>
 
         <div class="settings-layout">
@@ -48,10 +48,6 @@
           <main class="settings-content">
             <header class="content-heading">
               <div class="heading-copy">
-                <div class="heading-overline">
-                  <span>{{ currentSection.eyebrow }}</span>
-                  <span class="heading-status"><i></i>本机配置</span>
-                </div>
                 <h1>{{ currentSection.label }}</h1>
                 <p>{{ currentSection.description }}</p>
               </div>
@@ -118,6 +114,10 @@
                 <section class="settings-group">
                   <header><strong>执行边界</strong><small>任务规划与工具调用</small></header>
                   <div class="setting-stack">
+                    <div class="harness-status" :class="{ 'is-ready': harnessRuntime?.lifecycle === 'ready' }">
+                      <span><i></i><strong>DeepSeek Harness</strong><small>Cordis {{ harnessRuntime?.versions?.cordis || '—' }} · {{ harnessRuntime?.pluginCount || 0 }} 个插件</small></span>
+                      <em>生命周期作用域 · 权限仍由 DataEyes 管理</em>
+                    </div>
                     <div><strong>执行引擎</strong><p>选择负责拆解任务的规划器。无论选择哪一个，文件、终端和电脑操作都继续经过 DataEyes ToolRegistry 与审批边界。</p></div>
                     <div class="choice-grid is-two engine-choice" role="radiogroup" aria-label="Agent 执行引擎">
                       <button type="button" role="radio" :aria-checked="agentEngine === 'native'" :class="{ 'is-selected': agentEngine === 'native' }" :disabled="runtimeLocked" @click="emit('update-agent-engine', 'native')">
@@ -175,7 +175,17 @@
                     <div><strong>单轮最大行动步数</strong><p>防止 Agent 在一次回复中无限调用工具；范围 4–64，下个任务生效。</p></div>
                     <label class="number-control">
                       <button type="button" aria-label="减少最大行动步数" @click="settings.setMaxActionsPerTurn(maxActionsPerTurn - 1)">−</button>
-                      <input :value="maxActionsPerTurn" type="number" min="4" max="64" aria-label="单轮最大行动步数" @change="onMaxActionsChange" />
+                      <input
+                        :value="maxActionsPerTurn"
+                        type="number"
+                        name="max-actions-per-turn"
+                        inputmode="numeric"
+                        autocomplete="off"
+                        min="4"
+                        max="64"
+                        aria-label="单轮最大行动步数"
+                        @change="onMaxActionsChange"
+                      />
                       <button type="button" aria-label="增加最大行动步数" @click="settings.setMaxActionsPerTurn(maxActionsPerTurn + 1)">＋</button>
                     </label>
                   </div>
@@ -271,7 +281,8 @@ const props = defineProps({
   providerLabel: { type: String, default: '' },
   providerConfigured: { type: Boolean, default: false },
   agentEngine: { type: String, default: 'native' },
-  opencodeStatus: { type: Object, default: () => ({ state: 'unknown' }) }
+  opencodeStatus: { type: Object, default: () => ({ state: 'unknown' }) },
+  harnessRuntime: { type: Object, default: () => ({ lifecycle: 'starting', pluginCount: 0, versions: {} }) }
 })
 
 const emit = defineEmits({
@@ -393,67 +404,63 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-/* Optical Runtime surface tokens. Keep this layer local to settings so the
- * legacy canvas skin cannot leak into the desktop control plane. */
+/* Quiet system surface: one neutral hierarchy shared by light and dark mode. */
 .settings-center {
-  --sc-bg: #f3f7f5;
+  --sc-bg: #f5f5f7;
   --sc-panel: #ffffff;
-  --sc-panel-raised: #fbfdfc;
-  --sc-subtle: #edf4f1;
-  --sc-hover: #e5efeb;
-  --sc-border: #d3e0db;
-  --sc-border-strong: #b8cbc2;
-  --sc-text: #14211b;
-  --sc-muted: #52625a;
-  --sc-faint: #718079;
-  --sc-accent: #16825a;
-  --sc-accent-bright: #39b980;
-  --sc-cyan: #117e8f;
-  --sc-warning: #98650e;
-  --sc-danger: #b24e58;
-  --sc-focus: #138ca2;
-  --sc-accent-soft: rgba(22, 130, 90, .1);
-  --sc-shadow: 0 18px 44px rgba(26, 58, 45, .08), 0 2px 8px rgba(26, 58, 45, .04);
+  --sc-panel-raised: #fafafc;
+  --sc-subtle: #eeeeF0;
+  --sc-hover: #e7e7ea;
+  --sc-border: #d8d8dc;
+  --sc-border-strong: #c5c5ca;
+  --sc-text: #1d1d1f;
+  --sc-muted: #6e6e73;
+  --sc-faint: #8e8e93;
+  --sc-accent: #147d92;
+  --sc-accent-bright: #34c759;
+  --sc-cyan: #147d92;
+  --sc-warning: #9a6700;
+  --sc-danger: #c9343f;
+  --sc-focus: #007aff;
+  --sc-accent-soft: rgba(20, 125, 146, .1);
+  --sc-shadow: 0 1px 2px rgba(0, 0, 0, .04), 0 8px 24px rgba(0, 0, 0, .035);
   position: fixed;
   z-index: 1800;
   inset: 0;
   display: grid;
-  grid-template-rows: 64px minmax(0, 1fr);
+  grid-template-rows: 56px minmax(0, 1fr);
   overflow: hidden;
   isolation: isolate;
-  outline: none;
+  outline: 2px solid transparent;
+  outline-offset: -2px;
   color: var(--sc-text);
-  background:
-    radial-gradient(circle at 88% -12%, rgba(62, 188, 143, .1), transparent 31rem),
-    var(--sc-bg);
+  background: var(--sc-bg);
   color-scheme: light;
-  font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei UI", sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Segoe UI Variable", "Microsoft YaHei UI", sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
 :global(html.dark .settings-center) {
-  --sc-bg: #0b1219;
-  --sc-panel: #111b24;
-  --sc-panel-raised: #16232e;
-  --sc-subtle: #0f1820;
-  --sc-hover: #1a2a34;
-  --sc-border: #263945;
-  --sc-border-strong: #38515c;
-  --sc-text: #e6f1ed;
-  --sc-muted: #a1b1ac;
-  --sc-faint: #7c8d88;
-  --sc-accent: #45c58a;
-  --sc-accent-bright: #6be0ad;
-  --sc-cyan: #52c9d8;
-  --sc-warning: #e5b56e;
-  --sc-danger: #ef858b;
-  --sc-focus: #63d4e2;
-  --sc-accent-soft: rgba(69, 197, 138, .13);
-  --sc-shadow: 0 24px 60px rgba(0, 0, 0, .26), 0 2px 8px rgba(0, 0, 0, .2);
+  --sc-bg: #0e0e10;
+  --sc-panel: #1c1c1e;
+  --sc-panel-raised: #242426;
+  --sc-subtle: #151517;
+  --sc-hover: #2c2c2e;
+  --sc-border: #38383a;
+  --sc-border-strong: #4a4a4e;
+  --sc-text: #f5f5f7;
+  --sc-muted: #a1a1a6;
+  --sc-faint: #8e8e93;
+  --sc-accent: #64d2ff;
+  --sc-accent-bright: #30d158;
+  --sc-cyan: #64d2ff;
+  --sc-warning: #ffd60a;
+  --sc-danger: #ff6961;
+  --sc-focus: #0a84ff;
+  --sc-accent-soft: rgba(100, 210, 255, .12);
+  --sc-shadow: 0 1px 2px rgba(0, 0, 0, .24), 0 10px 28px rgba(0, 0, 0, .18);
   color-scheme: dark;
-  background:
-    radial-gradient(circle at 88% -12%, rgba(69, 197, 138, .11), transparent 31rem),
-    var(--sc-bg);
+  background: var(--sc-bg);
 }
 
 .settings-center :is(button, a, input) {
@@ -485,9 +492,9 @@ onMounted(async () => {
   align-items: center;
   gap: 16px;
   border-bottom: 1px solid var(--sc-border);
-  padding: 0 24px;
-  background: color-mix(in srgb, var(--sc-panel) 94%, transparent);
-  box-shadow: 0 1px 0 rgba(255, 255, 255, .04);
+  padding: 0 20px;
+  background: color-mix(in srgb, var(--sc-panel) 88%, transparent);
+  backdrop-filter: blur(20px) saturate(1.2);
 }
 
 .back-button {
@@ -517,19 +524,19 @@ onMounted(async () => {
 
 .settings-mark {
   display: grid;
-  width: 34px;
-  height: 34px;
+  width: 30px;
+  height: 30px;
   place-items: center;
   border: 1px solid color-mix(in srgb, var(--sc-accent) 38%, var(--sc-border));
-  border-radius: 10px;
+  border-radius: 8px;
   color: var(--sc-accent);
   background: var(--sc-accent-soft);
 }
 
-.settings-mark :deep(svg) { width: 26px; height: 26px; }
-.settings-title strong, .settings-title small { display: block; text-align: center; }
-.settings-title strong { font-size: 14px; font-weight: 720; letter-spacing: -.02em; }
-.settings-title small { margin-top: 2px; color: var(--sc-faint); font: 10px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .16em; }
+.settings-mark :deep(svg) { width: 22px; height: 22px; }
+.settings-title strong, .settings-title small { display: block; text-align: left; }
+.settings-title strong { font-size: 14px; font-weight: 600; letter-spacing: -.01em; }
+.settings-title small { margin-top: 1px; color: var(--sc-faint); font-size: 11px; line-height: 1.2; }
 
 .save-state {
   display: inline-flex;
@@ -556,7 +563,7 @@ onMounted(async () => {
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-columns: 248px minmax(0, 1fr);
+  grid-template-columns: 224px minmax(0, 1fr);
   width: min(1400px, 100%);
   min-height: 0;
   margin: 0 auto;
@@ -567,8 +574,8 @@ onMounted(async () => {
   grid-template-rows: auto minmax(0, 1fr) auto;
   min-height: 0;
   border-right: 1px solid var(--sc-border);
-  padding: 28px 16px 20px;
-  background: color-mix(in srgb, var(--sc-subtle) 92%, var(--sc-bg));
+  padding: 24px 12px 18px;
+  background: var(--sc-subtle);
 }
 
 .settings-navigation > p {
@@ -611,7 +618,7 @@ onMounted(async () => {
 }
 
 .settings-navigation nav button:hover { color: var(--sc-text); background: var(--sc-hover); border-color: var(--sc-border); }
-.settings-navigation nav button.is-active { color: var(--sc-text); background: var(--sc-panel-raised); border-color: var(--sc-border-strong); box-shadow: 0 8px 20px rgba(19, 58, 43, .06); }
+.settings-navigation nav button.is-active { color: var(--sc-text); background: var(--sc-panel); border-color: var(--sc-border); box-shadow: 0 1px 2px rgba(0, 0, 0, .035); }
 .settings-navigation nav button.is-active::before { opacity: 1; transform: scaleY(1); }
 .settings-navigation nav button svg { color: var(--sc-faint); }
 .settings-navigation nav button.is-active svg { color: var(--sc-accent); }
@@ -627,44 +634,44 @@ onMounted(async () => {
 
 .content-heading {
   border-bottom: 1px solid var(--sc-border);
-  padding: 42px clamp(32px, 6vw, 88px) 30px;
+  padding: 28px clamp(28px, 5vw, 64px) 21px;
 }
 
-.content-heading > div { width: min(900px, 100%); margin: 0 auto; }
+.content-heading > div { width: min(780px, 100%); margin: 0 auto; }
 .heading-overline { display: flex; align-items: center; gap: 14px; }
 .content-heading span:first-child { color: var(--sc-cyan); font: 11px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 750; letter-spacing: .14em; }
 .heading-status { display: inline-flex; align-items: center; gap: 7px; color: var(--sc-faint); font-size: 11px; }
 .heading-status i { width: 6px; height: 6px; box-shadow: none; }
-.content-heading h1 { margin: 10px 0 0; color: var(--sc-text); font-size: clamp(26px, 2.4vw, 32px); font-weight: 740; letter-spacing: -.035em; line-height: 1.15; }
-.content-heading p { max-width: 720px; margin: 9px 0 0; color: var(--sc-muted); font-size: 14px; line-height: 1.65; }
+.content-heading h1 { margin: 0; color: var(--sc-text); font-size: clamp(25px, 2.2vw, 29px); font-weight: 600; letter-spacing: -.035em; line-height: 1.2; text-wrap: balance; }
+.content-heading p { max-width: 680px; margin: 7px 0 0; color: var(--sc-muted); font-size: 13px; line-height: 1.55; text-wrap: pretty; }
 
 .settings-scroll {
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 30px clamp(32px, 6vw, 88px) 80px;
+  padding: 20px clamp(28px, 5vw, 64px) 64px;
   scrollbar-color: var(--sc-border-strong) transparent;
   scrollbar-width: thin;
 }
 
 .settings-group {
-  width: min(900px, 100%);
+  width: min(780px, 100%);
   margin: 0 auto;
   overflow: hidden;
   border: 1px solid var(--sc-border);
-  border-radius: 16px;
+  border-radius: 14px;
   background: var(--sc-panel);
   box-shadow: var(--sc-shadow);
 }
 
 .settings-group > header {
   display: flex;
-  min-height: 64px;
+  min-height: 56px;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
   border-bottom: 1px solid var(--sc-border);
-  padding: 15px 20px;
+  padding: 13px 18px;
   background: color-mix(in srgb, var(--sc-panel-raised) 72%, var(--sc-panel));
 }
 
@@ -675,9 +682,9 @@ onMounted(async () => {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 28px;
-  min-height: 86px;
-  padding: 18px 20px;
+  gap: 24px;
+  min-height: 78px;
+  padding: 16px 18px;
 }
 
 .setting-row + .setting-row, .setting-stack + .setting-stack { border-top: 1px solid var(--sc-border); }
@@ -721,8 +728,8 @@ onMounted(async () => {
   text-align: left;
 }
 
-.choice-grid button:hover { color: var(--sc-text); border-color: var(--sc-border-strong); background: var(--sc-hover); transform: translateY(-1px); }
-.choice-grid button.is-selected { border-color: var(--sc-accent); color: var(--sc-accent); background: var(--sc-accent-soft); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sc-accent) 28%, transparent), 0 8px 20px color-mix(in srgb, var(--sc-accent) 8%, transparent); }
+.choice-grid button:hover { color: var(--sc-text); border-color: var(--sc-border-strong); background: var(--sc-hover); }
+.choice-grid button.is-selected { border-color: var(--sc-accent); color: var(--sc-accent); background: var(--sc-accent-soft); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sc-accent) 20%, transparent); }
 .choice-grid button svg { grid-row: 1 / 3; color: currentColor; }
 .choice-grid button strong { color: inherit; font-size: 13px; }
 .choice-grid button small { color: var(--sc-faint); font-size: 11px; line-height: 1.4; }
@@ -733,6 +740,13 @@ onMounted(async () => {
 .engine-status i { width: 7px; height: 7px; flex: 0 0 auto; border: 1px solid var(--sc-border-strong); border-radius: 50%; background: transparent; }
 .engine-status.is-ready { color: var(--sc-accent); }
 .engine-status.is-ready i { border-color: var(--sc-accent); background: var(--sc-accent-bright); box-shadow: 0 0 0 3px var(--sc-accent-soft); }
+.harness-status { display: flex; min-height: 48px; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 17px; border: 1px solid var(--sc-border); border-radius: 10px; padding: 9px 11px; color: var(--sc-muted); background: var(--sc-subtle); }
+.harness-status > span { display: grid; grid-template-columns: 8px auto; align-items: center; gap: 2px 8px; min-width: 0; }
+.harness-status i { grid-row: 1 / 3; width: 7px; height: 7px; border-radius: 50%; background: var(--sc-faint); }
+.harness-status strong { color: var(--sc-text); font-size: 12px; }
+.harness-status small { overflow: hidden; color: var(--sc-faint); font-size: 10.5px; text-overflow: ellipsis; white-space: nowrap; }
+.harness-status em { color: var(--sc-faint); font-size: 10.5px; font-style: normal; text-align: right; }
+.harness-status.is-ready i { background: var(--sc-accent); box-shadow: 0 0 0 3px var(--sc-accent-soft); }
 
 .approval-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 16px; }
 .approval-grid button { min-height: 116px; border: 1px solid var(--sc-border); border-radius: 12px; padding: 14px; color: var(--sc-muted); background: var(--sc-panel-raised); text-align: left; }
@@ -867,6 +881,7 @@ onMounted(async () => {
   .setting-row { gap: 16px; min-height: 78px; padding: 15px; }
   .setting-row p, .setting-stack p { font-size: 12px; }
   .setting-stack { padding: 16px 15px; }
+  .harness-status em { display: none; }
   .choice-grid.is-three, .approval-grid { grid-template-columns: minmax(0, 1fr); }
   .choice-grid.is-two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .reasoning-effort-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }

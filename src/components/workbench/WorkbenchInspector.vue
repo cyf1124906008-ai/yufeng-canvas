@@ -49,13 +49,12 @@
           <div class="section-title"><strong>执行计划</strong><span>{{ plan.length }}</span></div>
           <p v-if="planExplanation" class="plan-explanation">{{ planExplanation }}</p>
           <ol v-if="plan.length" class="inspector-plan">
-            <li v-for="(item, index) in plan" :key="item.id" :class="`is-${item.status}`">
+            <li v-for="item in plan" :key="item.id" :class="`is-${item.status}`">
               <span class="plan-index">
                 <workbench-icon v-if="item.status === 'completed'" name="check" :size="11" />
                 <i v-else></i>
               </span>
               <div><strong>{{ item.label }}</strong><small>{{ planStatus(item.status) }}</small></div>
-              <span>{{ String(index + 1).padStart(2, '0') }}</span>
             </li>
           </ol>
           <div v-else class="compact-empty"><workbench-icon name="list" :size="17" /><p>Agent 选择工具后，计划会在这里出现。</p></div>
@@ -139,8 +138,8 @@
         <div class="section-title"><strong>任务产物</strong><span>{{ inspector.artifacts.length }}</span></div>
         <div v-if="inspector.artifacts.length" class="artifact-list">
           <button v-for="artifact in inspector.artifacts" :key="artifact.id" type="button" :disabled="!artifact.url" @click="emit('artifact-select', artifact)">
-            <img v-if="artifact.kind === 'image' && artifact.url" :src="artifact.url" :alt="artifact.label" />
-            <video v-else-if="artifact.kind === 'video' && artifact.url" :src="artifact.url" muted></video>
+            <img v-if="artifact.kind === 'image' && artifact.url" :src="artifact.url" :alt="artifact.label" width="86" height="78" loading="lazy" />
+            <video v-else-if="artifact.kind === 'video' && artifact.url" :src="artifact.url" width="86" height="78" muted aria-hidden="true"></video>
             <span v-else><workbench-icon :name="artifact.kind === 'video' ? 'video' : artifact.kind === 'image' ? 'image' : 'file'" :size="17" /></span>
             <div><strong>{{ artifact.label }}</strong><small>{{ artifact.isFinal ? '最终交付' : artifact.status.label }}</small></div>
             <workbench-icon name="chevron-right" :size="12" />
@@ -410,11 +409,11 @@ const rollbackLabel = rollback => ({
   .artifact-list button { transition-duration: 0s; }
 }
 
-@media (min-width: 1161px) {
+@media (min-width: 1440px) {
   .inspector:not(.is-open) { display: none; }
 }
 
-@media (max-width: 1160px) {
+@media (max-width: 1439px) {
   .inspector { position: fixed; z-index: 65; inset: 0 0 0 auto; width: min(350px,92vw); visibility: hidden; pointer-events: none; box-shadow: -18px 0 60px rgba(0,0,0,.45); transform: translateX(103%); transition: transform 170ms ease, visibility 0s linear 170ms; }
   .inspector.is-open { visibility: visible; pointer-events: auto; transform: translateX(0); transition-delay: 0s; }
 }

@@ -2,7 +2,7 @@
   "name": "yufeng-canvas",
   "productName": "DataEyes Code",
   "private": true,
-  "version": "1.4.0",
+  "version": "1.5.0",
   "description": "DataEyes Code local desktop Agent Harness with workspace, terminal, computer-control and creative tools",
   "repository": {
     "type": "git",
@@ -32,6 +32,9 @@
     "desktop:dist:mac:x64": "pnpm desktop:renderer && electron-builder --mac dmg zip --x64"
   },
   "dependencies": {
+    "@deepseek-ai/cordis": "4.0.1",
+    "@deepseek-ai/dsh-invariants": "0.1.1-rc.2",
+    "@deepseek-ai/dsh-scope": "0.1.1-rc.2",
     "electron-updater": "^6.8.3",
     "naive-ui": "^2.43.2",
     "pinia": "^3.0.4",
@@ -69,6 +72,7 @@
       "dist-desktop/**/*",
       "build/**/*",
       "electron/**/*",
+      "THIRD_PARTY_NOTICES.md",
       "package.json"
     ],
     "win": {

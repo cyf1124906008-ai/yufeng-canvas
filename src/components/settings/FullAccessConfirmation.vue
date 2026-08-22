@@ -180,7 +180,8 @@ watch(() => props.workspaceRoot, () => {
   display: grid;
   grid-template-rows: 54px minmax(0,1fr);
   overflow: hidden;
-  outline: none;
+  outline: 2px solid transparent;
+  outline-offset: -2px;
   color: var(--fa-text);
   background: var(--fa-bg);
   font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif;
@@ -257,7 +258,7 @@ watch(() => props.workspaceRoot, () => {
 .acknowledgement.is-checked { border-color: color-mix(in srgb,var(--fa-warning) 48%,var(--fa-border)); background: color-mix(in srgb,var(--fa-warning-soft) 45%,var(--fa-panel)); box-shadow: inset 0 0 0 1px color-mix(in srgb,var(--fa-warning) 12%,transparent); }
 .acknowledgement.is-disabled { cursor: wait; opacity: .66; }
 .acknowledgement input { position: absolute; width: 1px; height: 1px; overflow: hidden; opacity: 0; pointer-events: none; }
-.check-control { display: grid; width: 21px; height: 21px; place-items: center; border: 1px solid var(--fa-border-strong); border-radius: 6px; color: transparent; background: var(--fa-panel); transition: all 140ms ease; }
+.check-control { display: grid; width: 21px; height: 21px; place-items: center; border: 1px solid var(--fa-border-strong); border-radius: 6px; color: transparent; background: var(--fa-panel); transition: border-color 140ms ease, color 140ms ease, background-color 140ms ease; }
 .acknowledgement input:focus-visible + .check-control { outline: 2px solid color-mix(in srgb,var(--fa-warning) 68%,transparent); outline-offset: 2px; }
 .acknowledgement input:checked + .check-control { border-color: var(--fa-warning); color: #fff; background: var(--fa-warning); }
 .acknowledgement > span:last-child strong,

@@ -5,8 +5,7 @@
         <data-eyes-mark :size="31" />
       </button>
       <div class="brand-copy">
-        <strong>DATAEYES <b>CODE</b></strong>
-        <small>LOCAL AGENT RUNTIME</small>
+        <strong>DataEyes Code</strong>
       </div>
       <button type="button" class="icon-button mobile-close" aria-label="关闭导航" @click="emit('close')">
         <workbench-icon name="close" :size="17" />
@@ -21,7 +20,7 @@
       </button>
       <label class="task-search" :class="{ 'has-value': query }">
         <workbench-icon name="search" :size="14" />
-        <input ref="searchInput" v-model="query" type="search" placeholder="搜索任务" aria-label="搜索任务历史" />
+        <input ref="searchInput" v-model="query" type="search" name="task-search" placeholder="搜索任务…" aria-label="搜索任务历史" autocomplete="off" spellcheck="false" />
         <button v-if="query" type="button" aria-label="清除搜索" @click="query = ''">
           <workbench-icon name="close" :size="13" />
         </button>

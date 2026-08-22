@@ -19,3 +19,12 @@ export {
 export { createWorkbenchPlanner } from './workbenchPlanner.js'
 export { createDesktopWorkbenchToolRegistry } from './desktopWorkbenchTools.js'
 export { useAgentWorkbench } from './useAgentWorkbench.js'
+export {
+  WorkbenchHarnessKernel,
+  createCompatibilityWorkbenchHarness,
+  createWorkbenchHarnessKernel,
+  DEEPSEEK_HARNESS_UPSTREAM,
+  DEEPSEEK_HARNESS_VERSIONS,
+  HARNESS_PLUGIN_IDS,
+  HARNESS_SERVICES
+} from '../harness/index.js'

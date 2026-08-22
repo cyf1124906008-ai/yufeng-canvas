@@ -47,6 +47,7 @@ Observation → 继续 / 改道 / 请求批准 / 最终答复
 | 能力 | 当前实现 |
 | --- | --- |
 | Codex-style Agent Workbench | 新三栏命令中心：工作区与任务历史、对话和实时工具轨迹、计划 / 文件变更 / 产物检查器；支持多轮补充和文本附件。 |
+| DeepSeek Harness Runtime | 以官方 Cordis、DSH Scope 与 Invariants 作为可卸载插件生命周期层；Planner、工具注册和 Session Factory 都以显式服务运行，每个任务拥有独立生命周期 scope。 |
 | Generic Agent Session | Planner 每轮只返回 `message`、`tool_call` 或 `finish`；工具失败与拒绝都会作为 observation 继续决策。 |
 | OpenCode Local Planner | 桌面端可选用本机 `opencode serve` 负责任务拆解；真正的文件、终端和电脑操作仍由 DataEyes Code ToolRegistry、审批和 Electron 主进程执行。OpenCode 的 Provider 凭据不从 DataEyes Code 转发。 |
 | Task Plan | Agent 可建立并更新结构化步骤，最多一个步骤处于 `in_progress`；计划状态通过事件流实时投影，不展示隐藏思维链。 |
@@ -80,6 +81,7 @@ Observation → 继续 / 改道 / 请求批准 / 最终答复
 - 屏幕截图只保留在当前 App 内存中，用于预览与 Vision 分析；任务历史不会保存截图 base64。
 - Web 调试页可以查看 Workbench 界面，但真实本地工具只在 Electron App 中启用。
 - OpenCode Local 只在 Electron App 中启动；sidecar 固定绑定当前 workspace，并通过 Main-process IPC 访问。Web 预览不会假装拥有本机文件或终端权限。
+- DeepSeek Harness 的 scope 用于插件注册、事件路由和资源释放，不是系统权限边界；真实文件、终端、电脑控制和审批仍由 DataEyes Code 的 Electron 主进程校验并执行。
 
 ## 快速开始
 
@@ -139,14 +141,16 @@ pnpm desktop:dist:mac
 
 - [DataEyes Code 品牌与兼容标识](docs/dataeyes-code-branding.md)
 - [Agent Harness 总体架构](docs/agent-harness.md)
+- [DeepSeek Harness 集成边界](docs/deepseek-harness-integration.md)
 - [V0.2 Result Observation](docs/plans/agent-v0.2-result-observation.md)
 - [V0.3 Model Router](docs/plans/agent-v0.3-model-router.md)
 - [V0.4 Headless Runtime](docs/plans/agent-v0.4-headless-runtime.md)
 - [V0.5a Local Run History](docs/plans/agent-v0.5a-run-history.md)
 - [V0.6 Desktop Workbench](docs/plans/agent-v0.6-workbench.md)
 - [V0.7 Command Center](docs/plans/agent-v0.7-command-center.md)
-- [v1.3.0 Release Notes](docs/releases/v1.3.0.md)
+- [v1.5.0 Release Notes](docs/releases/v1.5.0.md)
 - [v1.4.0 Release Notes](docs/releases/v1.4.0.md)
+- [v1.3.0 Release Notes](docs/releases/v1.3.0.md)
 - [v1.2.0 Release Notes](docs/releases/v1.2.0.md)
 - [Local API / MCP](docs/local-api-mcp.md)
 
@@ -160,6 +164,7 @@ pnpm desktop:dist:mac
 - ✅ V0.6：通用多轮 Workbench、文件 / 终端 / macOS 工具、逐项审批和 Creative 工具化。
 - ✅ V0.7：新命令中心、结构化计划、SHA 绑定的行级补丁与 diff 事件、当前 App 会话内的条件回滚、终端实时状态、Provider Console。
 - ✅ v1.3：运行中停止 / 引导 / 安全续跑、四档审批模式、完全访问风险确认、七档推理强度、完整设置中心和本地自动化。
+- ✅ v1.5：接入 DeepSeek Cordis 插件生命周期与会话 scope，重构苹果/Codex 风格工作台、设置中心、Provider Console 和启动动画。
 - 下一阶段：真正的 PTY 终端、持久 checkpoint、成本预算与调用统计。
 - 后续阶段：任务级多并发隔离与 Git worktree、浏览器工具，以及更多可安装的 Tool / MCP 扩展。
 
